@@ -1,0 +1,3 @@
+phase,progress_condition,entry,selector_global,fgtile_update,affected_level,affected_level10_tiles,tile_metadata,proven_behavior,confidence
+pre_key,<= 3,0x08003BE6,0x03000620,0x08003B98,10,4,"(808,384)t4; (824,384)t4; (808,352)t5; (824,352)t5; all portTo=8",turn=4/5 gate tiles follow the pre-key path and return without entering the post-key collision/interaction machinery,high
+post_key,> 3,0x0800404A,0x03000620,0x08003B98,10,4,"(808,384)t4; (824,384)t4; (808,352)t5; (824,352)t5; all portTo=8",turn=4/5 gate tiles enter a distinct collision/interaction branch after the rusty-key collection advances progress 3->4; direct scene-transition timing remains unresolved,high

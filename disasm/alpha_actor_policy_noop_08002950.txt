@@ -1,0 +1,37 @@
+
+/tmp/tmp626p8ym3/wrap.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08002950 <_start>:
+ 8002950: 4770         	bx	lr
+ 8002952: 46c0         	mov	r8, r8
+ 8002954: 6c03         	ldr	r3, [r0, #0x40]
+ 8002956: b510         	push	{r4, lr}
+ 8002958: 0004         	movs	r4, r0
+ 800295a: 2b00         	cmp	r3, #0x0
+ 800295c: d003         	beq	0x8002966 <_start+0x16> @ imm = #0x6
+ 800295e: f7fd fd5b    	bl	0x8000418 <_start+0xffffffffffffdac8> @ imm = #-0x254a
+ 8002962: 2301         	movs	r3, #0x1
+ 8002964: 62e3         	str	r3, [r4, #0x2c]
+ 8002966: bc10         	pop	{r4}
+ 8002968: bc01         	pop	{r0}
+ 800296a: 4700         	bx	r0
+ 800296c: b570         	push	{r4, r5, r6, lr}
+ 800296e: 2301         	movs	r3, #0x1
+ 8002970: b086         	sub	sp, #0x18
+ 8002972: 000e         	movs	r6, r1
+ 8002974: 466a         	mov	r2, sp
+ 8002976: 9301         	str	r3, [sp, #0x4]
+ 8002978: ac02         	add	r4, sp, #0x8
+ 800297a: 3377         	adds	r3, #0x77
+ 800297c: 0005         	movs	r5, r0
+ 800297e: 9400         	str	r4, [sp]
+ 8002980: 4669         	mov	r1, sp
+ 8002982: 8113         	strh	r3, [r2, #0x8]
+ 8002984: 0030         	movs	r0, r6
+ 8002986: 2264         	movs	r2, #0x64
+ 8002988: f7fd fcfc    	bl	0x8000384 <_start+0xffffffffffffda34> @ imm = #-0x2608
+ 800298c: 0200         	lsls	r0, r0, #0x8
+ 800298e: 60a8         	str	r0, [r5, #0x8]
+

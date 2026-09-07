@@ -1,0 +1,50 @@
+address,name,evidence
+0x08000384,actor_property_int_lookup_candidate,repeatedly parses named integer actor properties with caller-supplied defaults
+0x080000C0,rom_entry_target,ARM reset-vector target
+0x080000E0,crt_start_arm,early runtime/stack setup
+0x08000108,crt_start_thumb,runtime startup after ARM->Thumb switch
+0x080010A4,actor_list_loader_candidate,0x08005950 calls it for the selected story-overlay list and again for LevelRecord+0x38 physical actors
+0x08002268,irq_handler_candidate,installed at 0x03007FFC; VBlank/IRQ dispatch candidate
+0x0800274C,NPC_draw,vtable 0x08018B00 draw method; stages four dynamic 16x8 source rows and submits two 16x16 OAM sprites
+0x08002914,grass_factory,spawnType=grass registry target; allocates 0x6C-byte grass/leaves object
+0x0800298C,npc_dialogue_actor_update_candidate,dispatches actor state modes and consumes dial-indexed 0x90-byte dialogue records
+0x08003998,NPC_constructor,called by NPC factory to initialize 0xFC-byte NPC/interactive-entity object
+0x08003A60,NPC_factory,spawnType=npc registry target; allocates 0xFC bytes and calls 0x08003998
+0x08003AEC,fgtile_factory,spawnType=fgtile registry target; allocates 0x90-byte foreground-tile object
+0x080037F6,state4_final_collection_handler,"state-4 opcode -5 handler; calls 0x08004FE0, plays SFX 13, sets 0x03000678=1, increments collection index, consumes pickup and clears dialogue"
+0x08003B98,Fgtile_update,"foreground-tile update; reads collection index 0x03000620, branches pre/post key at 3->4, and contains proven portTo -> request_scene path at 0x08004258"
+0x080043AC,actor_level_global_policy_candidate,level mismatch invokes actor virtual method; setglobal==0 sets inherited actor+0x31 culling-bypass flag
+0x080043F8,actor_common_property_parse_candidate,maps named actor properties into runtime object fields
+0x08004A74,TitleScene_exit,no-op exit (bx lr)
+0x08004F04,dynamic_obj_tile_upload,copies ROM-side 8bpp animation tiles into hardware-visible OBJ VRAM working slots
+0x08004FE0,ending_vram_effect_candidate,called by state-4 final-sketch opcode -5 handler and repeated while ending event flag is active; performs expanding VRAM copies
+0x08004A78,TitleScene_update,PRESS START input and delayed scene transition
+0x08004B74,GameplayScene_update,active gameplay scene update
+0x08004C10,GameplayScene_exit,gameplay scene exit
+0x08005914,TitleScene_enter,title scene enter/init
+0x0800575C,upload_level_graphics_resources,"level+0x24 graphics descriptor: BG/OBJ tile uploads, palettes, translation-table pointer"
+0x080057DC,upload_fixed_tilemap,translates level+0x1C tile IDs through 0x03000560 into BG screenblocks
+0x08005720,normal_dialogue_record_action_candidate,normal dialogue generic record-action fallback calls this with record argument; state-4 -5 uses separate handler
+0x08005950,load_level_record_resources,"consumes selected 0x40-byte runtime level record and loads graphics, fixed map, streaming layers and actors"
+0x08005A2C,GameplayScene_enter,loads level id; selects record at 0x03000A10 + id*0x40
+0x08005BEC,set_level_graphics_variant,"stores selector at scene-manager+0x1C, loads descriptor from current level record +0x24+selector*4, then reloads graphics/fixed/streamed layers"
+0x08005C54,set_level_graphics_variant_from_state_index,looks up a selector at 0x03000858 + index*4 and forwards it to 0x08005BEC; only direct call recovered at 0x08003F18
+0x0800A330,stream_world_tile_layers_region,streams translated cells from visual world layers A/B into BG tilemap buffers
+0x0800A400,update_streamed_world_tilemaps_on_scroll,updates streamed tilemap window as camera/scroll position changes
+0x0800DBF4,static_level_runtime_initializer,patches runtime level-record dimensions and other static initialized fields; dimension patch segment at 0x0800DD74
+0x08005C30,request_scene,queues pending scene + args + delay
+0x08005CB0,scene_manager_update,transition/enter/exit/update virtual dispatch
+0x08005ED8,bx_r3_trampoline,interworking/indirect-call trampoline
+0x0800621C,Player_constructor,player factory constructor; initializes sprite stride and copies 10x20-byte wardrobe label table to object+0x2B4
+0x08006418,Player_factory,registered player actor factory; allocates/constructs Player object
+0x080065FC,Player_draw,stages dynamic 8bpp OBJ rows and submits stacked hardware sprites for the player
+0x080068BC,Player_draw_state4_monster_branch,entered when 0x0300061C==1; submits five 16x16 OBJ sprites forming reconstructed dark creature composite
+0x08005EDA,bx_r5_trampoline,interworking/indirect-call trampoline
+0x08006D6C,message_selector_slot_copy_candidate,selects one of four message selector slots for Messages UI
+0x08008E30,Wardrobe_ui_update_candidate,Wardrobe screen routine; consumes fields from shared 0x03001254 state block
+0x0800A208,configure_gameplay_backgrounds,programs BG0..BG3 as 8bpp text backgrounds at screenblocks 27..30 with priorities 0..3
+0x0800A8F0,submit_obj_oam,"writes OAM entry from screen position, logical 8bpp tile, Graveblood size enum, flips and priority"
+0x0800D968,register_spawn_factories_npc_grass,binds literal spawnType keys npc/grass to concrete factory callbacks
+0x0800DBB4,register_spawn_factory_fgtile,binds literal spawnType key fgtile to 0x08003AEC
+0x0800D870,main,VBlank-synchronized main loop; reads KEYINPUT and updates scene manager
+0x0801061C,cpp_runtime_init_candidate,startup-time runtime/global-constructor-style initializer; alpha homolog at 0x08008B20

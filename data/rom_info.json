@@ -1,0 +1,24 @@
+{
+  "rom_size": 11072476,
+  "rom_size_hex": "0xA8F3DC",
+  "sha256": "e0d7878d2f41dcdeedcc306585bdaf18f39abc2ae42a4bc338514d49feb9449b",
+  "entry_bytes": "2e0000ea",
+  "title_raw_hex": "000000000000000000000000",
+  "game_code_raw_hex": "00000000",
+  "maker": "01",
+  "fixed_value": 150,
+  "unit_code": 0,
+  "device_type": 128,
+  "version": 0,
+  "header_checksum_stored": 112,
+  "header_checksum_calculated": 112,
+  "header_checksum_valid": true,
+  "standard_save_signatures": {
+    "SRAM_": -1,
+    "EEPROM_": -1,
+    "FLASH_": -1,
+    "FLASH512_": -1,
+    "FLASH1M_": -1,
+    "SIIRTC_V": -1
+  }
+}

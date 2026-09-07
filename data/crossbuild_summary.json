@@ -1,0 +1,116 @@
+{
+  "latest_sha256": "e0d7878d2f41dcdeedcc306585bdaf18f39abc2ae42a4bc338514d49feb9449b",
+  "alpha_sha256": "f63e1604c3887a9f018961cadca6365fe621f006b83f458702c68b079e0b0f0a",
+  "latest_search_range": [
+    "0x100",
+    "0x18000"
+  ],
+  "alpha_search_range": [
+    "0x100",
+    "0x18000"
+  ],
+  "window_bytes": 32,
+  "minimum_block_bytes": 48,
+  "match_blocks": 109,
+  "matched_bytes_sum_nonexclusive": 22605,
+  "largest_block_bytes": 1537,
+  "delta_clusters": [
+    {
+      "delta": "+0x7afc",
+      "blocks": 37,
+      "bytes": 10284,
+      "max_block": 1537
+    },
+    {
+      "delta": "-0x10",
+      "blocks": 15,
+      "bytes": 3915,
+      "max_block": 598
+    },
+    {
+      "delta": "+0x65a0",
+      "blocks": 8,
+      "bytes": 1697,
+      "max_block": 624
+    },
+    {
+      "delta": "+0x76a0",
+      "blocks": 6,
+      "bytes": 1522,
+      "max_block": 584
+    },
+    {
+      "delta": "+0x76a4",
+      "blocks": 9,
+      "bytes": 1175,
+      "max_block": 286
+    },
+    {
+      "delta": "+0x0",
+      "blocks": 15,
+      "bytes": 1158,
+      "max_block": 196
+    },
+    {
+      "delta": "+0x7b30",
+      "blocks": 6,
+      "bytes": 1042,
+      "max_block": 330
+    },
+    {
+      "delta": "+0x62a0",
+      "blocks": 3,
+      "bytes": 358,
+      "max_block": 144
+    },
+    {
+      "delta": "+0x62c4",
+      "blocks": 2,
+      "bytes": 311,
+      "max_block": 212
+    },
+    {
+      "delta": "+0x65a8",
+      "blocks": 1,
+      "bytes": 306,
+      "max_block": 306
+    },
+    {
+      "delta": "+0x2a18",
+      "blocks": 2,
+      "bytes": 228,
+      "max_block": 128
+    },
+    {
+      "delta": "+0x57c",
+      "blocks": 1,
+      "bytes": 226,
+      "max_block": 226
+    },
+    {
+      "delta": "+0x62a8",
+      "blocks": 1,
+      "bytes": 146,
+      "max_block": 146
+    },
+    {
+      "delta": "+0x65a4",
+      "blocks": 1,
+      "bytes": 93,
+      "max_block": 93
+    },
+    {
+      "delta": "+0x2da8",
+      "blocks": 1,
+      "bytes": 88,
+      "max_block": 88
+    },
+    {
+      "delta": "+0x2b60",
+      "blocks": 1,
+      "bytes": 56,
+      "max_block": 56
+    }
+  ],
+  "note": "Exact-byte fingerprints only; relocated branch/literal instructions can split otherwise homologous functions."
+}

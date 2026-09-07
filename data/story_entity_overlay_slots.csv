@@ -1,0 +1,3 @@
+slot,slot_iwram,initializer_rom_addr,actor_list_ptr,loader_function,level_record_actor_field,level_gate_function,confidence
+0,0x0300083C,0x08A8D7EC,0x08018E94,0x080010A4,+0x38,0x080043AC,high
+1,0x03000840,0x08A8D7F0,0x08018E94,0x080010A4,+0x38,0x080043AC,high

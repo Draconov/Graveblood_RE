@@ -1,0 +1,7 @@
+progress_index,dialogue_script,script_role,selector_global,selector_dispatch,completion_behavior,confidence
+0,4,first collection dialogue,0x03000620,0x08002C24,completed state-4 interaction increments selector; most completion paths also move entity y to -100,high
+1,-1,silent collection,0x03000620,0x08002C24,completed state-4 interaction increments selector; most completion paths also move entity y to -100,high
+2,-1,silent collection,0x03000620,0x08002C24,completed state-4 interaction increments selector; most completion paths also move entity y to -100,high
+3,5,rusty key dialogue,0x03000620,0x08002C24,completed state-4 interaction increments selector; most completion paths also move entity y to -100,high
+4,6,final sketch / monster transition,0x03000620,0x08002C24,completed state-4 interaction increments selector; most completion paths also move entity y to -100,high
+5,0,post-completion fallback,0x03000620,0x08002C24,fallback state after the five recovered state-4 overlay entities have been consumed,high

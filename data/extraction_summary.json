@@ -1,0 +1,12 @@
+{
+  "physical_actor_records": 267,
+  "normal_level_descriptors": 11,
+  "normal_level_actor_references_unique": 251,
+  "standalone_spawners": 16,
+  "level_actor_records_unique": 251,
+  "unassigned_records": 0,
+  "focused_strings": 72,
+  "portal_edges": 38,
+  "dialogue_scripts": 7,
+  "dialogue_records": 58
+}

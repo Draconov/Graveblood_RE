@@ -1,0 +1,59 @@
+dial_index,step,record_addr,record_rom_offset,speaker,text,opcode,argument,opcode_interpretation
+0,0,0x080131B8,0x000131B8,Vika,"My favorite console, so much good memories...",0,0,normal context: dialogue/content record; argument consumed by generic handler
+0,1,0x08013248,0x00013248,Vika,I wish I had more games to play,0,1,normal context: dialogue/content record; argument consumed by generic handler
+0,2,0x080132D8,0x000132D8,Vika,One day I'll pick up the ones I always wanted on my shelf,0,1,normal context: dialogue/content record; argument consumed by generic handler
+0,3,0x08013368,0x00013368,,,-2,0,normal context: set primary message-stream selector 0x03001814 to argument
+0,4,0x080133F8,0x000133F8,,,-1,4,normal context: set actor dialogue-step (+0x70) to argument
+0,5,0x08013488,0x00013488,Vika,I have things to do right now,0,2,normal context: dialogue/content record; argument consumed by generic handler
+0,6,0x08013518,0x00013518,Vika,But I will play as I'll get back home later that evening.,0,1,normal context: dialogue/content record; argument consumed by generic handler
+0,7,0x080135A8,0x000135A8,,,-1,4,normal context: set actor dialogue-step (+0x70) to argument
+1,0,0x08012CA8,0x00012CA8,Vika,It's hard to buy new stuff when parents stopped giving me money,0,2,normal context: dialogue/content record; argument consumed by generic handler
+1,1,0x08012D38,0x00012D38,Vika,Maybe I should find a work...,0,2,normal context: dialogue/content record; argument consumed by generic handler
+1,2,0x08012DC8,0x00012DC8,,,-1,-1,normal context: set actor dialogue-step (+0x70) to argument
+1,3,0x08012E58,0x00012E58,Test Girl 1,Done! Press A and then check your messages,0,0,normal context: dialogue/content record; argument consumed by generic handler
+1,4,0x08012EE8,0x00012EE8,,,-3,1,normal context: insert argument into first free auxiliary selector: 0x03001810/0x0300180C/0x03001808
+1,5,0x08012F78,0x00012F78,,,-1,4,normal context: set actor dialogue-step (+0x70) to argument
+1,6,0x08013008,0x00013008,Test Girl 1,Isn't it cool? You now have one more task in your book!,0,0,normal context: dialogue/content record; argument consumed by generic handler
+1,7,0x08013098,0x00013098,Test Girl 1,What are you waiting for? Go face the adventures!,0,0,normal context: dialogue/content record; argument consumed by generic handler
+1,8,0x08013128,0x00013128,,,-1,4,normal context: set actor dialogue-step (+0x70) to argument
+2,0,0x08012168,0x00012168,IQ 54,"Hey, cool to see you here!",0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,1,0x080121F8,0x000121F8,IQ 54,"I wanted to draw some graffity here, but when wind started to blow",0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,2,0x08012288,0x00012288,IQ 54,And it blown away all of my sketches,0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,3,0x08012318,0x00012318,Vika,"Wow, that sucks...",0,2,normal context: dialogue/content record; argument consumed by generic handler
+2,4,0x080123A8,0x000123A8,Vika,But could we just improvise?,0,0,normal context: dialogue/content record; argument consumed by generic handler
+2,5,0x08012438,0x00012438,IQ 54,"I love to plan things first, and I had a brilliant idea.",0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,6,0x080124C8,0x000124C8,Vika,"Well, okay...",0,2,normal context: dialogue/content record; argument consumed by generic handler
+2,7,0x08012558,0x00012558,IQ 54,"Could you help me to find all of my 5 sketches, please?",0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,8,0x080125E8,0x000125E8,,,-4,1,normal context: set story/progression stage 0x030006AC to argument; state-4 pickup context overrides this opcode
+2,9,0x08012678,0x00012678,,,-1,10,normal context: set actor dialogue-step (+0x70) to argument
+2,10,0x08012708,0x00012708,Vika,Are we gonna bomb that old creepy building?,0,1,normal context: dialogue/content record; argument consumed by generic handler
+2,11,0x08012798,0x00012798,IQ 54,"Yeah, I guess it's a good start before we find a canvas on streets.",0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,12,0x08012828,0x00012828,Vika,"So you wanted to just practice, yet you can't improvise?",0,2,normal context: dialogue/content record; argument consumed by generic handler
+2,13,0x080128B8,0x000128B8,IQ 54,"You have to have something in mind, you know?",0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,14,0x08012948,0x00012948,,,-4,1,normal context: set story/progression stage 0x030006AC to argument; state-4 pickup context overrides this opcode
+2,15,0x080129D8,0x000129D8,,,-1,16,normal context: set actor dialogue-step (+0x70) to argument
+2,16,0x08012A68,0x00012A68,IQ 54,Have you found any of my sketches yet?,0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,17,0x08012AF8,0x00012AF8,IQ 54,There's just 5 sketches. Please help me find them,0,3,normal context: dialogue/content record; argument consumed by generic handler
+2,18,0x08012B88,0x00012B88,Vika,Why don't you try find some yourself instead of just standing here?,0,2,normal context: dialogue/content record; argument consumed by generic handler
+2,19,0x08012C18,0x00012C18,,,-1,16,normal context: set actor dialogue-step (+0x70) to argument
+3,0,0x08011B38,0x00011B38,Katya,"Hey, sis, your weird friend was here, asked if you are home",0,4,normal context: dialogue/content record; argument consumed by generic handler
+3,1,0x08011BC8,0x00011BC8,Vika,Weird friend? Are you about IQ? What you told him?,0,1,normal context: dialogue/content record; argument consumed by generic handler
+3,2,0x08011C58,0x00011C58,Katya,"You was sleeping, right?",0,4,normal context: dialogue/content record; argument consumed by generic handler
+3,3,0x08011CE8,0x00011CE8,Katya,"Anyway, he's waiting you somewhere at the end of street",0,4,normal context: dialogue/content record; argument consumed by generic handler
+3,4,0x08011D78,0x00011D78,Katya,I guess he was talking about some abandoned building,0,4,normal context: dialogue/content record; argument consumed by generic handler
+3,5,0x08011E08,0x00011E08,Vika,Got ya,0,1,normal context: dialogue/content record; argument consumed by generic handler
+3,6,0x08011E98,0x00011E98,,,-2,0,normal context: set primary message-stream selector 0x03001814 to argument
+3,7,0x08011F28,0x00011F28,,,-1,7,normal context: set actor dialogue-step (+0x70) to argument
+3,8,0x08011FB8,0x00011FB8,Katya,"And take my bicycle if you want. It's kinda far from here, I believe",0,4,normal context: dialogue/content record; argument consumed by generic handler
+3,9,0x08012048,0x00012048,Vika,"Yeah, and thank you for the suggestion!",0,0,normal context: dialogue/content record; argument consumed by generic handler
+3,10,0x080120D8,0x000120D8,,,-1,7,normal context: set actor dialogue-step (+0x70) to argument
+4,0,0x08011A18,0x00011A18,Vika,"Is it that hard to find 'em yourself, bro?",0,2,normal context: dialogue/content record; argument consumed by generic handler
+4,1,0x08011AA8,0x00011AA8,,,-1,6,normal context: set actor dialogue-step (+0x70) to argument
+5,0,0x08011868,0x00011868,Vika,Found a rusty key,0,2,normal context: dialogue/content record; argument consumed by generic handler
+5,1,0x080118F8,0x000118F8,Vika,I wounder if it's open those gates,0,2,normal context: dialogue/content record; argument consumed by generic handler
+5,2,0x08011988,0x00011988,,,-1,6,normal context: set actor dialogue-step (+0x70) to argument
+6,0,0x08011598,0x00011598,Vika,Ok this is the last one,0,1,normal context: dialogue/content record; argument consumed by generic handler
+6,1,0x08011628,0x00011628,,,-4,6,normal context: set story/progression stage 0x030006AC to argument; state-4 pickup context overrides this opcode
+6,2,0x080116B8,0x000116B8,Vika,...,0,2,normal context: dialogue/content record; argument consumed by generic handler
+6,3,0x08011748,0x00011748,Vika,What in the world is this?,0,2,normal context: dialogue/content record; argument consumed by generic handler
+6,4,0x080117D8,0x000117D8,,,-5,6,normal context: generic record-action fallback calls 0x08005720(argument); state-4 pickup context overrides this opcode

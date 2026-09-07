@@ -1,0 +1,4 @@
+spawn_type,literal_rom_addr,registration_function,factory,allocation_bytes,constructor,vtable,object_class,confidence
+npc,0x08A8C2C0,0x0800D968,0x08003A60,0xFC,0x08003998,0x08018B00,npc,high
+grass,0x08A8C2C4,0x0800D968,0x08002914,0x6C,inline in factory,0x08018AD8,grass/leaves,high
+fgtile,0x08A8C2CC,0x0800DBB4,0x08003AEC,0x90,inline in factory,0x08018E4C,foreground tile,high

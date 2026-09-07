@@ -1,0 +1,67 @@
+
+/tmp/tmpoxtf1jbl/wrap.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+080043ac <_start>:
+ 80043ac: 2356         	movs	r3, #0x56
+ 80043ae: 5ec3         	ldrsh	r3, [r0, r3]
+ 80043b0: b510         	push	{r4, lr}
+ 80043b2: 0004         	movs	r4, r0
+ 80043b4: 1c5a         	adds	r2, r3, #0x1
+ 80043b6: d007         	beq	0x80043c8 <_start+0x1c> @ imm = #0xe
+ 80043b8: 4a08         	ldr	r2, [pc, #0x20]         @ 0x30 <_start+0x30>
+ 80043ba: 6812         	ldr	r2, [r2]
+ 80043bc: 4293         	cmp	r3, r2
+ 80043be: d003         	beq	0x80043c8 <_start+0x1c> @ imm = #0x6
+ 80043c0: 6803         	ldr	r3, [r0]
+ 80043c2: 699b         	ldr	r3, [r3, #0x18]
+ 80043c4: f000 fb54    	bl	0x8004a70 <_start+0x6c4> @ imm = #0x6a8
+ 80043c8: 2358         	movs	r3, #0x58
+ 80043ca: 5ee3         	ldrsh	r3, [r4, r3]
+ 80043cc: 2b00         	cmp	r3, #0x0
+ 80043ce: d102         	bne	0x80043d6 <_start+0x2a> @ imm = #0x4
+ 80043d0: 2201         	movs	r2, #0x1
+ 80043d2: 3331         	adds	r3, #0x31
+ 80043d4: 54e2         	strb	r2, [r4, r3]
+ 80043d6: bc10         	pop	{r4}
+ 80043d8: bc01         	pop	{r0}
+ 80043da: 4700         	bx	r0
+ 80043dc: 0808         	lsrs	r0, r1, #0x20
+ 80043de: 0300         	lsls	r0, r0, #0xc
+ 80043e0: 6c03         	ldr	r3, [r0, #0x40]
+ 80043e2: b510         	push	{r4, lr}
+ 80043e4: 0004         	movs	r4, r0
+ 80043e6: 2b00         	cmp	r3, #0x0
+ 80043e8: d003         	beq	0x80043f2 <_start+0x46> @ imm = #0x6
+ 80043ea: f7fc f815    	bl	0x8000418 <_start+0xffffffffffffc06c> @ imm = #-0x3fd6
+ 80043ee: 2301         	movs	r3, #0x1
+ 80043f0: 62e3         	str	r3, [r4, #0x2c]
+ 80043f2: bc10         	pop	{r4}
+ 80043f4: bc01         	pop	{r0}
+ 80043f6: 4700         	bx	r0
+ 80043f8: b570         	push	{r4, r5, r6, lr}
+ 80043fa: 2301         	movs	r3, #0x1
+ 80043fc: b086         	sub	sp, #0x18
+ 80043fe: 000e         	movs	r6, r1
+ 8004400: 466a         	mov	r2, sp
+ 8004402: 9301         	str	r3, [sp, #0x4]
+ 8004404: ac02         	add	r4, sp, #0x8
+ 8004406: 3377         	adds	r3, #0x77
+ 8004408: 0005         	movs	r5, r0
+ 800440a: 9400         	str	r4, [sp]
+ 800440c: 4669         	mov	r1, sp
+ 800440e: 8113         	strh	r3, [r2, #0x8]
+ 8004410: 0030         	movs	r0, r6
+ 8004412: 2264         	movs	r2, #0x64
+ 8004414: f7fb ffb6    	bl	0x8000384 <_start+0xffffffffffffbfd8> @ imm = #-0x4094
+ 8004418: 0200         	lsls	r0, r0, #0x8
+ 800441a: 60a8         	str	r0, [r5, #0x8]
+ 800441c: 9800         	ldr	r0, [sp]
+ 800441e: 42a0         	cmp	r0, r4
+ 8004420: d001         	beq	0x8004426 <_start+0x7a> @ imm = #0x2
+ 8004422: f009 fe39    	bl	0x800e098 <_start+0x9cec> @ imm = #0x9c72
+ 8004426: 2301         	movs	r3, #0x1
+ 8004428: 466a         	mov	r2, sp
+ 800442a: 9301         	str	r3, [sp, #0x4]
+

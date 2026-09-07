@@ -1,0 +1,5 @@
+address,role,initial_value,writer
+0x03001814,primary,-1,dialogue opcode -2
+0x03001810,auxiliary #1,-1,dialogue opcode -3 first-free policy
+0x0300180C,auxiliary #2,-1,dialogue opcode -3 first-free policy
+0x03001808,auxiliary #3,-1,dialogue opcode -3 first-free policy

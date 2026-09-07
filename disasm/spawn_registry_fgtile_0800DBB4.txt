@@ -1,0 +1,77 @@
+
+/tmp/tmpx0nh0fmb/wrap.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+0800dbb4 <_start>:
+ 800dbb4: b510         	push	{r4, lr}
+ 800dbb6: b086         	sub	sp, #0x18
+ 800dbb8: ac02         	add	r4, sp, #0x8
+ 800dbba: 9400         	str	r4, [sp]
+ 800dbbc: 4b0b         	ldr	r3, [pc, #0x2c]         @ 0x38 <_start+0x38>
+ 800dbbe: 681a         	ldr	r2, [r3]
+ 800dbc0: 9202         	str	r2, [sp, #0x8]
+ 800dbc2: 889b         	ldrh	r3, [r3, #0x4]
+ 800dbc4: 80a3         	strh	r3, [r4, #0x4]
+ 800dbc6: 2306         	movs	r3, #0x6
+ 800dbc8: 466a         	mov	r2, sp
+ 800dbca: 9301         	str	r3, [sp, #0x4]
+ 800dbcc: 2300         	movs	r3, #0x0
+ 800dbce: 4668         	mov	r0, sp
+ 800dbd0: 7393         	strb	r3, [r2, #0xe]
+ 800dbd2: 4907         	ldr	r1, [pc, #0x1c]         @ 0x3c <_start+0x3c>
+ 800dbd4: f7f2 fc3c    	bl	0x8000450 <_start+0xffffffffffff289c> @ imm = #-0xd788
+ 800dbd8: 9800         	ldr	r0, [sp]
+ 800dbda: 42a0         	cmp	r0, r4
+ 800dbdc: d001         	beq	0x800dbe2 <_start+0x2e> @ imm = #0x2
+ 800dbde: f000 fa5b    	bl	0x800e098 <_start+0x4e4> @ imm = #0x4b6
+ 800dbe2: b006         	add	sp, #0x18
+ 800dbe4: bc10         	pop	{r4}
+ 800dbe6: bc01         	pop	{r0}
+ 800dbe8: 4700         	bx	r0
+ 800dbea: 46c0         	mov	r8, r8
+ 800dbec: c2cc         	stm	r2!, {r2, r3, r6, r7}
+ 800dbee: 08a8         	lsrs	r0, r5, #0x2
+ 800dbf0: 3aed         	subs	r2, #0xed
+ 800dbf2: 0800         	lsrs	r0, r0, #0x20
+ 800dbf4: b5f0         	push	{r4, r5, r6, r7, lr}
+ 800dbf6: 464e         	mov	r6, r9
+ 800dbf8: 4645         	mov	r5, r8
+ 800dbfa: 46de         	mov	lr, r11
+ 800dbfc: 4657         	mov	r7, r10
+ 800dbfe: 48ae         	ldr	r0, [pc, #0x2b8]        @ 0x304 <_start+0x304>
+ 800dc00: 4bae         	ldr	r3, [pc, #0x2b8]        @ 0x308 <_start+0x308>
+ 800dc02: 6800         	ldr	r0, [r0]
+ 800dc04: b5e0         	push	{r5, r6, r7, lr}
+ 800dc06: 4aae         	ldr	r2, [pc, #0x2b8]        @ 0x30c <_start+0x30c>
+ 800dc08: 6298         	str	r0, [r3, #0x28]
+ 800dc0a: 48ae         	ldr	r0, [pc, #0x2b8]        @ 0x310 <_start+0x310>
+ 800dc0c: 6812         	ldr	r2, [r2]
+ 800dc0e: 6800         	ldr	r0, [r0]
+ 800dc10: 605a         	str	r2, [r3, #0x4]
+ 800dc12: 6358         	str	r0, [r3, #0x34]
+ 800dc14: 4aac         	ldr	r2, [pc, #0x2b0]        @ 0x314 <_start+0x314>
+ 800dc16: 48ad         	ldr	r0, [pc, #0x2b4]        @ 0x318 <_start+0x318>
+ 800dc18: 6812         	ldr	r2, [r2]
+ 800dc1a: 6800         	ldr	r0, [r0]
+ 800dc1c: 611a         	str	r2, [r3, #0x10]
+ 800dc1e: 64d8         	str	r0, [r3, #0x4c]
+ 800dc20: 4aab         	ldr	r2, [pc, #0x2ac]        @ 0x31c <_start+0x31c>
+ 800dc22: 48ac         	ldr	r0, [pc, #0x2b0]        @ 0x320 <_start+0x320>
+ 800dc24: 6811         	ldr	r1, [r2]
+ 800dc26: 6800         	ldr	r0, [r0]
+ 800dc28: 4aab         	ldr	r2, [pc, #0x2ac]        @ 0x324 <_start+0x324>
+ 800dc2a: 6598         	str	r0, [r3, #0x58]
+ 800dc2c: 6812         	ldr	r2, [r2]
+ 800dc2e: 48ab         	ldr	r0, [pc, #0x2ac]        @ 0x328 <_start+0x328>
+ 800dc30: 6199         	str	r1, [r3, #0x18]
+ 800dc32: 621a         	str	r2, [r3, #0x20]
+ 800dc34: 63d9         	str	r1, [r3, #0x3c]
+ 800dc36: 645a         	str	r2, [r3, #0x44]
+ 800dc38: 6619         	str	r1, [r3, #0x60]
+ 800dc3a: 669a         	str	r2, [r3, #0x68]
+ 800dc3c: 6800         	ldr	r0, [r0]
+ 800dc3e: 6718         	str	r0, [r3, #0x70]
+ 800dc40: 48a7         	ldr	r0, [pc, #0x29c]        @ 0x32c <_start+0x32c>
+ 800dc42: 6800         	ldr	r0, [r0]
+

@@ -1,0 +1,7 @@
+stream_id,stream_ram_ptr,source_rom_offset,story_stage,title,sender,body
+0,0x03001704,0x00A8E6B4,0,Go meet IQ,Katya,Your friend was here and asked me to tell you he's gonna wait you at the abandoned house.
+0,0x03001704,0x00A8E736,1,Find sketches,IQ 54,"My graffity sketches were scattered across this location. Please, help me find them all."
+1,0x03001600,0x00A8E5B0,0,Side quest,Nikita,"Well, it doesn't seem too complicated now, but imagine how more vars you will have to add further."
+1,0x03001600,0x00A8E632,1,Side quest,Nikita,"Wow, you've gone this far? It's amazing."
+2,0x030014FC,0x00A8E4AC,0,Thoughts,Vika,Why don't you go and look for your sketches for yourself?
+2,0x030014FC,0x00A8E52E,1,Thoughts,Vika,Why don't you go and look for your sketches for yourself?

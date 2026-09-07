@@ -1,0 +1,12 @@
+fact,value,evidence
+factory,0x08006418,player actor registration/factory chain
+constructor,0x0800621C,factory target initializes Player object
+vtable,0x08019688,Player object vtable used by draw dispatch
+draw,0x080065FC,stages dynamic OBJ rows then submits player sprites
+dynamic_obj_upload,0x08004F04,ROM OBJ source -> OBJ VRAM tile copy
+oam_submit,0x0800A8F0,constructs 8-byte OAM entries
+graphics_stride_field,player+0x1DC = 192,constructor writes 0xC0; player draw multiplies animation/bank selection by field
+wardrobe_labels,10 slots x 20 bytes @ 0x080198A0 -> player+0x2B4,constructor copies 0xC8 bytes
+shared_avatar_menu_state,0x03001254,Player_draw reads first fields; Wardrobe UI consumes later/shared fields; semantics not reduced to outfit index
+known_character_source_sample,source base 2198,valid 16x32 Vika-style frame reconstruction; not claimed as constructor/default outfit
+initialized_branch_candidate,source base 3468 if player+0x1E0 == 0,derived from initialized globals and 0x08006B3A branch; allocator/default for +0x1E0 not yet proven

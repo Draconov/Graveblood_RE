@@ -1,0 +1,11 @@
+slot,source_rom_addr,source_rom_offset,player_object_offset,label,literal_status
+0,0x080198A0,0x000198A0,+0x2B4,Favorite Skirt,named
+1,0x080198B4,0x000198B4,+0x2C8, Not for demo ,not_for_demo_literal
+2,0x080198C8,0x000198C8,+0x2DC, Not for demo ,not_for_demo_literal
+3,0x080198DC,0x000198DC,+0x2F0, Not for demo ,not_for_demo_literal
+4,0x080198F0,0x000198F0,+0x304, Not for demo ,not_for_demo_literal
+5,0x08019904,0x00019904,+0x318, Not for demo ,not_for_demo_literal
+6,0x08019918,0x00019918,+0x32C, Not for demo ,not_for_demo_literal
+7,0x0801992C,0x0001992C,+0x340, Not for demo ,not_for_demo_literal
+8,0x08019940,0x00019940,+0x354,,empty
+9,0x08019954,0x00019954,+0x368,,empty

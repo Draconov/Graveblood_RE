@@ -1,0 +1,17 @@
+index,identity,semantic_role,identity_confidence,evidence
+0,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+1,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+2,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+3,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+4,IQ 54,walking story character,high,"overlay #4 has dial=2, state=3, route=0; script 2 is spoken by IQ 54 and asks Vika to find five sketches"
+5,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+6,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+7,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+8,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+9,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+10,Katya,story character,high,overlay #10 has dial=3; script 3 is Katya's sister/bicycle conversation
+11,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+12,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+13,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+14,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+15,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches

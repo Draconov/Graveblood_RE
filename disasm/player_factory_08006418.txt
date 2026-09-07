@@ -1,0 +1,61 @@
+
+/tmp/tmpl33om2hf/wrap.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08006418 <_start>:
+ 8006418: 20e8         	movs	r0, #0xe8
+ 800641a: b510         	push	{r4, lr}
+ 800641c: 0080         	lsls	r0, r0, #0x2
+ 800641e: f007 fe41    	bl	0x800e0a4 <_start+0x7c8c> @ imm = #0x7c82
+ 8006422: 0004         	movs	r4, r0
+ 8006424: f7ff fefa    	bl	0x800621c <_start+0xfffffffffffffe04> @ imm = #-0x20c
+ 8006428: 0020         	movs	r0, r4
+ 800642a: bc10         	pop	{r4}
+ 800642c: bc02         	pop	{r1}
+ 800642e: 4708         	bx	r1
+ 8006430: b5f0         	push	{r4, r5, r6, r7, lr}
+ 8006432: 46de         	mov	lr, r11
+ 8006434: 4657         	mov	r7, r10
+ 8006436: 464e         	mov	r6, r9
+ 8006438: 4645         	mov	r5, r8
+ 800643a: b5e0         	push	{r5, r6, r7, lr}
+ 800643c: 4b3f         	ldr	r3, [pc, #0xfc]         @ 0x124 <_start+0x124>
+ 800643e: b085         	sub	sp, #0x14
+ 8006440: 9003         	str	r0, [sp, #0xc]
+ 8006442: 6858         	ldr	r0, [r3, #0x4]
+ 8006444: 9302         	str	r3, [sp, #0x8]
+ 8006446: 2800         	cmp	r0, #0x0
+ 8006448: d023         	beq	0x8006492 <_start+0x7a> @ imm = #0x46
+ 800644a: 6943         	ldr	r3, [r0, #0x14]
+ 800644c: 469c         	mov	r12, r3
+ 800644e: 6905         	ldr	r5, [r0, #0x10]
+ 8006450: 44ac         	add	r12, r5
+ 8006452: 4565         	cmp	r5, r12
+ 8006454: da1a         	bge	0x800648c <_start+0x74> @ imm = #0x34
+ 8006456: 68c3         	ldr	r3, [r0, #0xc]
+ 8006458: 6981         	ldr	r1, [r0, #0x18]
+ 800645a: 4698         	mov	r8, r3
+ 800645c: 4689         	mov	r9, r1
+ 800645e: 005b         	lsls	r3, r3, #0x1
+ 8006460: 469a         	mov	r10, r3
+ 8006462: 2460         	movs	r4, #0x60
+ 8006464: 44c1         	add	r9, r8
+ 8006466: 01af         	lsls	r7, r5, #0x6
+ 8006468: 45c8         	cmp	r8, r9
+ 800646a: da0b         	bge	0x8006484 <_start+0x6c> @ imm = #0x16
+ 800646c: 6c82         	ldr	r2, [r0, #0x48]
+ 800646e: 4653         	mov	r3, r10
+ 8006470: 4693         	mov	r11, r2
+ 8006472: 2200         	movs	r2, #0x0
+ 8006474: 19db         	adds	r3, r3, r7
+ 8006476: 445b         	add	r3, r11
+ 8006478: 5b06         	ldrh	r6, [r0, r4]
+ 800647a: 3201         	adds	r2, #0x1
+ 800647c: 801e         	strh	r6, [r3]
+ 800647e: 3302         	adds	r3, #0x2
+ 8006480: 428a         	cmp	r2, r1
+ 8006482: d1f9         	bne	0x8006478 <_start+0x60> @ imm = #-0xe
+ 8006484: 3501         	adds	r5, #0x1
+ 8006486: 3740         	adds	r7, #0x40
+

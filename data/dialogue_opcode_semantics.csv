@@ -1,0 +1,7 @@
+opcode,semantic,proven_behavior,confidence
+0,normal dialogue/content record,generic content/action path,high
+-1,set dialogue step,writes record argument to actor+0x70,high
+-2,set primary message stream,writes record argument to primary message selector,high
+-3,add auxiliary message stream,writes record argument to first free auxiliary message-selector slot,high
+-4,set story/progression stage,writes record argument to story stage consumed by Messages indexing,high
+-5,generic record action fallback,not specially dispatched; falls through generic path which calls 0x08005720 with the record argument,high

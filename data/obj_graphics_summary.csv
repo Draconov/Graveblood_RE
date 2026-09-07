@@ -1,0 +1,2 @@
+obj_tiles_source,obj_palette_source,initial_obj_upload_bytes,logical_8bpp_tile_bytes,initial_logical_tiles,complete_source_tiles_before_palette,source_bytes_remainder_before_palette,obj_mapping,oam_submit_function,dynamic_upload_function
+0x08310654,0x08366E58,0x8000,64,512,5536,4,2D (DISPCNT bit 6 clear),0x0800A8F0,0x08004F04

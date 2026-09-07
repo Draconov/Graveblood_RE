@@ -1,0 +1,26 @@
+{
+  "canonical_rom_sha256": "e0d7878d2f41dcdeedcc306585bdaf18f39abc2ae42a4bc338514d49feb9449b",
+  "obj_tiles_source": "0x08310654",
+  "obj_palette_source": "0x08366E58",
+  "initial_obj_upload_bytes": 32768,
+  "logical_tile_bytes_8bpp": 64,
+  "complete_source_tiles_before_palette": 5536,
+  "source_bytes_remainder_before_palette": 4,
+  "character_source_2198_note": "Known-valid Vika-style 16x32 frame sample; not claimed as constructor/default outfit.",
+  "player_branch_candidate_3468_note": "Derived from initialized globals and the 0x08006B3A branch assuming player+0x1E0 == 0; that default remains unproven.",
+  "leaves_tile_note": "Logical tile 0x48 from initial OBJ upload, confirming the previously misidentified vtable is leaves rather than Player.",
+  "npc_source_bias_iwram": "0x030007FC",
+  "npc_source_bias_initialized_value": 3584,
+  "npc_source_formula": "sourceBias + legsColor*8 + subtype + 2*(frame-1)",
+  "npc_semantic_warning": "The npc runtime class is also used for non-human interactive entities; class identity alone must not be used as story identity.",
+  "state4_monster_render_flag": "0x0300061C",
+  "state4_monster_animation_state": "0x03000570",
+  "state4_monster_tiles": [
+    "0x159",
+    "0x178",
+    "0x17A",
+    "0x198",
+    "0x19A"
+  ],
+  "state4_monster_note": "Player_draw 0x080068BC replaces normal player rendering with this five-sprite creature composite when the state-4 -4 handler sets 0x0300061C=1."
+}

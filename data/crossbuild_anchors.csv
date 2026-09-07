@@ -1,0 +1,7 @@
+latest_address,alpha_address,working_name,confidence,evidence
+0x08000384,0x08000384,actor_property_int_lookup,high,same named-integer property lookup helper
+0x080043AC,0x08002950,actor_level_global_policy_vs_alpha_noop,high,alpha homolog is bx lr; latest adds level/setglobal policy before unchanged following actor methods
+0x080043E0,0x08002954,actor_following_method,high,homologous method immediately after policy slot
+0x080043F8,0x0800296C,actor_common_property_parser,high,shared base parser; alpha ends after portTo while latest continues with level/setglobal/state/dial/route
+0x08003B98,0x08002560,portal_fgtile_actor_family,medium,homologous actor/update family; latest is substantially expanded
+0x0801061C,0x08008B20,cpp_runtime_init_candidate,medium,homologous startup/runtime initializer region; address delta +0x7afc

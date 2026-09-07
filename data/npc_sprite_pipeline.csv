@@ -1,0 +1,10 @@
+fact,value,evidence
+draw,0x0800274C,NPC vtable 0x08018B00 draw slot; stages four 16x8 rows and submits two 16x16 sprites
+source_bias_iwram,0x030007FC,literal at 0x08002910; loaded by staging loop around 0x0800286E
+source_bias_initializer_rom,0x08A8D7AC,startup initialized-data mapping ROM 0x08A8D738 -> IWRAM 0x03000788
+source_bias_initialized_value,0xE00,u32 initializer copied to 0x030007FC; no direct writer identified in traced references
+source_base_formula,sourceBias + legsColor*8 + subtype + 2*(frame-1),0x0800286E..0x080028A0; frame is actor+0x78 and 1-based
+source_rows,"base + {0,16,32,48}","staging loop increments row selector 0,8,16,24 then doubles it"
+dynamic_destination_formula,"logical rows 0x60 + 2*(24*A4 + A8 + C8) + {0,0x10,0x20,0x30}",NPC draw destination math plus 0x08004F04 halfword-offset semantics
+dynamic_obj_upload,0x08004F04,shared ROM-source -> OBJ-VRAM tile staging routine
+semantic_warning,runtime npc class is not synonymous with human NPC,standalone state=4 records with subtype=6 render paper/sketch-like graphics through the same class

@@ -1,0 +1,81 @@
+
+/tmp/tmpw4ekk66p/wrap.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08005bec <_start>:
+ 8005bec: b510         	push	{r4, lr}
+ 8005bee: 4c0a         	ldr	r4, [pc, #0x28]         @ 0x2c <_start+0x2c>
+ 8005bf0: 69a3         	ldr	r3, [r4, #0x18]
+ 8005bf2: 469c         	mov	r12, r3
+ 8005bf4: 61e0         	str	r0, [r4, #0x1c]
+ 8005bf6: 3008         	adds	r0, #0x8
+ 8005bf8: 0080         	lsls	r0, r0, #0x2
+ 8005bfa: 4460         	add	r0, r12
+ 8005bfc: 6840         	ldr	r0, [r0, #0x4]
+ 8005bfe: f7ff fdad    	bl	0x800575c <_start+0xfffffffffffffb70> @ imm = #-0x4a6
+ 8005c02: 69a0         	ldr	r0, [r4, #0x18]
+ 8005c04: f7ff fdea    	bl	0x80057dc <_start+0xfffffffffffffbf0> @ imm = #-0x42c
+ 8005c08: 2201         	movs	r2, #0x1
+ 8005c0a: 4904         	ldr	r1, [pc, #0x10]         @ 0x30 <_start+0x30>
+ 8005c0c: 4804         	ldr	r0, [pc, #0x10]         @ 0x34 <_start+0x34>
+ 8005c0e: f004 fbf7    	bl	0x800a400 <_start+0x4814> @ imm = #0x47ee
+ 8005c12: bc10         	pop	{r4}
+ 8005c14: bc01         	pop	{r0}
+ 8005c16: 4700         	bx	r0
+ 8005c18: 05bc         	lsls	r4, r7, #0x16
+ 8005c1a: 0300         	lsls	r0, r0, #0xc
+ 8005c1c: e800 0600    	<unknown>
+ 8005c20: e000         	b	0x8005c24 <_start+0x38> @ imm = #0x0
+ 8005c22: 0600         	lsls	r0, r0, #0x18
+ 8005c24: b510         	push	{r4, lr}
+ 8005c26: f7ff ffe1    	bl	0x8005bec <_start>      @ imm = #-0x3e
+ 8005c2a: bc10         	pop	{r4}
+ 8005c2c: bc01         	pop	{r0}
+ 8005c2e: 4700         	bx	r0
+ 8005c30: b530         	push	{r4, r5, lr}
+ 8005c32: 4c06         	ldr	r4, [pc, #0x18]         @ 0x60 <_start+0x60>
+ 8005c34: 68e5         	ldr	r5, [r4, #0xc]
+ 8005c36: 2d00         	cmp	r5, #0x0
+ 8005c38: d105         	bne	0x8005c46 <_start+0x5a> @ imm = #0xa
+ 8005c3a: 60e0         	str	r0, [r4, #0xc]
+ 8005c3c: 4804         	ldr	r0, [pc, #0x10]         @ 0x64 <_start+0x64>
+ 8005c3e: 6121         	str	r1, [r4, #0x10]
+ 8005c40: 6001         	str	r1, [r0]
+ 8005c42: 6162         	str	r2, [r4, #0x14]
+ 8005c44: 60a3         	str	r3, [r4, #0x8]
+ 8005c46: bc30         	pop	{r4, r5}
+ 8005c48: bc01         	pop	{r0}
+ 8005c4a: 4700         	bx	r0
+ 8005c4c: 05bc         	lsls	r4, r7, #0x16
+ 8005c4e: 0300         	lsls	r0, r0, #0xc
+ 8005c50: 0808         	lsrs	r0, r1, #0x20
+ 8005c52: 0300         	lsls	r0, r0, #0xc
+ 8005c54: b510         	push	{r4, lr}
+ 8005c56: 008b         	lsls	r3, r1, #0x2
+ 8005c58: 4903         	ldr	r1, [pc, #0xc]          @ 0x7c <_start+0x7c>
+ 8005c5a: 18c9         	adds	r1, r1, r3
+ 8005c5c: 6d08         	ldr	r0, [r1, #0x50]
+ 8005c5e: f7ff ffc5    	bl	0x8005bec <_start>      @ imm = #-0x76
+ 8005c62: bc10         	pop	{r4}
+ 8005c64: bc01         	pop	{r0}
+ 8005c66: 4700         	bx	r0
+ 8005c68: 0808         	lsrs	r0, r1, #0x20
+ 8005c6a: 0300         	lsls	r0, r0, #0xc
+ 8005c6c: b510         	push	{r4, lr}
+ 8005c6e: 24c0         	movs	r4, #0xc0
+ 8005c70: 03a4         	lsls	r4, r4, #0xe
+ 8005c72: 46a4         	mov	r12, r4
+ 8005c74: 004b         	lsls	r3, r1, #0x1
+ 8005c76: 4a0c         	ldr	r2, [pc, #0x30]         @ 0xbc <_start+0xbc>
+ 8005c78: 1859         	adds	r1, r3, r1
+ 8005c7a: 0089         	lsls	r1, r1, #0x2
+ 8005c7c: 588b         	ldr	r3, [r1, r2]
+ 8005c7e: 1851         	adds	r1, r2, r1
+ 8005c80: 4463         	add	r3, r12
+ 8005c82: 0158         	lsls	r0, r3, #0x5
+ 8005c84: 688b         	ldr	r3, [r1, #0x8]
+ 8005c86: 019a         	lsls	r2, r3, #0x6
+ 8005c88: 4b08         	ldr	r3, [pc, #0x20]         @ 0xc0 <_start+0xc0>
+ 8005c8a: 699c         	ldr	r4, [r3, #0x18]
+

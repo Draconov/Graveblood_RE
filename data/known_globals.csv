@@ -1,0 +1,39 @@
+address,name,evidence
+0x03000548,world_grid_width_tiles,level+0x00; used in collision/world-layer indexing
+0x0300054C,world_grid_height_tiles,level+0x04; paired with world width
+0x03000550,collision_grid_ptr,level+0x0C; u16 world collision grid
+0x0300055C,tile_translation_index_base,level+0x20; values 0x40/0x3E0 and consumed by streamed renderer
+0x03000560,tile_translation_table_ptr,graphics descriptor +0x08; translates source tile IDs before VRAM upload
+0x03000564,visual_world_layer_b_ptr,level+0x10; second streamed u16 world tile layer
+0x03000568,visual_world_layer_a_ptr,level+0x08; first streamed u16 world tile layer
+0x03000554,frame_counter,incremented once per VBlank/main-loop iteration
+0x03000574,npc_spatial_query_scratch_candidate,used by NPC state 1/2/4 proximity/collision queries; not the route table
+0x030005BC,scene_manager,pending/active scene state
+0x030005C4,scene_transition_delay,scene_manager +0x08
+0x030005C8,pending_scene,scene_manager +0x0C
+0x030005F8,active_scene,scene_manager +0x3C
+0x0300061C,state4_monster_render_flag,state-4 opcode -4 sets to 1; Player_draw branches to 0x080068BC when value == 1
+0x03000620,state4_collection_progress_index,state-4 branch indexes six-entry selector with this value; completed pickups increment it; Fgtile_update gates behavior at >3
+0x03000674,ending_effect_progress_counter_candidate,incremented while opcode -5 event flag is active and fed to 0x08004FE0
+0x03000678,ending_event_active_flag,set to 1 by state-4 final-sketch opcode -5 handler 0x080037F6; monitored by gameplay update
+0x030006AC,story_progression_stage,written by normal-context dialogue opcode -4; consumed as stage index by Messages UI; state-4 pickup -4 does not write it
+0x030006BC,keys_current,inverted KEYINPUT mask
+0x030006C0,keys_previous,previous frame key mask
+0x030007FC,npc_obj_source_base_initialized,initialized to 0xE00 from ROM 0x08A8D7AC; NPC draw reads it as ROM-side OBJ source-bank base
+0x0300078C,dialogue_script_pointer_table,initialized from ROM 0xA8D73C; indexed by actor dial at 0x08002DF2
+0x03000808,level_id_or_transition_arg,set to 7 on title Start; consumed by gameplay enter
+0x0300083C,story_entity_overlay_list_slot0,startup-initialized to 0x08018E94; selected by level loader before physical level actors
+0x03000840,story_entity_overlay_list_slot1,"startup-initialized to 0x08018E94; second selector slot, identical in this demo"
+0x0300080C,GameplayScene_object,vtable 0x08018E88
+0x03000A0C,TitleScene_object,vtable 0x08018E74
+0x030005D4,current_level_record_ptr,scene-manager base+0x18; set by 0x08005950
+0x030005D8,level_graphics_variant_selector,scene-manager base+0x1C; initialized to 0 by level loader and written by 0x08005BEC
+0x03000A10,level_runtime_record_array,"11 records, 0x40-byte stride; GameplayScene_enter indexes by level id"
+0x030014EC,message_stream_pointer_table,three initialized message-stream pointers; indexed after selecting a message slot
+0x03001808,message_selector_aux3,third auxiliary selector; initialized -1; filled by opcode -3 first-free policy
+0x0300180C,message_selector_aux2,second auxiliary selector; initialized -1; filled by opcode -3 first-free policy
+0x03001810,message_selector_aux1,first auxiliary selector; initialized -1; filled by opcode -3 first-free policy
+0x03001814,message_selector_primary,primary selector; initialized -1; set by dialogue opcode -2
+0x03001818,npc_route_pointer_table,five route pointers; state==3 indexes this table with actor.route
+0x03001254,avatar_menu_shared_state_block,"shared initialized state block consumed by Player_draw, Wardrobe UI and other menu systems; not a proven outfit-only variable"
+0x03007FFC,irq_callback_slot,startup/main installs 0x08002268 here
