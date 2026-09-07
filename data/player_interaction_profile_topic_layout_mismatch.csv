@@ -1,0 +1,55 @@
+selector_index,name,topic_index,topic,profile_field_offset,raw_value,raw_value_hex,ascii_le,valid_response_class,explicit_dispatch_range,layout_finding,behavior_confidence
+3,Stas,0,sports,+0x18,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,1,movies,+0x1C,1953723722,0x7473754A,Just,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,2,fashion,+0x20,1952804128,0x74656D20, met,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,3,video games,+0x24,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,4,school,+0x28,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,5,future,+0x2C,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,6,parties,+0x30,8,0x00000008,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,7,last event,+0x34,1,0x00000001,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+3,Stas,8,mysteries,+0x38,6,0x00000006,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,0,sports,+0x18,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,1,movies,+0x1C,1633906508,0x61636F4C,Loca,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,2,fashion,+0x20,1647845484,0x6238206C,l 8b,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,3,video games,+0x24,1830843497,0x6D207469,it m,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,4,school,+0x28,1702130529,0x65747361,aste,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,5,future,+0x2C,114,0x00000072,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,6,parties,+0x30,1935766611,0x73617453,Stas,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,7,last event,+0x34,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+4,IQ 54,8,mysteries,+0x38,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,0,sports,+0x18,2,0x00000002,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,1,movies,+0x1C,1814067533,0x6C20794D,My l,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,2,fashion,+0x20,1818588783,0x6C65766F,ovel,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,3,video games,+0x24,1769152633,0x69732079,y si,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,4,school,+0x28,1919251571,0x72657473,ster,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,5,future,+0x2C,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,6,parties,+0x30,891310409,0x35205149,IQ 5,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,7,last event,+0x34,52,0x00000034,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+5,Kate,8,mysteries,+0x38,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,0,sports,+0x18,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,1,movies,+0x1C,1953723722,0x7473754A,Just,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,2,fashion,+0x20,1952804128,0x74656D20, met,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,3,video games,+0x24,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,4,school,+0x28,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,5,future,+0x2C,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,6,parties,+0x30,1702125899,0x6574614B,Kate,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,7,last event,+0x34,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+6,Kiata,8,mysteries,+0x38,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,0,sports,+0x18,5,0x00000005,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,1,movies,+0x1C,543516756,0x20656854,The ,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,2,fashion,+0x20,1685218670,0x6472656E,nerd,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,3,video games,+0x24,1969692793,0x75672079,y gu,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,4,school,+0x28,121,0x00000079,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,5,future,+0x2C,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,6,parties,+0x30,1952541003,0x7461694B,Kiat,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,7,last event,+0x34,97,0x00000061,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+7,Alex,8,mysteries,+0x38,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,0,sports,+0x18,7,0x00000007,,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,1,movies,+0x1C,1970302800,0x75706F50,Popu,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,2,fashion,+0x20,544366956,0x2072616C,lar ,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,3,video games,+0x24,1819437383,0x6C726947,Girl,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,4,school,+0x28,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,5,future,+0x2C,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,6,parties,+0x30,2019912769,0x78656C41,Alex,no,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,7,last event,+0x34,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high
+8,Evelina,8,mysteries,+0x38,0,0x00000000,,yes,0..4,wrong-layout metadata overlaps social topic-class read,high

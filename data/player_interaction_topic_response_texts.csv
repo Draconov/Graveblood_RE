@@ -1,0 +1,217 @@
+action,topic_index,topic,slot,profile_value_class,variant,rom_addr,response_stride,text,confidence
+SUBJECT,0,sports,0,0,0,0x08018078,108,These jocks are just pricks. Why you even bother me with that?,high
+SUBJECT,0,sports,1,1,0,0x080180E4,108,"Ahh, yeah... How's anyone even finds grabbing weights any entertaining?",high
+SUBJECT,0,sports,2,3,0,0x08018150,108,It is always refreshing to go jogging time to times.,high
+SUBJECT,0,sports,3,4,0,0x080181BC,108,I always love to do sports at the weekends!,high
+SUBJECT,0,sports,4,0,1,0x08018228,108,What's so special 'bout watching some dumbs kicking the ball over the field?,high
+SUBJECT,0,sports,5,1,1,0x08018294,108,I prefer sitting somewhere and not get involved in any team games.,high
+SUBJECT,0,sports,6,3,1,0x08018300,108,"Yeah, we could play volleyball or something sometimes!",high
+SUBJECT,0,sports,7,4,1,0x0801836C,108,Do you like my muscles? I am spending all of my free time in gym!,high
+SUBJECT,0,sports,8,0,2,0x080183D8,108,Going to gym is just a narcist crap to me.,high
+SUBJECT,0,sports,9,1,2,0x08018444,108,"I am not interested in such activities, to be honest.",high
+SUBJECT,0,sports,10,3,2,0x080184B0,108,"Not planning to be in a professional, but I like to be in a team!",high
+SUBJECT,0,sports,11,4,2,0x0801851C,108,Have you seen last Ouls game? That last minute... They hit two goals!,high
+SUBJECT,0,sports,12,0,3,0x08018588,108,My favorite sport is when you frick off!,high
+SUBJECT,0,sports,13,1,3,0x080185F4,108,"Well, it's just not my kind of thing",high
+SUBJECT,0,sports,14,3,3,0x08018660,108,"Cheerleader girls are such a hotties, have you noticed?",high
+SUBJECT,0,sports,15,4,3,0x080186CC,108,So I've been training till the late evening yesterday! What a session!,high
+CRITICIZE,0,sports,0,0,0,0x08014DD8,108,"Yeah, that's what I always told - if you love sports, you got issues, bro!",high
+CRITICIZE,0,sports,1,1,0,0x08014E44,108,You are right. Some activities are so pointless.,high
+CRITICIZE,0,sports,2,3,0,0x08014EB0,108,"If you didn't knew, I like to being able to move.",high
+CRITICIZE,0,sports,3,4,0,0x08014F1C,108,Don't like my thing - go tell jokes in other places...,high
+CRITICIZE,0,sports,4,0,1,0x08014F88,108,I can't imagine my day sitting on a couch and watching this stupid sports.,high
+CRITICIZE,0,sports,5,1,1,0x08014FF4,108,"Sport is good, if you want to ruin your helph",high
+CRITICIZE,0,sports,6,3,1,0x08015060,108,Wanna tell me these exersices were pointless?,high
+CRITICIZE,0,sports,7,4,1,0x080150CC,108,"Now repeat this to my fist, huh",high
+SUBJECT,1,movies,0,0,0,0x080179B8,108,All the films I've seen last year was a complete tasteless mistake.,high
+SUBJECT,1,movies,1,1,0,0x08017A24,108,I didn't watched anything in like a years...,high
+SUBJECT,1,movies,2,3,0,0x08017A90,108,We've been on that Jumpscare-2 movie and it was horrifying!,high
+SUBJECT,1,movies,3,4,0,0x08017AFC,108,Have you seen Vintage Movie Critic's new video? It is historical!,high
+SUBJECT,1,movies,4,0,1,0x08017B68,108,Are you still eating what Hollywood is producing every year?,high
+SUBJECT,1,movies,5,1,1,0x08017BD4,108,"Nah, I haven't seen this one",high
+SUBJECT,1,movies,6,3,1,0x08017C40,108,I am going on that 4D film next Saturday. Are you join in?,high
+SUBJECT,1,movies,7,4,1,0x08017CAC,108,Did you knew they used CGI to recreate John's face? Still looks so natural!,high
+SUBJECT,1,movies,8,0,2,0x08017D18,108,Huh... Try reading books once.,high
+SUBJECT,1,movies,9,1,2,0x08017D84,108,I have better things to do instead of watching some nonames trying to act,high
+SUBJECT,1,movies,10,3,2,0x08017DF0,108,I would like to play some superhero one day!,high
+SUBJECT,1,movies,11,4,2,0x08017E5C,108,I can remember and call like 20 examples of use of dollyzoom in films!,high
+SUBJECT,1,movies,12,0,3,0x08017EC8,108,I don't even have time on such stupid things,high
+SUBJECT,1,movies,13,1,3,0x08017F34,108,Have you yet visited local cinema? Don't know places worst than this...,high
+SUBJECT,1,movies,14,3,3,0x08017FA0,108,"Yeah, I watched that one on the TV. Don't remember if it was any good.",high
+SUBJECT,1,movies,15,4,3,0x0801800C,108,So stoked to watch Killpool part 3. It's coming next year!,high
+CRITICIZE,1,movies,0,0,0,0x08014A78,108,Watching movies is the most dumb thing to be honest.,high
+CRITICIZE,1,movies,1,1,0,0x08014AE4,108,"Yeah, they only show poor quality popcorn stuff in cinema these days.",high
+CRITICIZE,1,movies,2,3,0,0x08014B50,108,"I don't know, maybe you are kinda strict to the plot",high
+CRITICIZE,1,movies,3,4,0,0x08014BBC,108,This is my favorite movie...,high
+CRITICIZE,1,movies,4,0,1,0x08014C28,108,Why somebody even waste their time on movies while you could play games?,high
+CRITICIZE,1,movies,5,1,1,0x08014C94,108,...And they spent something about 60 mil. on this... Have no words...,high
+CRITICIZE,1,movies,6,3,1,0x08014D00,108,"Maybe if you read the novel, you will understand what this film is about.",high
+CRITICIZE,1,movies,7,4,1,0x08014D6C,108,"Wait, wait, wait... Don't even ever talk to me again!",high
+SUBJECT,2,fashion,0,0,0,0x080172F8,108,Are you really interested in such silly things?,high
+SUBJECT,2,fashion,1,1,0,0x08017364,108,Usually new trends are going to far off the rail...,high
+SUBJECT,2,fashion,2,3,0,0x080173D0,108,I am liking to choose my clothes so I look good.,high
+SUBJECT,2,fashion,3,4,0,0x0801743C,108,Creepers are the most trendy shoes this year! You gotta have a pair!,high
+SUBJECT,2,fashion,4,0,1,0x080174A8,108,Fashion guys are looking like peacocks sometimes. Nasty.,high
+SUBJECT,2,fashion,5,1,1,0x08017514,108,I'd rather dress normal as everyone does...,high
+SUBJECT,2,fashion,6,3,1,0x08017580,108,IQ looks like he knows how to dress right.,high
+SUBJECT,2,fashion,7,4,1,0x080175EC,108,So I am thinking to go to Fashion Illustration after school!,high
+SUBJECT,2,fashion,8,0,2,0x08017658,108,Do you thinking I do look bad or something?,high
+SUBJECT,2,fashion,9,1,2,0x080176C4,108,"Ask someone else, okay?",high
+SUBJECT,2,fashion,10,3,2,0x08017730,108,I want to buy this new fab checkered shirt from Yours.,high
+SUBJECT,2,fashion,11,4,2,0x0801779C,108,The way of how one is dressed tells so much about one's personality.,high
+SUBJECT,2,fashion,12,0,3,0x08017808,108,Are you with that beauty bloggers gang or something?,high
+SUBJECT,2,fashion,13,1,3,0x08017874,108,I don't understand anything in fashion,high
+SUBJECT,2,fashion,14,3,3,0x080178E0,108,Sometimes you can find an awesome cloth on Second Hand store!,high
+SUBJECT,2,fashion,15,4,3,0x0801794C,108,We gonna shoot a fashion session this weekends. Are you going to join?,high
+CRITICIZE,2,fashion,0,0,0,0x08014718,108,"Ha-ha, these model boys looks so silly!",high
+CRITICIZE,2,fashion,1,1,0,0x08014784,108,"Yeap, in places like this you don't look like fashion magazine covers",high
+CRITICIZE,2,fashion,2,3,0,0x080147F0,108,"Ah, well, if you don't like it, doesn't mean it looks tasteless...",high
+CRITICIZE,2,fashion,3,4,0,0x0801485C,108,You just won't be as fabulous as us.,high
+CRITICIZE,2,fashion,4,0,1,0x080148C8,108,At some point all fashion nerds will start using garbage as material.,high
+CRITICIZE,2,fashion,5,1,1,0x08014934,108,Is it even brings them money in modern world?,high
+CRITICIZE,2,fashion,6,3,1,0x080149A0,108,You just don't understand what is beauty... yet.,high
+CRITICIZE,2,fashion,7,4,1,0x08014A0C,108,"First of all, look at the mirror, ok?",high
+SUBJECT,3,video games,0,0,0,0x08016C38,108,Are you stuck in a child age that you still playing video games?,high
+SUBJECT,3,video games,1,1,0,0x08016CA4,108,Video game is not my thing,high
+SUBJECT,3,video games,2,3,0,0x08016D10,108,"I downloaded a new Need For Pee game, and it's rules!",high
+SUBJECT,3,video games,3,4,0,0x08016D7C,108,Wanna see my console collection? It has some rare items in it.,high
+SUBJECT,3,video games,4,0,1,0x08016DE8,108,You better spend money on something usefull instead of these stupid games.,high
+SUBJECT,3,video games,5,1,1,0x08016E54,108,"I had some video game machine back then, don't know where is it now",high
+SUBJECT,3,video games,6,3,1,0x08016EC0,108,Wish my parents buy me a PlaySession 4 one day...,high
+SUBJECT,3,video games,7,4,1,0x08016F2C,108,"I almost finished my video game. It is 2D, but still going to be fun!",high
+SUBJECT,3,video games,8,0,2,0x08016F98,108,Video games are killing people and makes your brain weak!,high
+SUBJECT,3,video games,9,1,2,0x08017004,108,Don't want to even install anything on my computer.,high
+SUBJECT,3,video games,10,3,2,0x08017070,108,Let's go to the Computer Club tommorow! We are going to play some CS!,high
+SUBJECT,3,video games,11,4,2,0x080170DC,108,Video games are art. It's sad that not everyone understand this.,high
+SUBJECT,3,video games,12,0,3,0x08017148,108,Do you constantly get seizures because of games? Because you have to.,high
+SUBJECT,3,video games,13,1,3,0x080171B4,108,I tried Banio once and it was hard and unfair.,high
+SUBJECT,3,video games,14,3,3,0x08017220,108,You should def check out a new issue of Games Mania magazine!,high
+SUBJECT,3,video games,15,4,3,0x0801728C,108,"Wow, Bantendo banned like 9 fangames and made 2 new Banio games this year!",high
+CRITICIZE,3,video games,0,0,0,0x080143B8,108,Those who play video games all days long have some sort of addiction.,high
+CRITICIZE,3,video games,1,1,0,0x08014424,108,Have you heard about gaming disorder?,high
+CRITICIZE,3,video games,2,3,0,0x08014490,108,Just play it a little more until you got sucked in. Give it a chanse,high
+CRITICIZE,3,video games,3,4,0,0x080144FC,108,Go play Flappy Farm in other place.,high
+CRITICIZE,3,video games,4,0,1,0x08014568,108,I know one guy who spending all his money on games. What a retard!,high
+CRITICIZE,3,video games,5,1,1,0x080145D4,108,I honestly don't understand those who could play MMO all night long.,high
+CRITICIZE,3,video games,6,3,1,0x08014640,108,"No, not the every console is called Bantendo.",high
+CRITICIZE,3,video games,7,4,1,0x080146AC,108,"I bet you never even hold a gamepad, why are you even telling me that?",high
+SUBJECT,4,school,0,0,0,0x08016578,108,I hate doing homework. Do you?,high
+SUBJECT,4,school,1,1,0,0x080165E4,108,Why we even need to study Chemistry or History if we won't use it later?,high
+SUBJECT,4,school,2,3,0,0x08016650,108,They got such a good soup this week on the cafeteria. Try it out!,high
+SUBJECT,4,school,3,4,0,0x080166BC,108,It's important to learn as much as they give to you while you can.,high
+SUBJECT,4,school,4,0,1,0x08016728,108,I was expelled from the last school. And you better don't be curious why.,high
+SUBJECT,4,school,5,1,1,0x08016794,108,Is it any fun listen to lections you don't understand?,high
+SUBJECT,4,school,6,3,1,0x08016800,108,What answer do you have in the third task? I got 172.5,high
+SUBJECT,4,school,7,4,1,0x0801686C,108,"Come visit library sometimes, we always meet there on Fridays.",high
+SUBJECT,4,school,8,0,2,0x080168D8,108,"How's it going in your stupid nerd club, huh?",high
+SUBJECT,4,school,9,1,2,0x08016944,108,How are these nerds even manage to learn so much?,high
+SUBJECT,4,school,10,3,2,0x080169B0,108,I will do my homework and then we could go outside if you want.,high
+SUBJECT,4,school,11,4,2,0x08016A1C,108,Are you going to participate in Math Olimpics this year? I do!,high
+SUBJECT,4,school,12,0,3,0x08016A88,108,Never listen to what teachers says. They know nothing about life.,high
+SUBJECT,4,school,13,1,3,0x08016AF4,108,The only thing I like about school is going to cafetheria.,high
+SUBJECT,4,school,14,3,3,0x08016B60,108,Do you already found a couple to work together on the project?,high
+SUBJECT,4,school,15,4,3,0x08016BCC,108,I met Math teacher at the shop yesterday. She's such a pretty woman.,high
+CRITICIZE,4,school,0,0,0,0x08014058,108,Teachers sucks!,high
+CRITICIZE,4,school,1,1,0,0x080140C4,108,Modern days schools have some serious issues. But seems like nobody cares.,high
+CRITICIZE,4,school,2,3,0,0x08014130,108,Maybe teachers are people too?,high
+CRITICIZE,4,school,3,4,0,0x0801419C,108,You didn't even tried to solve the problem. You'll never learn.,high
+CRITICIZE,4,school,4,0,1,0x08014208,108,Do you have matches? I am planning to burn this place down right now!,high
+CRITICIZE,4,school,5,1,1,0x08014274,108,Mayor never spent a penny on our school. Just look on it's walls.,high
+CRITICIZE,4,school,6,3,1,0x080142E0,108,...Then why are you even going to school?,high
+CRITICIZE,4,school,7,4,1,0x0801434C,108,"Please be quiet, I am trying to read!",high
+SUBJECT,5,future,0,0,0,0x08015EB8,108,What are you even talking about?,high
+SUBJECT,5,future,1,1,0,0x08015F24,108,We don't have much oportunities while living in this town...,high
+SUBJECT,5,future,2,3,0,0x08015F90,108,I am going to go to the big city after school and make my dreams come true!,high
+SUBJECT,5,future,3,4,0,0x08015FFC,108,"Work hard today, and you will be the one that they can't be tommorow",high
+SUBJECT,5,future,4,0,1,0x08016068,108,Why are you so positive about your future? You are living in Graveblood...,high
+SUBJECT,5,future,5,1,1,0x080160D4,108,I don't really want to think about what to do after school.,high
+SUBJECT,5,future,6,3,1,0x08016140,108,Do you already decided on what univercity you going to go?,high
+SUBJECT,5,future,7,4,1,0x080161AC,108,Do you think terraforming the Mars in 15 years in possible?,high
+SUBJECT,5,future,8,0,2,0x08016218,108,"Get lost, nerd!",high
+SUBJECT,5,future,9,1,2,0x08016284,108,I don't even know what I'll have on tommorow dinner. Why you asking?,high
+SUBJECT,5,future,10,3,2,0x080162F0,108,"Prestige job, a good house and two happy kids, it's that a dream to achive?",high
+SUBJECT,5,future,11,4,2,0x0801635C,108,"You can't discover new lands, but ocean almost havn't been touched yet!",high
+SUBJECT,5,future,12,0,3,0x080163C8,108,"They told us you can become a president, a movie star, anything. What a lie.",high
+SUBJECT,5,future,13,1,3,0x08016434,108,Just have fun while you can in the present.,high
+SUBJECT,5,future,14,3,3,0x080164A0,108,Every good thing you do today helps you to become a good person later.,high
+SUBJECT,5,future,15,4,3,0x0801650C,108,Just look how far we've come in a past three decades! And what awaits us?,high
+CRITICIZE,5,future,0,0,0,0x08013CF8,108,Olders says we might have a bright future. How could they know?,high
+CRITICIZE,5,future,1,1,0,0x08013D64,108,After school I just going to do nothing at all,high
+CRITICIZE,5,future,2,3,0,0x08013DD0,108,At least you could try to achieve something in life.,high
+CRITICIZE,5,future,3,4,0,0x08013E3C,108,Your dark mood is killing me. Don't do it. Stop it now!,high
+CRITICIZE,5,future,4,0,1,0x08013EA8,108,I don't want to be old and useless. I want to die young!,high
+CRITICIZE,5,future,5,1,1,0x08013F14,108,Just live today. Your future problems is your future problems.,high
+CRITICIZE,5,future,6,3,1,0x08013F80,108,"You never know what awaits you next, you always should be prepared.",high
+CRITICIZE,5,future,7,4,1,0x08013FEC,108,Why I am even talking to you if you don't care about your carrier?,high
+SUBJECT,6,parties,0,0,0,0x080157F8,108,What's so fun being drunk and mindless once a week?,high
+SUBJECT,6,parties,1,1,0,0x08015864,108,"Nah, being surrounded by people is not my thing.",high
+SUBJECT,6,parties,2,3,0,0x080158D0,108,Last show of Wet Chockers was sick! I even got a photo with them!,high
+SUBJECT,6,parties,3,4,0,0x0801593C,108,We are going to do a live show next Saturday. Are you going?,high
+SUBJECT,6,parties,4,0,1,0x080159A8,108,Is it something what mindless jocks are liking to do?,high
+SUBJECT,6,parties,5,1,1,0x08015A14,108,Kira's Birthday party was horrible. I don't go on any parties ever since.,high
+SUBJECT,6,parties,6,3,1,0x08015A80,108,It's always good to see people you haven't seen in a while!,high
+SUBJECT,6,parties,7,4,1,0x08015AEC,108,"I drunk so much last Sunday night, I couldn't stay on the foot!",high
+SUBJECT,6,parties,8,0,2,0x08015B58,108,So is that you making noises after 11PM every night? I remember it...,high
+SUBJECT,6,parties,9,1,2,0x08015BC4,108,I love to spend time home more.,high
+SUBJECT,6,parties,10,3,2,0x08015C30,108,Do you decided on with who you going to celebrate that Christmas?,high
+SUBJECT,6,parties,11,4,2,0x08015C9C,108,...and then Alex's parents came. He was ander home arrest for a week!,high
+SUBJECT,6,parties,12,0,3,0x08015D08,108,"Next time you drink too much, make sure there's poison in your cup.",high
+SUBJECT,6,parties,13,1,3,0x08015D74,108,I am feeling kinda introvert for such things.,high
+SUBJECT,6,parties,14,3,3,0x08015DE0,108,"Yes, make sure to invite a friend if you want next time!",high
+SUBJECT,6,parties,15,4,3,0x08015E4C,108,"Last time I only fall asleep at 6AM, do you imagine?",high
+CRITICIZE,6,parties,0,0,0,0x08013998,108,Those who goes to parties are not usually smart people.,high
+CRITICIZE,6,parties,1,1,0,0x08013A04,108,I don't like noisy meetings,high
+CRITICIZE,6,parties,2,3,0,0x08013A70,108,"So you don't like being social, huh?",high
+CRITICIZE,6,parties,3,4,0,0x08013ADC,108,"If you don't like parties, don't worry, noone even planned to invite you.",high
+CRITICIZE,6,parties,4,0,1,0x08013B48,108,"I love beeng surrounded by books, cats and coffee.",high
+CRITICIZE,6,parties,5,1,1,0x08013BB4,108,Sometimes I really can't go sleep why they screaming outside...,high
+CRITICIZE,6,parties,6,3,1,0x08013C20,108,"If you don't like parties, what is alternative way of having a good time?",high
+CRITICIZE,6,parties,7,4,1,0x08013C8C,108,I guess I heard something... Anyone else heard some quiet silly things?,high
+SUBJECT,7,last event,0,0,0,0x08015138,108,Why someone'd waste their time trying to find something that doesn't exist?,high
+SUBJECT,7,last event,1,1,0,0x080151A4,108,I don't believe in ghosts or anything,high
+SUBJECT,7,last event,2,3,0,0x08015210,108,There's defenitely something strange going on in Graveblood...,high
+SUBJECT,7,last event,3,4,0,0x0801527C,108,Raid Area 51? Sign me up!,high
+SUBJECT,7,last event,4,0,1,0x080152E8,108,What are you? Wasting time browsing abandone houses? Pathetic.,high
+SUBJECT,7,last event,5,1,1,0x08015354,108,I am kinda afraid so I don't really try to uncover these themes...,high
+SUBJECT,7,last event,6,3,1,0x080153C0,108,"Only between us, there's a secret tunnels underneath the Graveblood.",high
+SUBJECT,7,last event,7,4,1,0x0801542C,108,I've seen ghosts in the cemetery and I almost caught one on camera!,high
+SUBJECT,7,last event,8,0,2,0x08015498,108,It's all just your imagination.,high
+SUBJECT,7,last event,9,1,2,0x08015504,108,So um... Do you seen any ghosts or aliens or something?,high
+SUBJECT,7,last event,10,3,2,0x08015570,108,In Schepkin's Hotel you can hear wierd moaning. I guess it's just wind.,high
+SUBJECT,7,last event,11,4,2,0x080155DC,108,"Some guys went to forest to find a Witch, but they never came back...",high
+SUBJECT,7,last event,12,0,3,0x08015648,108,Yeah. My stomack makes ghost sounds when I am hungry.,high
+SUBJECT,7,last event,13,1,3,0x080156B4,108,"These are just stories to attract tourist, you see?",high
+SUBJECT,7,last event,14,3,3,0x08015720,108,"I love telling scary stories on a picnic, do you?",high
+SUBJECT,7,last event,15,4,3,0x0801578C,108,The old guy from the River Bar seems like he knows something...,high
+CRITICIZE,7,last event,0,0,0,0x08013638,108,"They still believe in ghosts. Oh, gosh, been on a cemetery and never saw one.",high
+CRITICIZE,7,last event,1,1,0,0x080136A4,108,"So much legends, not a single proove...",high
+CRITICIZE,7,last event,2,3,0,0x08013710,108,"If you don't believe in them, it's your choise, ok.",high
+CRITICIZE,7,last event,3,4,0,0x0801377C,108,You won't be so careless when you meet the forest killer...,high
+CRITICIZE,7,last event,4,0,1,0x080137E8,108,"Anyone who thinks ghosts are real, are just don't smart enough.",high
+CRITICIZE,7,last event,5,1,1,0x08013854,108,My grandmother loves reading these Mysteries Newspapers. It's ok for her age.,high
+CRITICIZE,7,last event,6,3,1,0x080138C0,108,"Well, maybe it's just a legend. But I still want to believe.",high
+CRITICIZE,7,last event,7,4,1,0x0801392C,108,Try to critisize Graveblood Witch if she left you alife once you meet her...,high
+SUBJECT,8,mysteries,0,0,0,0x08015138,108,Why someone'd waste their time trying to find something that doesn't exist?,high
+SUBJECT,8,mysteries,1,1,0,0x080151A4,108,I don't believe in ghosts or anything,high
+SUBJECT,8,mysteries,2,3,0,0x08015210,108,There's defenitely something strange going on in Graveblood...,high
+SUBJECT,8,mysteries,3,4,0,0x0801527C,108,Raid Area 51? Sign me up!,high
+SUBJECT,8,mysteries,4,0,1,0x080152E8,108,What are you? Wasting time browsing abandone houses? Pathetic.,high
+SUBJECT,8,mysteries,5,1,1,0x08015354,108,I am kinda afraid so I don't really try to uncover these themes...,high
+SUBJECT,8,mysteries,6,3,1,0x080153C0,108,"Only between us, there's a secret tunnels underneath the Graveblood.",high
+SUBJECT,8,mysteries,7,4,1,0x0801542C,108,I've seen ghosts in the cemetery and I almost caught one on camera!,high
+SUBJECT,8,mysteries,8,0,2,0x08015498,108,It's all just your imagination.,high
+SUBJECT,8,mysteries,9,1,2,0x08015504,108,So um... Do you seen any ghosts or aliens or something?,high
+SUBJECT,8,mysteries,10,3,2,0x08015570,108,In Schepkin's Hotel you can hear wierd moaning. I guess it's just wind.,high
+SUBJECT,8,mysteries,11,4,2,0x080155DC,108,"Some guys went to forest to find a Witch, but they never came back...",high
+SUBJECT,8,mysteries,12,0,3,0x08015648,108,Yeah. My stomack makes ghost sounds when I am hungry.,high
+SUBJECT,8,mysteries,13,1,3,0x080156B4,108,"These are just stories to attract tourist, you see?",high
+SUBJECT,8,mysteries,14,3,3,0x08015720,108,"I love telling scary stories on a picnic, do you?",high
+SUBJECT,8,mysteries,15,4,3,0x0801578C,108,The old guy from the River Bar seems like he knows something...,high
+CRITICIZE,8,mysteries,0,0,0,0x08013638,108,"They still believe in ghosts. Oh, gosh, been on a cemetery and never saw one.",high
+CRITICIZE,8,mysteries,1,1,0,0x080136A4,108,"So much legends, not a single proove...",high
+CRITICIZE,8,mysteries,2,3,0,0x08013710,108,"If you don't believe in them, it's your choise, ok.",high
+CRITICIZE,8,mysteries,3,4,0,0x0801377C,108,You won't be so careless when you meet the forest killer...,high
+CRITICIZE,8,mysteries,4,0,1,0x080137E8,108,"Anyone who thinks ghosts are real, are just don't smart enough.",high
+CRITICIZE,8,mysteries,5,1,1,0x08013854,108,My grandmother loves reading these Mysteries Newspapers. It's ok for her age.,high
+CRITICIZE,8,mysteries,6,3,1,0x080138C0,108,"Well, maybe it's just a legend. But I still want to believe.",high
+CRITICIZE,8,mysteries,7,4,1,0x0801392C,108,Try to critisize Graveblood Witch if she left you alife once you meet her...,high

@@ -1,0 +1,31 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08009504 <_start>:
+ 8009504: 23f8         	movs	r3, #0xf8
+ 8009506: 005b         	lsls	r3, r3, #0x1
+ 8009508: 58e3         	ldr	r3, [r4, r3]
+ 800950a: 3306         	adds	r3, #0x6
+ 800950c: 009b         	lsls	r3, r3, #0x2
+ 800950e: 585b         	ldr	r3, [r3, r1]
+ 8009510: 3b02         	subs	r3, #0x2
+ 8009512: 694a         	ldr	r2, [r1, #0x14]
+ 8009514: 4694         	mov	r12, r2
+ 8009516: 005b         	lsls	r3, r3, #0x1
+ 8009518: 4463         	add	r3, r12
+ 800951a: 614b         	str	r3, [r1, #0x14]
+ 800951c: e5ff         	b	0x800911e <_start+0xfffffffffffffc1a> @ imm = #-0x402
+ 800951e: 2805         	cmp	r0, #0x5
+ 8009520: dd00         	ble	0x8009524 <_start+0x20> @ imm = #0x0
+ 8009522: e55e         	b	0x8008fe2 <_start+0xfffffffffffffade> @ imm = #-0x544
+ 8009524: 2690         	movs	r6, #0x90
+ 8009526: 1c43         	adds	r3, r0, #0x1
+ 8009528: 00b6         	lsls	r6, r6, #0x2
+ 800952a: 51a3         	str	r3, [r4, r6]
+ 800952c: 309f         	adds	r0, #0x9f
+ 800952e: 0080         	lsls	r0, r0, #0x2
+ 8009530: 1820         	adds	r0, r4, r0
+ 8009532: 6840         	ldr	r0, [r0, #0x4]
+

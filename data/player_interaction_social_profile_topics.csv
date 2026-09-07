@@ -1,0 +1,19 @@
+selector_index,profile_ptr,name,profile_field_14_initial,topic_index,topic,rating,rating_range,record_kind,behavior_confidence
+0,0x030010D0,Stas,0,0,sports,3,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,1,movies,4,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,2,fashion,0,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,3,video games,2,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,4,school,1,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,5,future,1,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,6,parties,3,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,7,last event,2,0..4,social_profile_0x3C,high
+0,0x030010D0,Stas,0,8,mysteries,2,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,0,sports,1,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,1,movies,2,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,2,fashion,2,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,3,video games,0,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,4,school,1,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,5,future,2,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,6,parties,4,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,7,last event,2,0..4,social_profile_0x3C,high
+1,0x03001094,Julia,0,8,mysteries,3,0..4,social_profile_0x3C,high

@@ -1,0 +1,2 @@
+proper_social_profiles,null_entries,wrong_layout_entries,wrong_layout_topic_reads,wrong_layout_reads_in_0_4,runtime_profile_deref,selector_null_guard,null_selector_index,actor_selector_source,parity_warning,behavior_confidence
+2,1,6,54,23,0x0800948C,none before profile/topic dereference,2,actor+0x5C -> Player+0x388,do not normalize selector table in faithful demo mode,high

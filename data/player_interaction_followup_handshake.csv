@@ -1,0 +1,2 @@
+armed_by,flag_offset,consumer,trigger,clears,active_global_write,result_state,exact_leaf_effect,confidence
+quadrants 1 and 2 at 0x08009212,+0x382,0x0800852E,fresh A while Player+0x382 != 0,Player+0x382|Player+0x381|Player+0x1EC,0x03000610=1,0,not proved; dispatcher is quadrant-only,high

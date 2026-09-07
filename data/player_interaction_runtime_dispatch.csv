@@ -1,0 +1,17 @@
+action_index,action_label,page_base,quadrant,runtime_path,dispatcher,dispatch_key,page_base_consulted,shared_flag_offset,reconstruction_warning,confidence
+4,SUBJECT,4,0,SUBJECT response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+5,Ask about,4,1,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+6,JOKE,4,2,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+7,CRITICIZE,4,3,CRITICIZE response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+8,KISS CHEEK,8,0,SUBJECT response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+9,KISS LIPS,8,1,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+10,DIRTY JOKE,8,2,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+11,BREAKUP,8,3,CRITICIZE response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+12,SWEAR,12,0,SUBJECT response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+13,FIGHT,12,1,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+14,unused,12,2,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+15,SCAM,12,3,CRITICIZE response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+16,GIFT,16,0,SUBJECT response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high
+17,ACTIVITY,16,1,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+18,A Number,16,2,set Player+0x382=1,0x08009200,Player+0x1E4 quadrant only,no,+0x382,leaf label is not proof of a unique runtime effect in this demo,high
+19,ASK,16,3,CRITICIZE response bank,0x08009200,Player+0x1E4 quadrant only,no,,leaf label is not proof of a unique runtime effect in this demo,high

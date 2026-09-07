@@ -1,0 +1,58 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08008bf4 <_start>:
+ 8008bf4: 3340         	adds	r3, #0x40
+ 8008bf6: 001a         	movs	r2, r3
+ 8008bf8: 400a         	ands	r2, r1
+ 8008bfa: 2d01         	cmp	r5, #0x1
+ 8008bfc: d101         	bne	0x8008c02 <_start+0xe>  @ imm = #0x2
+ 8008bfe: f000 fdc9    	bl	0x8009794 <_start+0xba0> @ imm = #0xb92
+ 8008c02: 2a00         	cmp	r2, #0x0
+ 8008c04: d101         	bne	0x8008c0a <_start+0x16> @ imm = #0x2
+ 8008c06: f000 fef7    	bl	0x80099f8 <_start+0xe04> @ imm = #0xdee
+ 8008c0a: 4a74         	ldr	r2, [pc, #0x1d0]        @ 0x1e8 <_start+0x1e8>
+ 8008c0c: 6812         	ldr	r2, [r2]
+ 8008c0e: 421a         	tst	r2, r3
+ 8008c10: d001         	beq	0x8008c16 <_start+0x22> @ imm = #0x2
+ 8008c12: f000 fef1    	bl	0x80099f8 <_start+0xe04> @ imm = #0xde2
+ 8008c16: 23f8         	movs	r3, #0xf8
+ 8008c18: 005b         	lsls	r3, r3, #0x1
+ 8008c1a: 58e2         	ldr	r2, [r4, r3]
+ 8008c1c: 2a00         	cmp	r2, #0x0
+ 8008c1e: dd20         	ble	0x8008c62 <_start+0x6e> @ imm = #0x40
+ 8008c20: 1e51         	subs	r1, r2, #0x1
+ 8008c22: 50e1         	str	r1, [r4, r3]
+ 8008c24: 2186         	movs	r1, #0x86
+ 8008c26: 0023         	movs	r3, r4
+ 8008c28: 0089         	lsls	r1, r1, #0x2
+ 8008c2a: 1865         	adds	r5, r4, r1
+ 8008c2c: 2002         	movs	r0, #0x2
+ 8008c2e: 2109         	movs	r1, #0x9
+ 8008c30: 33f5         	adds	r3, #0xf5
+ 8008c32: 33ff         	adds	r3, #0xff
+ 8008c34: 6018         	str	r0, [r3]
+ 8008c36: 6259         	str	r1, [r3, #0x24]
+ 8008c38: 3304         	adds	r3, #0x4
+ 8008c3a: 429d         	cmp	r5, r3
+ 8008c3c: d1fa         	bne	0x8008c34 <_start+0x40> @ imm = #-0xc
+ 8008c3e: 23f8         	movs	r3, #0xf8
+ 8008c40: 0092         	lsls	r2, r2, #0x2
+ 8008c42: 18a2         	adds	r2, r4, r2
+ 8008c44: 2106         	movs	r1, #0x6
+ 8008c46: 005b         	lsls	r3, r3, #0x1
+ 8008c48: 50d1         	str	r1, [r2, r3]
+ 8008c4a: 3324         	adds	r3, #0x24
+ 8008c4c: 3101         	adds	r1, #0x1
+ 8008c4e: 50d1         	str	r1, [r2, r3]
+ 8008c50: 0020         	movs	r0, r4
+ 8008c52: 2100         	movs	r1, #0x0
+ 8008c54: f7fe fc40    	bl	0x80074d8 <_start+0xffffffffffffe8e4> @ imm = #-0x1780
+ 8008c58: 0020         	movs	r0, r4
+ 8008c5a: f7fe f8d1    	bl	0x8006e00 <_start+0xffffffffffffe20c> @ imm = #-0x1e5e
+ 8008c5e: 4653         	mov	r3, r10
+ 8008c60: 6819         	ldr	r1, [r3]
+ 8008c62: 2302         	movs	r3, #0x2
+

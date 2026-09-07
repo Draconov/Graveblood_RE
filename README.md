@@ -1,22 +1,8 @@
 # Graveblood_RE
 
-Unofficial fan reverse-engineering and reconstruction project for Graveblood, developed with permission from Cojam.
+Unofficial fan reverse-engineering and reconstruction project for Graveblood, a game by Cojam.
 
-This repository documents and reproducibly extracts structures from the **canonical latest public demo ROM**:
-
-`Graveblood 0.0.1.1.5.2 demo.gba`
-
-Expected SHA-256:
-
-`e0d7878d2f41dcdeedcc306585bdaf18f39abc2ae42a4bc338514d49feb9449b`
-
-The older **Pre Pre Pre Alpha** build is used **only as a differential reference** to identify inherited CFA-era code and later Graveblood additions. Alpha content is not treated as canonical game content.
-
-Alpha reference SHA-256:
-
-`f63e1604c3887a9f018961cadca6365fe621f006b83f458702c68b079e0b0f0a`
-
-The ROMs themselves are intentionally **not included** in this archive.
+This repository documents and reproducibly extracts structures from the **canonical latest public demo ROM**.
 
 ## Buildable clean-room reconstruction
 
@@ -36,7 +22,7 @@ Development releases use tags such as `Graveblood_RE_v0.0.1-dev`; GitHub Actions
 
 ## 1. What this repository contains
 
-The workspace now includes:
+The workspace includes:
 
 - a buildable clean-room Butano reconstruction shell under `reconstruction/`;
 - local development/build/release instructions plus GitHub Actions ROM artifacts/releases;
@@ -805,5 +791,3 @@ This workspace intentionally separates:
 - **proven machine behavior** — directly supported by traced code/data;
 - **working names** — useful conservative labels whose original developer names are unknown;
 - **candidates** — plausible interpretations that still need another proof step.
-
-That distinction matters if this work later becomes the basis for a finished Graveblood reconstruction: recovered facts should not quietly turn into invented “original” design.

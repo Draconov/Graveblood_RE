@@ -1,0 +1,21 @@
+index,source_rom_addr,label,record_size,visual_selector,node_type,field_24,field_28,node_role,child_base,children,confidence
+0,0x08018738,TALK,44,8,0,4,0,submenu,4,SUBJECT|Ask about|JOKE|CRITICIZE,high
+1,0x08018764,FLIRT,44,14,0,8,0,submenu,8,KISS CHEEK|KISS LIPS|DIRTY JOKE|BREAKUP,high
+2,0x08018790,ASSAULT,44,36,0,12,0,submenu,12,SWEAR|FIGHT|unused|SCAM,high
+3,0x080187BC,SHARE,44,12,0,16,0,submenu,16,GIFT|ACTIVITY|A Number|ASK,high
+4,0x080187E8,SUBJECT,44,8,1,0,9,leaf_action,,,high
+5,0x08018814,Ask about,44,38,1,10,5,leaf_action,,,high
+6,0x08018840,JOKE,44,32,1,2,0,leaf_action,,,high
+7,0x0801886C,CRITICIZE,44,34,1,0,9,leaf_action,,,high
+8,0x08018898,KISS CHEEK,44,40,1,0,0,leaf_action,,,high
+9,0x080188C4,KISS LIPS,44,42,1,1,0,leaf_action,,,high
+10,0x080188F0,DIRTY JOKE,44,14,1,2,0,leaf_action,,,high
+11,0x0801891C,BREAKUP,44,44,1,0,0,leaf_action,,,high
+12,0x08018948,SWEAR,44,46,1,0,0,leaf_action,,,high
+13,0x08018974,FIGHT,44,64,1,1,0,leaf_action,,,high
+14,0x080189A0,unused,44,14,1,2,0,leaf_action,,,high
+15,0x080189CC,SCAM,44,34,1,0,0,leaf_action,,,high
+16,0x080189F8,GIFT,44,66,1,0,0,leaf_action,,,high
+17,0x08018A24,ACTIVITY,44,68,1,1,0,leaf_action,,,high
+18,0x08018A50,A Number,44,70,1,2,0,leaf_action,,,high
+19,0x08018A7C,ASK,44,12,1,0,0,leaf_action,,,high

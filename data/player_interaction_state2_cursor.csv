@@ -1,0 +1,2 @@
+cursor_offset,entry_value,entry_handler,up_handler,up_behavior,down_handler,down_behavior,mechanical_range,rebuild_calls,per_action_count_clamp,confidence
++0x1F0,0,0x08009DDA,0x08008C16,fresh Up decrements cursor when cursor > 0,0x080099F8,fresh Down increments cursor when cursor <= 7,0..8,0x080074D8|0x08006E00,not proved; movement code uses global 0..8 bound,high

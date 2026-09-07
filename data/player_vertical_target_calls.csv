@@ -1,0 +1,4 @@
+callsite,context,target_x_write,target_y_write,helper,helper_consumes_target_x,helper_consumes_target_y,helper_clears_target_x,helper_clears_target_y,confidence
+0x08002DD6,NPC/dialogue interaction,source actor X -> Player+0x390,source actor Y -> Player+0x394,0x080080A4,no,yes,yes,yes,high
+0x080041C8,Fgtile interaction,none in this call path,512px -> Player+0x394,0x080080A4,no,yes,yes,yes,high
+0x080042BE,rusty-key level-10 turn=4/5 gate,826px -> Player+0x390,360px or 410px -> Player+0x394 depending on turn,0x080080A4,no,yes,yes,yes,high

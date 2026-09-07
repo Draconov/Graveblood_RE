@@ -1,0 +1,2 @@
+player_offset,profile_selector_offset,profile_table,profile_field_offset,target_formula,below_target,above_target,at_target,entry_path,semantic_name,confidence
++0x39C,+0x388,0x0300110C,+0x14,10 * profile[+0x14],increment Player+0x39C by 1,decrement Player+0x39C by 1,leave Player+0x39C unchanged,after fresh-A +0x382 follow-up handshake,scaled relationship-like score mirror/follower,high

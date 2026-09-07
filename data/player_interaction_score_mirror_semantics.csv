@@ -1,0 +1,2 @@
+direct_sync_site,profile_selector,profile_table,profile_field,player_field,direct_sync_formula,position,followup_behavior,working_name,behavior_confidence
+0x080090F8,Player+0x388,0x0300110C,+0x14,+0x39C,Player+0x39C = 10 * profile+0x14,before quadrant-specific response branch,fresh-A +0x382 path nudges same field by one toward same target,scaled relationship-like score mirror/follower,high

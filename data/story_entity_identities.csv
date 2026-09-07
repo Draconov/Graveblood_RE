@@ -8,7 +8,7 @@ index,identity,semantic_role,identity_confidence,evidence
 6,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
 7,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
 8,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-9,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+9,IQ 54,story character,high,"overlay #9 is level=10, state=2, dial=2; dial is the proven dialogue-script index and script 2's speaking NPC is IQ 54"
 10,Katya,story character,high,overlay #10 has dial=3; script 3 is Katya's sister/bicycle conversation
 11,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
 12,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches

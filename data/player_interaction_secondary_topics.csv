@@ -1,0 +1,4 @@
+action_index,action_label,topic_start,topic_count,topics,builder,topic_table,topic_stride,field_24_role,field_28_role,zero_count_behavior,confidence
+4,SUBJECT,0,9,sports|movies|fashion|video games|school|future|parties|last event|mysteries,0x08006E00,0x080114B4,15,topic_start when field_28 > 0,topic_count,builder exits before field_24 is used as a topic-table index,high
+5,Ask about,10,5,hobbies|fav. music|best places|fav. meals|dreams,0x08006E00,0x080114B4,15,topic_start when field_28 > 0,topic_count,builder exits before field_24 is used as a topic-table index,high
+7,CRITICIZE,0,9,sports|movies|fashion|video games|school|future|parties|last event|mysteries,0x08006E00,0x080114B4,15,topic_start when field_28 > 0,topic_count,builder exits before field_24 is used as a topic-table index,high

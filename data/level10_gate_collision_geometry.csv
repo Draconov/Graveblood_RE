@@ -1,0 +1,2 @@
+entry,player_x_grid,player_y_grid,actor_x_grid,actor_y_grid,contact_condition,grid_cell_px,player_contact_flag,fgtile_contact_flags,confidence
+0x0800404A,(playerX-8px)>>11,(playerY-24px)>>11,(actorX-8px)>>11,(actorY-16px)>>11,"PX in {AX,AX+1} and PY in {AY,AY+1}",8,+0x1C0=1,+0x8C=1; +0x8D=1,high

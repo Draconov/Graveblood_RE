@@ -1,0 +1,3 @@
+copy,function,destination,source_bias,bytes_per_step,argument_bias,size_formula,size_at_argument_0,copy_helper,scene_manager,confidence
+1,0x08004FE0,0x06000000,0x0005E801,1500,64,1500*(argument+64),96000,0x08010C54,0x030005BC,high
+2,0x08004FE0,0x06010000,0x0005E800,250,64,250*(argument+64),16000,0x08010C54,0x030005BC,high

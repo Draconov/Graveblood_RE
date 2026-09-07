@@ -1,0 +1,2 @@
+profile_field,update_site,topic_class_source,update_formula,topic_class_deltas,player_follower_offset,player_follower_target,direct_player_mirror_site,direct_player_mirror_formula,proper_profile_initial_values,semantic_name,name_confidence,behavior_confidence
++0x14,0x08009504..0x0800951A,profile + 4*(Player+0x1F0 + 6),profile+0x14 += 2 * (topic_class - 2),0:-4|1:-2|2:0|3:+2|4:+4,+0x39C,10 * profile+0x14,0x080090F8,Player+0x39C = 10 * profile+0x14,Stas:0|Julia:0,relationship-like social score,medium-high,high

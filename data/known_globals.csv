@@ -12,6 +12,7 @@ address,name,evidence
 0x030005C4,scene_transition_delay,scene_manager +0x08
 0x030005C8,pending_scene,scene_manager +0x0C
 0x030005F8,active_scene,scene_manager +0x3C
+0x03000610,player_interaction_active_flag,NPC fresh-A handler sets to 1 at 0x08002FF2 after copying dial/X/Y into Player; Player_update gates +0x1EC interaction dispatch at 0x08008BC8 and clears it at 0x0800965C
 0x0300061C,state4_monster_render_flag,state-4 opcode -4 sets to 1; Player_draw branches to 0x080068BC when value == 1
 0x03000620,state4_collection_progress_index,state-4 branch indexes six-entry selector with this value; completed pickups increment it; Fgtile_update gates behavior at >3
 0x03000674,ending_effect_progress_counter_candidate,incremented while opcode -5 event flag is active and fed to 0x08004FE0

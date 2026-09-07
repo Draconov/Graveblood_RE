@@ -14,6 +14,7 @@
 08003B98 Fgtile_update
 080043AC actor_level_global_policy_candidate
 080043F8 actor_common_property_parse_candidate
+08004670 apply_actor_motion_with_tile_collision_candidate
 08004A74 TitleScene_exit
 08004F04 dynamic_obj_tile_upload
 08004FE0 ending_vram_effect_candidate
@@ -38,6 +39,8 @@
 08006418 Player_factory
 080065FC Player_draw
 080068BC Player_draw_state4_monster_branch
+080080A4 Player_apply_vertical_target_delta
+080081B0 Player_update
 08005EDA bx_r5_trampoline
 08006D6C message_selector_slot_copy_candidate
 08008E30 Wardrobe_ui_update_candidate
@@ -60,6 +63,7 @@
 030005C4 scene_transition_delay
 030005C8 pending_scene
 030005F8 active_scene
+03000610 player_interaction_active_flag
 0300061C state4_monster_render_flag
 03000620 state4_collection_progress_index
 03000674 ending_effect_progress_counter_candidate
@@ -85,3 +89,9 @@
 03001818 npc_route_pointer_table
 03001254 avatar_menu_shared_state_block
 03007FFC irq_callback_slot
+0800948C player_social_profile_topic_deref_candidate
+08009504 player_relationship_like_score_update_candidate
+0300110C player_social_profile_selector_table
+030010D0 stas_social_profile_initialized
+03001094 julia_social_profile_initialized
+080090F8 player_relationship_score_mirror_sync_candidate

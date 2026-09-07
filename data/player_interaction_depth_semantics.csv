@@ -1,0 +1,2 @@
+depth_offset,submenu_confirm,leaf_entry,b_return,state2_fresh_a_gate,talk_page_base,other_page_bases,other_page_fresh_a,state_offset,page_base_offset,confidence
++0x38C,increments depth at 0x08009C62,reloads depth at 0x08009E18 then increments through 0x08009C62,decrements depth at 0x08008C98,depth > 0 and page_base == 4 -> state 3,4,8|12|16,exits Player_update path without changing interaction state,+0x1EC,+0x1E8,high

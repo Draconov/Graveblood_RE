@@ -1,0 +1,56 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08004fe0 <_start>:
+ 8004fe0: 3040         	adds	r0, #0x40
+ 8004fe2: b570         	push	{r4, r5, r6, lr}
+ 8004fe4: 0005         	movs	r5, r0
+ 8004fe6: 4c14         	ldr	r4, [pc, #0x50]         @ 0x58 <_start+0x58>
+ 8004fe8: 4a14         	ldr	r2, [pc, #0x50]         @ 0x5c <_start+0x5c>
+ 8004fea: 0016         	movs	r6, r2
+ 8004fec: 436e         	muls	r6, r5, r6
+ 8004fee: 69a2         	ldr	r2, [r4, #0x18]
+ 8004ff0: 4694         	mov	r12, r2
+ 8004ff2: 69e3         	ldr	r3, [r4, #0x1c]
+ 8004ff4: 3308         	adds	r3, #0x8
+ 8004ff6: 009b         	lsls	r3, r3, #0x2
+ 8004ff8: 4463         	add	r3, r12
+ 8004ffa: 685b         	ldr	r3, [r3, #0x4]
+ 8004ffc: 6819         	ldr	r1, [r3]
+ 8004ffe: 4b10         	ldr	r3, [pc, #0x40]         @ 0x60 <_start+0x60>
+ 8005000: 20c0         	movs	r0, #0xc0
+ 8005002: 469c         	mov	r12, r3
+ 8005004: 0032         	movs	r2, r6
+ 8005006: 4461         	add	r1, r12
+ 8005008: 04c0         	lsls	r0, r0, #0x13
+ 800500a: f00b fe23    	bl	0x8010c54 <_start+0xbc74> @ imm = #0xbc46
+ 800500e: 23fa         	movs	r3, #0xfa
+ 8005010: 3418         	adds	r4, #0x18
+ 8005012: 001a         	movs	r2, r3
+ 8005014: 436a         	muls	r2, r5, r2
+ 8005016: cc0a         	ldm	r4!, {r1, r3}
+ 8005018: 3308         	adds	r3, #0x8
+ 800501a: 009b         	lsls	r3, r3, #0x2
+ 800501c: 18cb         	adds	r3, r1, r3
+ 800501e: 685b         	ldr	r3, [r3, #0x4]
+ 8005020: 6959         	ldr	r1, [r3, #0x14]
+ 8005022: 23bd         	movs	r3, #0xbd
+ 8005024: 02db         	lsls	r3, r3, #0xb
+ 8005026: 469c         	mov	r12, r3
+ 8005028: 4806         	ldr	r0, [pc, #0x18]         @ 0x64 <_start+0x64>
+ 800502a: 4461         	add	r1, r12
+ 800502c: f00b fe12    	bl	0x8010c54 <_start+0xbc74> @ imm = #0xbc24
+ 8005030: bc70         	pop	{r4, r5, r6}
+ 8005032: bc01         	pop	{r0}
+ 8005034: 4700         	bx	r0
+ 8005036: 46c0         	mov	r8, r8
+ 8005038: 05bc         	lsls	r4, r7, #0x16
+ 800503a: 0300         	lsls	r0, r0, #0xc
+ 800503c: 05dc         	lsls	r4, r3, #0x17
+ 800503e: 0000         	movs	r0, r0
+ 8005040: e801 0005    	<unknown>
+ 8005044: 0000         	movs	r0, r0
+ 8005046: 0601         	lsls	r1, r0, #0x18
+

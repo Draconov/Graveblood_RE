@@ -1,0 +1,10 @@
+selector_index,profile_ptr,initialized_rom_addr,name,record_kind,record_size,selector_source,behavior_confidence
+0,0x030010D0,0x08A8E080,Stas,social_profile_0x3C,60,actor+0x5C copied to Player+0x388,high
+1,0x03001094,0x08A8E044,Julia,social_profile_0x3C,60,actor+0x5C copied to Player+0x388,high
+2,0x00000000,,,null,0,actor+0x5C copied to Player+0x388,high
+3,0x03001224,0x08A8E1D4,Stas,npc_metadata_0x30_wrong_for_social_code,48,actor+0x5C copied to Player+0x388,high
+4,0x030011F4,0x08A8E1A4,IQ 54,npc_metadata_0x30_wrong_for_social_code,48,actor+0x5C copied to Player+0x388,high
+5,0x030011C4,0x08A8E174,Kate,npc_metadata_0x30_wrong_for_social_code,48,actor+0x5C copied to Player+0x388,high
+6,0x03001194,0x08A8E144,Kiata,npc_metadata_0x30_wrong_for_social_code,48,actor+0x5C copied to Player+0x388,high
+7,0x03001164,0x08A8E114,Alex,npc_metadata_0x30_wrong_for_social_code,48,actor+0x5C copied to Player+0x388,high
+8,0x03001134,0x08A8E0E4,Evelina,npc_metadata_0x30_wrong_for_social_code,48,actor+0x5C copied to Player+0x388,high

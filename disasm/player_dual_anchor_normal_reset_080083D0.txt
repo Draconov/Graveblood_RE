@@ -1,0 +1,57 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+080083d0 <_start>:
+ 80083d0: 5ca2         	ldrb	r2, [r4, r2]
+ 80083d2: 2a00         	cmp	r2, #0x0
+ 80083d4: d12f         	bne	0x8008436 <_start+0x66> @ imm = #0x5e
+ 80083d6: 4a69         	ldr	r2, [pc, #0x1a4]        @ 0x1ac <_start+0x1ac>
+ 80083d8: 5ca2         	ldrb	r2, [r4, r2]
+ 80083da: 2a00         	cmp	r2, #0x0
+ 80083dc: d12b         	bne	0x8008436 <_start+0x66> @ imm = #0x56
+ 80083de: 782a         	ldrb	r2, [r5]
+ 80083e0: 2a00         	cmp	r2, #0x0
+ 80083e2: d128         	bne	0x8008436 <_start+0x66> @ imm = #0x50
+ 80083e4: 22e4         	movs	r2, #0xe4
+ 80083e6: 0092         	lsls	r2, r2, #0x2
+ 80083e8: 58a2         	ldr	r2, [r4, r2]
+ 80083ea: 2a00         	cmp	r2, #0x0
+ 80083ec: d000         	beq	0x80083f0 <_start+0x20> @ imm = #0x0
+ 80083ee: 61a1         	str	r1, [r4, #0x18]
+ 80083f0: 069a         	lsls	r2, r3, #0x1a
+ 80083f2: d401         	bmi	0x80083f8 <_start+0x28> @ imm = #0x2
+ 80083f4: f001 fbb6    	bl	0x8009b64 <_start+0x1794> @ imm = #0x176c
+ 80083f8: 4a61         	ldr	r2, [pc, #0x184]        @ 0x1b0 <_start+0x1b0>
+ 80083fa: 61a2         	str	r2, [r4, #0x18]
+ 80083fc: 6a22         	ldr	r2, [r4, #0x20]
+ 80083fe: 3201         	adds	r2, #0x1
+ 8008400: 6222         	str	r2, [r4, #0x20]
+ 8008402: 2209         	movs	r2, #0x9
+ 8008404: 60b2         	str	r2, [r6, #0x8]
+ 8008406: 22e5         	movs	r2, #0xe5
+ 8008408: 0092         	lsls	r2, r2, #0x2
+ 800840a: 58a2         	ldr	r2, [r4, r2]
+ 800840c: 2a00         	cmp	r2, #0x0
+ 800840e: d001         	beq	0x8008414 <_start+0x44> @ imm = #0x2
+ 8008410: 2200         	movs	r2, #0x0
+ 8008412: 61e2         	str	r2, [r4, #0x1c]
+ 8008414: 065a         	lsls	r2, r3, #0x19
+ 8008416: d401         	bmi	0x800841c <_start+0x4c> @ imm = #0x2
+ 8008418: f001 fbb2    	bl	0x8009b80 <_start+0x17b0> @ imm = #0x1764
+ 800841c: 4a58         	ldr	r2, [pc, #0x160]        @ 0x1b0 <_start+0x1b0>
+ 800841e: 61e2         	str	r2, [r4, #0x1c]
+ 8008420: 6a22         	ldr	r2, [r4, #0x20]
+ 8008422: 3201         	adds	r2, #0x1
+ 8008424: 6222         	str	r2, [r4, #0x20]
+ 8008426: 220c         	movs	r2, #0xc
+ 8008428: 60b2         	str	r2, [r6, #0x8]
+ 800842a: 21e4         	movs	r1, #0xe4
+ 800842c: 2201         	movs	r2, #0x1
+ 800842e: 0089         	lsls	r1, r1, #0x2
+ 8008430: 5062         	str	r2, [r4, r1]
+ 8008432: 3104         	adds	r1, #0x4
+ 8008434: 5062         	str	r2, [r4, r1]
+ 8008436: 2001         	movs	r0, #0x1
+
