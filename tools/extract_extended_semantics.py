@@ -381,6 +381,15 @@ NPC_STATE1_ENTRY = 0x08002ACA
 NPC_STATE1_SOCIAL_HANDOFF = 0x08002B52
 NPC_SOCIAL_PRELUDE = 0x08002FA2
 NPC_SOCIAL_BOOTSTRAP = 0x08002FCE
+NPC_STATE2_ENTRY = 0x08002A0C
+NPC_STATE4_ENTRY = 0x08002C0C
+NPC_STATE2_ACTIVATION = 0x08002D96
+NPC_STATE4_ACTIVATION = 0x0800301C
+NPC_INTERACTION_SCRATCH = 0x03000574
+NPC_INTERACTION_ACTOR_BIAS = -0x1000
+NPC_INPUT_CURRENT = 0x030006BC
+NPC_INPUT_PREVIOUS = 0x030006C0
+NPC_COLLECTION_SELECTOR = 0x03000620
 
 ENDING_VRAM_EFFECT = 0x08004FE0
 ENDING_VRAM_LITERALS = 0x08005038
@@ -1310,6 +1319,150 @@ def extract_player_interaction_profile_topic_layout_mismatch(data: bytes) -> lis
                 "behavior_confidence": "high",
             })
     return rows
+
+
+def extract_npc_interaction_geometry(data: bytes) -> list[dict]:
+    """Recover the state 1/2/4 proximity rectangles and fresh-A gates.
+
+    NPC coordinates are fixed-point with 11 fractional bits for the grid tests.
+    Each interaction branch subtracts 0x1000 (two grid cells) from actor X/Y
+    before scanning its rectangle against Player X/Y.  The rectangles differ:
+    state 1 is fixed 5x5, state 2 is 4x4 only when actor+0x4E == 1 and 5x5
+    otherwise, and state 4 is fixed 4x4.  All three activation paths require
+    input bit 0 to be set in the current input word and clear in the previous
+    input word, i.e. a fresh A press.
+    """
+    # State dispatch and actor-origin bias are shared by all three branches.
+    dispatch_sig = (0x2B04, 0xD100, 0xE10C, 0x2B02, 0xD00A, 0x2B01, 0xD067)
+    if _unpack_halfwords(data, 0x080029EC, len(dispatch_sig)) != dispatch_sig:
+        raise ValueError("NPC interaction state dispatch drifted")
+    bias = struct.unpack_from("<i", data, 0x08002D10 - ROM_BASE)[0]
+    if bias != NPC_INTERACTION_ACTOR_BIAS:
+        raise ValueError(f"NPC interaction actor-origin bias drifted: {bias:#x}")
+
+    # State 2: actor+0x4E is converted to a 0/1 delta and +4, producing
+    # a 4x4 rectangle when the field equals 1 and 5x5 otherwise.
+    state2_size_sig = (0x234E, 0x4CB9, 0x46A4, 0x5EE9, 0x3901, 0x1E4B, 0x4199)
+    if _unpack_halfwords(data, 0x08002A26, len(state2_size_sig)) != state2_size_sig:
+        raise ValueError("NPC state-2 geometry selector drifted")
+    state2_loop_sig = (0x2300, 0xE002, 0x3301, 0x4299, 0xD07A, 0x4294, 0xD1FA,
+                       0x19DE, 0x42B0, 0xD1F7, 0x2601, 0x46B2, 0x9608, 0x3201,
+                       0x4295, 0xD1EF)
+    if _unpack_halfwords(data, 0x08002A6E, len(state2_loop_sig)) != state2_loop_sig:
+        raise ValueError("NPC state-2 proximity loop drifted")
+
+    # State 1: both dimensions are explicitly bounded at 5 iterations.
+    state1_loop_sig = (0x1D57, 0x2300, 0xE002, 0x3301, 0x2B05, 0xD007,
+                       0x4291, 0xD1FA, 0x18E0, 0x4286, 0xD1F7, 0x2001,
+                       0x4682, 0x4681, 0x3201, 0x42BA, 0xD1EF)
+    if _unpack_halfwords(data, 0x08002B14, len(state1_loop_sig)) != state1_loop_sig:
+        raise ValueError("NPC state-1 5x5 proximity loop drifted")
+
+    # State 4: both dimensions are explicitly bounded at 4 iterations.
+    state4_loop_sig = (0x1D17, 0x2300, 0xE002, 0x3301, 0x2B04, 0xD007,
+                       0x428A, 0xD1FA, 0x1918, 0x42B0, 0xD1F7, 0x2001,
+                       0x4681, 0x4680, 0x3201, 0x4297, 0xD1EF)
+    if _unpack_halfwords(data, 0x08002C66, len(state4_loop_sig)) != state4_loop_sig:
+        raise ValueError("NPC state-4 4x4 proximity loop drifted")
+
+    # State 2 and state 1 share input globals 0x030006BC/0x030006C0.
+    if struct.unpack_from("<I", data, 0x08002FF8 - ROM_BASE)[0] != NPC_INPUT_CURRENT:
+        raise ValueError("NPC current-input global drifted")
+    if struct.unpack_from("<I", data, 0x08002FFC - ROM_BASE)[0] != NPC_INPUT_PREVIOUS:
+        raise ValueError("NPC previous-input global drifted")
+    state2_fresh_a = (0x4A94, 0x6812, 0x421A, 0xD100, 0xE0F3,
+                      0x4A93, 0x6812, 0x421A, 0xD000, 0xE0EE)
+    if _unpack_halfwords(data, 0x08002DA4, len(state2_fresh_a)) != state2_fresh_a:
+        raise ValueError("NPC state-2 fresh-A gate drifted")
+    if struct.unpack_from("<I", data, 0x08003018 - ROM_BASE)[0] != PLAYER_INTERACTION_ACTIVE_RAM:
+        raise ValueError("NPC state-1 interaction-active global drifted")
+    state1_fresh_a = (0x4B0F, 0x681B, 0x4213, 0xD100, 0xE51A,
+                      0x4B0D, 0x681B, 0x4013, 0xD000, 0xE515)
+    if _unpack_halfwords(data, 0x08002FBA, len(state1_fresh_a)) != state1_fresh_a:
+        raise ValueError("NPC state-1 fresh-A gate drifted")
+
+    # State 4 repeats the same bit-0 rising-edge test using another literal pool.
+    if struct.unpack_from("<I", data, 0x08003368 - ROM_BASE)[0] != NPC_INPUT_CURRENT:
+        raise ValueError("NPC state-4 current-input global drifted")
+    if struct.unpack_from("<I", data, 0x0800336C - ROM_BASE)[0] != NPC_INPUT_PREVIOUS:
+        raise ValueError("NPC state-4 previous-input global drifted")
+    state4_fresh_a = (0x4ACF, 0x6812, 0x421A, 0xD100, 0xE0EA,
+                      0x4ACD, 0x6812, 0x4013, 0xD000, 0xE0E5)
+    if _unpack_halfwords(data, 0x0800302A, len(state4_fresh_a)) != state4_fresh_a:
+        raise ValueError("NPC state-4 fresh-A gate drifted")
+    if struct.unpack_from("<I", data, 0x08002D18 - ROM_BASE)[0] != NPC_COLLECTION_SELECTOR:
+        raise ValueError("state-4 collection selector global drifted")
+
+    common = {
+        "activation": "fresh A press",
+        "input_rule": "current A set; previous A clear",
+        "grid_shift": "11",
+        "actor_origin_bias_fixed": "-0x1000",
+        "actor_origin_bias_cells": "-2,-2",
+        "scratch_state": f"0x{NPC_INTERACTION_SCRATCH:08X}",
+        "confidence": "high",
+    }
+    return [
+        {
+            "state": 1,
+            "dispatch_address": f"0x{NPC_STATE1_ENTRY:08X}",
+            "working_name": "social_interaction",
+            "proximity_cells": "5x5",
+            "geometry_condition": "fixed",
+            "activation_effect": (
+                "actor+0x5C -> Player+0x388; actor+0x08 -> Player+0x390; "
+                "actor+0x0C -> Player+0x394; requires 0x03000610==0; "
+                "actor+0x4C=1; 0x03000610=1"
+            ),
+            "evidence": "0x08002B14..0x08002B34 geometry; 0x08002FBA..0x08002FF2 fresh-A/bootstrap",
+            **common,
+        },
+        {
+            "state": 2,
+            "dispatch_address": f"0x{NPC_STATE2_ENTRY:08X}",
+            "working_name": "dialogue_interaction",
+            "proximity_cells": "4x4 if actor+0x4E == 1; otherwise 5x5",
+            "geometry_condition": "actor+0x4E (legsColor export)",
+            "activation_effect": (
+                "fresh A enters dialogue path; when actor+0x4E != 1, actor X/Y are copied "
+                "to Player+0x390/+0x394 and 0x080080A4 queues Player alignment"
+            ),
+            "evidence": "0x08002A26..0x08002A8C geometry; 0x08002D96..0x08002DD8 fresh-A/alignment",
+            **common,
+        },
+        {
+            "state": 4,
+            "dispatch_address": f"0x{NPC_STATE4_ENTRY:08X}",
+            "working_name": "collection_interaction",
+            "proximity_cells": "4x4",
+            "geometry_condition": "fixed",
+            "activation_effect": (
+                "fresh A dispatches 0x03000620 collection selector through "
+                "4;-1;-1;5;6;0 progression"
+            ),
+            "evidence": "0x08002C66..0x08002C86 geometry; 0x0800301C..0x0800305E fresh-A/selector dispatch",
+            **common,
+        },
+    ]
+
+
+def extract_npc_state_modes(data: bytes) -> list[dict]:
+    """Return the recovered NPC state dispatch with promoted interaction names."""
+    geometry = {row["state"]: row for row in extract_npc_interaction_geometry(data)}
+    return [
+        {"state":0,"dispatch_address":"default/return","working_name":"default",
+         "proven_behavior":"no special state branch in 0x0800298C dispatch","confidence":"high"},
+        {"state":1,"dispatch_address":"0x08002ACA","working_name":"social_interaction",
+         "proven_behavior":"5x5 proximity; fresh-A social interaction bootstrap and Player/NPC alignment anchors",
+         "confidence":geometry[1]["confidence"]},
+        {"state":2,"dispatch_address":"0x08002A0C","working_name":"dialogue_interaction",
+         "proven_behavior":"4x4 when actor+0x4E == 1, otherwise 5x5; fresh-A dialogue path with conditional Player alignment",
+         "confidence":geometry[2]["confidence"]},
+        {"state":3,"dispatch_address":"0x08002B72","working_name":"route_follow",
+         "proven_behavior":"uses actor.route (+0x64), actor waypoint index (+0xF8), six (x,y) waypoints; loops index after 5","confidence":"high"},
+        {"state":4,"dispatch_address":"0x08002C0C","working_name":"collection_interaction",
+         "proven_behavior":"fixed 4x4 proximity; fresh-A collection selector dispatch via 0x03000620","confidence":geometry[4]["confidence"]},
+    ]
 
 
 def extract_player_interaction_profile_selector_reachability(data: bytes) -> list[dict]:
@@ -2245,13 +2398,14 @@ def main():
     write_csv(args.out / "npc_routes.csv",
               ["route_id","route_ptr","route_rom_offset","waypoint_index","x","y"], route_rows)
 
-    state_rows = [
-        {"state":0,"dispatch_address":"default/return","working_name":"default","proven_behavior":"no special state branch in 0x0800298C dispatch","confidence":"high"},
-        {"state":1,"dispatch_address":"0x08002ACA","working_name":"interaction_mode_1","proven_behavior":"player proximity query; A-button rising-edge can start dialogue","confidence":"medium"},
-        {"state":2,"dispatch_address":"0x08002A0C","working_name":"interaction_mode_2","proven_behavior":"spatial/proximity interaction variant; A-button rising-edge can start dialogue","confidence":"medium"},
-        {"state":3,"dispatch_address":"0x08002B72","working_name":"route_follow","proven_behavior":"uses actor.route (+0x64), actor waypoint index (+0xF8), six (x,y) waypoints; loops index after 5","confidence":"high"},
-        {"state":4,"dispatch_address":"0x08002C0C","working_name":"interaction_mode_4","proven_behavior":"third spatial/proximity interaction variant; can enter dialogue","confidence":"medium"},
-    ]
+    interaction_geometry_rows = extract_npc_interaction_geometry(data)
+    write_csv(args.out / "npc_interaction_geometry.csv",
+              ["state","dispatch_address","working_name","proximity_cells","geometry_condition",
+               "activation","input_rule","grid_shift","actor_origin_bias_fixed","actor_origin_bias_cells",
+               "scratch_state","activation_effect","evidence","confidence"],
+              interaction_geometry_rows)
+
+    state_rows = extract_npc_state_modes(data)
     write_csv(args.out / "npc_state_modes.csv",
               ["state","dispatch_address","working_name","proven_behavior","confidence"], state_rows)
 

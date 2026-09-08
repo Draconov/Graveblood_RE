@@ -691,5 +691,68 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertIn("normal-context", globs[0x030006AC][1])
 
 
+class NpcInteractionGeometryExtractionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.data = ROM_PATH.read_bytes()
+
+    def test_state_1_2_4_geometry_and_activation_are_code_backed(self):
+        self.assertTrue(
+            hasattr(mod, 'extract_npc_interaction_geometry'),
+            'missing NPC interaction-geometry extractor',
+        )
+        rows = mod.extract_npc_interaction_geometry(self.data)
+        keyed = {row['state']: row for row in rows}
+        self.assertEqual(set(keyed), {1, 2, 4})
+
+        self.assertEqual(keyed[1]['working_name'], 'social_interaction')
+        self.assertEqual(keyed[1]['proximity_cells'], '5x5')
+        self.assertEqual(keyed[1]['geometry_condition'], 'fixed')
+
+        self.assertEqual(keyed[2]['working_name'], 'dialogue_interaction')
+        self.assertEqual(keyed[2]['proximity_cells'], '4x4 if actor+0x4E == 1; otherwise 5x5')
+        self.assertEqual(keyed[2]['geometry_condition'], 'actor+0x4E (legsColor export)')
+
+        self.assertEqual(keyed[4]['working_name'], 'collection_interaction')
+        self.assertEqual(keyed[4]['proximity_cells'], '4x4')
+        self.assertEqual(keyed[4]['geometry_condition'], 'fixed')
+
+        for state in (1, 2, 4):
+            self.assertEqual(keyed[state]['activation'], 'fresh A press')
+            self.assertEqual(keyed[state]['input_rule'], 'current A set; previous A clear')
+            self.assertEqual(keyed[state]['grid_shift'], '11')
+            self.assertEqual(keyed[state]['actor_origin_bias_fixed'], '-0x1000')
+            self.assertEqual(keyed[state]['actor_origin_bias_cells'], '-2,-2')
+            self.assertEqual(keyed[state]['confidence'], 'high')
+
+    def test_state_specific_activation_side_effects_remain_distinct(self):
+        rows = mod.extract_npc_interaction_geometry(self.data)
+        keyed = {row['state']: row for row in rows}
+
+        self.assertIn('actor+0x5C -> Player+0x388', keyed[1]['activation_effect'])
+        self.assertIn('actor+0x08 -> Player+0x390', keyed[1]['activation_effect'])
+        self.assertIn('0x03000610==0', keyed[1]['activation_effect'])
+        self.assertIn('0x03000610=1', keyed[1]['activation_effect'])
+
+        self.assertIn('0x080080A4', keyed[2]['activation_effect'])
+        self.assertIn('actor+0x4E != 1', keyed[2]['activation_effect'])
+
+        self.assertIn('0x03000620', keyed[4]['activation_effect'])
+        self.assertIn('4;-1;-1;5;6;0', keyed[4]['activation_effect'])
+
+    def test_npc_state_mode_export_promotes_recovered_names_and_geometry(self):
+        self.assertTrue(hasattr(mod, 'extract_npc_state_modes'), 'missing NPC state-mode extractor')
+        rows = mod.extract_npc_state_modes(self.data)
+        keyed = {row['state']: row for row in rows}
+        self.assertEqual(keyed[1]['working_name'], 'social_interaction')
+        self.assertIn('5x5', keyed[1]['proven_behavior'])
+        self.assertEqual(keyed[2]['working_name'], 'dialogue_interaction')
+        self.assertIn('4x4', keyed[2]['proven_behavior'])
+        self.assertIn('5x5', keyed[2]['proven_behavior'])
+        self.assertEqual(keyed[4]['working_name'], 'collection_interaction')
+        self.assertIn('4x4', keyed[4]['proven_behavior'])
+        self.assertTrue(all(keyed[state]['confidence'] == 'high' for state in (1, 2, 4)))
+
+
 if __name__ == '__main__':
     unittest.main()

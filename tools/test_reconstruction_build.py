@@ -22,10 +22,17 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
             'reconstruction/source/engine/collision.c',
             'reconstruction/source/engine/portal.c',
             'reconstruction/source/engine/world.c',
+            'reconstruction/source/engine/stream.c',
             'reconstruction/source/game/player.c',
+            'reconstruction/source/game/actors.c',
             'reconstruction/source/game/graveblood.c',
             'reconstruction/include/graveblood/assets.h',
+            'reconstruction/include/graveblood/actors.h',
+            'reconstruction/data/actor_data.c',
+            'reconstruction/data/actor_routes.c',
+            'reconstruction/data/actor_sprite_data.c',
             'reconstruction/include/graveblood/world.h',
+            'reconstruction/include/graveblood/stream.h',
             'reconstruction/README.md',
             'DEVELOPING_AND_BUILDING.md',
             '.github/workflows/build-release-rom.yml',
@@ -72,16 +79,89 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertNotIn('alternate_backdrop', combined)
         self.assertNotIn('PRESS A TO START', combined)
 
-    def test_runtime_has_real_level7_level8_slice(self):
+    def test_video_uses_recovered_four_bg_layout_and_parallax_scroll(self):
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
+        self.assertIn('#define GB_BG0_SCREENBLOCK 27', video)
+        self.assertIn('#define GB_BG1_SCREENBLOCK 28', video)
+        self.assertIn('#define GB_BG2_SCREENBLOCK 29', video)
+        self.assertIn('#define GB_BG3_SCREENBLOCK 30', video)
+        self.assertIn('BGCTRL[0]', video)
+        self.assertIn('BGCTRL[1]', video)
+        self.assertIn('BGCTRL[2]', video)
+        self.assertIn('BGCTRL[3]', video)
+        self.assertGreaterEqual(video.count('BG_SIZE_0'), 4)
+        self.assertIn('BG_PRIORITY(0)', video)
+        self.assertIn('BG_PRIORITY(1)', video)
+        self.assertIn('BG_PRIORITY(2)', video)
+        self.assertIn('BG_PRIORITY(3)', video)
+        for token in ('BG0_ON', 'BG1_ON', 'BG2_ON', 'BG3_ON'):
+            self.assertIn(token, video)
+        self.assertIn('level->bg_tile_halfwords', video)
+        self.assertIn('level->fixed_map', video)
+        self.assertIn('gb_video_stream_full', header)
+        self.assertIn('gb_video_stream_column', header)
+        self.assertIn('gb_video_stream_row', header)
+        self.assertIn('BG_OFFSET[0].x = 0', video)
+        self.assertIn('BG_OFFSET[1].x = (u16)x', video)
+        self.assertIn('BG_OFFSET[2].x = (u16)x', video)
+        self.assertIn('BG_OFFSET[3].x = (u16)(x / 4)', video)
+        self.assertIn('BG_OFFSET[3].y = (u16)(y / 4)', video)
+
+    def test_runtime_has_all_level_registry_and_game_uses_default_lookup(self):
         assets = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')
         world = (ROOT / 'reconstruction/source/engine/world.c').read_text(encoding='utf-8')
         game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
-        self.assertIn('gb_level07_assets', assets)
-        self.assertIn('gb_level08_assets', assets)
-        self.assertIn('GB_LEVEL_07', game)
-        self.assertIn('GB_LEVEL_08', game)
+        registry = (ROOT / 'reconstruction/data/level_registry.c').read_text(encoding='utf-8')
+        for level in range(11):
+            self.assertIn(f'gb_level{level:02d}_assets', assets)
+        self.assertIn('gb_level00_v1_assets', assets)
+        self.assertIn('gb_level00_v2_assets', assets)
+        self.assertIn('const GbLevelAssets* gb_level_assets', assets)
+        self.assertIn('const GbLevelAssets* gb_level_default_assets', assets)
+        self.assertIn('case 10:', registry)
+        self.assertIn('gb_level_default_assets(level_id)', game)
+        self.assertNotIn('static const GbLevelAssets* gb_level_by_id', game)
+        self.assertNotIn('GB_LEVEL_08', game)
         self.assertIn('world_width_tiles', world)
-        self.assertIn('BG_OFFSET[0]', world)
+        self.assertIn('gb_video_stream_full', world)
+        self.assertIn('gb_video_set_camera', world)
+
+    def test_generated_level_registry_resolves_all_defaults_and_level0_variants(self):
+        declarations = []
+        for level in range(11):
+            width = 782 if level == 9 else 1
+            declarations.append(
+                f'const GbLevelAssets gb_level{level:02d}_assets = {{ .level_id = {level}, .graphics_variant = 0, .world_width_tiles = {width} }};'
+            )
+        declarations.extend([
+            'const GbLevelAssets gb_level00_v1_assets = { .level_id = 0, .graphics_variant = 1 };',
+            'const GbLevelAssets gb_level00_v2_assets = { .level_id = 0, .graphics_variant = 2 };',
+        ])
+        harness = """\n#include <assert.h>\n#include <graveblood/assets.h>\n\nDECLARATIONS\n\nint main(void)\n{\n    for(int level = 0; level <= 10; ++level)\n    {\n        const GbLevelAssets* assets = gb_level_default_assets(level);\n        assert(assets != 0);\n        assert(assets->level_id == level);\n        assert(assets->graphics_variant == 0);\n    }\n    assert(gb_level_assets(0, 1) == &gb_level00_v1_assets);\n    assert(gb_level_assets(0, 2) == &gb_level00_v2_assets);\n    assert(gb_level_assets(1, 1) == 0);\n    assert(gb_level_assets(11, 0) == 0);\n    assert(gb_level_default_assets(9)->world_width_tiles == 782);\n    return 0;\n}\n""".replace('DECLARATIONS', '\n'.join(declarations))
+        gba_h = """\n#ifndef GBA_H\n#define GBA_H\n#include <stdint.h>\ntypedef uint8_t u8;\ntypedef int8_t s8;\ntypedef uint16_t u16;\ntypedef int16_t s16;\ntypedef uint32_t u32;\ntypedef int32_t s32;\n#endif\n"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'registry_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'registry_test'
+            subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/data/level_registry.c'),
+                str(td / 'registry_test.c'), '-o', str(exe),
+            ], check=True, cwd=ROOT)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_game_lifecycle_loads_updates_and_draws_actor_system(self):
+        game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        self.assertIn('#include <graveblood/actors.h>', game)
+        self.assertIn('GbActorSystem actors;', game)
+        self.assertIn('GbInteractionEvent interaction;', game)
+        self.assertIn('gb_actor_system_load(actors, assets)', game)
+        self.assertIn('gb_actor_system_update(&actors, &player, &input, &interaction)', game)
+        self.assertIn('gb_video_draw_actors(&actors, world.camera_x, world.camera_y)', game)
+        self.assertGreaterEqual(game.count('gb_enter_level(&world, &player, &actors,'), 2)
 
     def test_development_guide_is_devkitpro_only(self):
         text = (ROOT / 'DEVELOPING_AND_BUILDING.md').read_text(encoding='utf-8')
@@ -103,7 +183,8 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('devkitPro', text)
         self.assertIn('libgba', text)
         self.assertIn('Level 7', text)
-        self.assertIn('Level 8', text)
+        self.assertIn('all 11 canonical level records', text)
+        self.assertIn('13 recovered graphics variants', text)
         self.assertNotIn('clean-room C++/Butano project', text)
         self.assertNotIn('BUTANO_REBUILD_NOTES.md', text)
 
@@ -147,6 +228,281 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('reconstruction/*.gba', text)
         self.assertIn('reconstruction/*.elf', text)
         self.assertIn('reconstruction/*.map', text)
+
+    def test_all_generated_level_units_link_with_registry_on_host(self):
+        level_units = sorted((ROOT / 'reconstruction/data').glob('level*_assets.c'))
+        self.assertEqual(13, len(level_units))
+        harness = r"""
+#include <assert.h>
+#include <graveblood/assets.h>
+
+int main(void)
+{
+    for(int level = 0; level <= 10; ++level)
+    {
+        const GbLevelAssets* assets = gb_level_default_assets(level);
+        assert(assets != 0);
+        assert(assets->level_id == level);
+    }
+    assert(gb_level_assets(0, 1) != 0);
+    assert(gb_level_assets(0, 2) != 0);
+    assert(gb_level_assets(10, 1) == 0);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'all_levels_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'all_levels_test'
+            subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                *map(str, level_units),
+                str(ROOT / 'reconstruction/data/level_registry.c'),
+                str(td / 'all_levels_test.c'), '-o', str(exe),
+            ], check=True, cwd=ROOT)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_actor_video_uses_bounded_dynamic_8bpp_slots_and_preserves_player_palette(self):
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
+        self.assertIn('void gb_video_draw_actors', header)
+        self.assertIn('#define GB_ACTOR_OAM_FIRST 1', video)
+        self.assertIn('#define GB_ACTOR_OAM_COUNT 56', video)
+        self.assertIn('#define GB_OBJ_256_COLOR (1u << 13)', video)
+        self.assertIn('#define GB_PLAYER_PALETTE_BANK 15', video)
+        self.assertIn('gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256)', video)
+        self.assertIn('OBJ_COLORS + GB_PLAYER_PALETTE_BANK * 16', video)
+        self.assertIn('(GB_PLAYER_PALETTE_BANK << 12)', video)
+        self.assertIn('GB_PLAYER_FRAME_COUNT * 128', video)
+        self.assertIn('GB_ACTOR_FRAME_HALFWORDS', video)
+        self.assertIn('actor->descriptor->actor_class != GB_ACTOR_NPC', video)
+        self.assertIn('actor->descriptor->visual_index >= GB_ACTOR_VISUAL_COUNT', video)
+
+    def test_actor_video_compiles_with_host_gba_contract(self):
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount;
+extern volatile u16 gb_test_dispcnt;
+extern volatile u16 gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256];
+extern volatile u16 gb_test_obj_colors[256];
+extern volatile u16 gb_test_oam[512];
+extern volatile u16 gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            obj = td / 'video.o'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                '-c', str(ROOT / 'reconstruction/source/engine/video.c'), '-o', str(obj),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            self.assertTrue(obj.is_file())
+
+    def test_actor_runtime_population_routes_and_interaction_events(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/actors.h>
+
+static const GbActorDescriptor social_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 1, .dial = 7, .visual_index = 0
+};
+static const GbActorDescriptor dialogue4_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 2, .legs_color = 1, .dial = 3, .visual_index = 0
+};
+static const GbActorDescriptor dialogue5_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 2, .legs_color = 24, .dial = 4, .visual_index = 0
+};
+static const GbActorDescriptor collection_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 4, .dial = 5, .visual_index = 0
+};
+
+static void one_actor(GbActorSystem* system, const GbActorDescriptor* desc)
+{
+    system->count = 1;
+    system->actors[0].descriptor = desc;
+    system->actors[0].fixed_x = ((s32)desc->x) << GB_ACTOR_FIXED_SHIFT;
+    system->actors[0].fixed_y = ((s32)desc->y) << GB_ACTOR_FIXED_SHIFT;
+    system->actors[0].frame = 1;
+    system->actors[0].waypoint_index = 0;
+    system->actors[0].facing_right = 0;
+    system->actors[0].active = 1;
+}
+
+int main(void)
+{
+    GbLevelAssets level = { 0 };
+    GbActorSystem system;
+    GbInteractionEvent event;
+    GbInput none = { 0, 0 };
+    GbInput fresh_a = { KEY_A, KEY_A };
+    GbInput held_a = { KEY_A, 0 };
+    GbPlayer player = { 0 };
+
+    level.level_id = 0;
+    gb_actor_system_load(&system, &level);
+    assert(system.count == 55);
+    for(unsigned i = 1; i < 49; ++i)
+        assert(system.actors[i - 1].descriptor->rom_order < system.actors[i].descriptor->rom_order);
+    for(unsigned i = 49; i < system.count; ++i)
+        assert(system.actors[i].descriptor->rom_order >= 0x8000);
+
+    level.level_id = 3;
+    gb_actor_system_load(&system, &level);
+    assert(system.count == 65);
+    assert(system.count <= GB_ACTOR_CAPACITY);
+
+    level.level_id = 0;
+    gb_actor_system_load(&system, &level);
+    GbActor* route_actor = 0;
+    for(unsigned i = 0; i < system.count; ++i)
+    {
+        if(system.actors[i].descriptor->state == 3)
+        {
+            route_actor = &system.actors[i];
+            break;
+        }
+    }
+    assert(route_actor != 0);
+    const s32 before_x = route_actor->fixed_x;
+    const s32 before_y = route_actor->fixed_y;
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(route_actor->fixed_x == before_x - GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->fixed_y == before_y - GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->facing_right == 0);
+    assert(event.type == GB_INTERACTION_NONE);
+
+    route_actor->waypoint_index = 5;
+    route_actor->fixed_x = ((s32)gb_actor_routes[0][5].x) << GB_ACTOR_FIXED_SHIFT;
+    route_actor->fixed_y = ((s32)gb_actor_routes[0][5].y) << GB_ACTOR_FIXED_SHIFT;
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(route_actor->waypoint_index == 0);
+
+    one_actor(&system, &social_desc);
+    player.x = 102; player.y = 102;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_SOCIAL && event.dial == 7);
+    player.x = 103; player.y = 100;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_NONE);
+    player.x = 100; player.y = 100;
+    gb_actor_system_update(&system, &player, &held_a, &event);
+    assert(event.type == GB_INTERACTION_NONE);
+
+    one_actor(&system, &dialogue4_desc);
+    player.x = 101; player.y = 101;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_DIALOGUE && event.dial == 3);
+    player.x = 102; player.y = 100;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_NONE);
+
+    one_actor(&system, &dialogue5_desc);
+    player.x = 102; player.y = 102;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_DIALOGUE && event.dial == 4);
+
+    one_actor(&system, &collection_desc);
+    player.x = 101; player.y = 101;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_COLLECTION && event.dial == 5);
+    assert(event.actor_index == 0 && event.state == 4);
+    assert(event.actor_x == 100 && event.actor_y == 100);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'actor_runtime_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'actor_runtime_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(ROOT / 'reconstruction/data/actor_data.c'),
+                str(ROOT / 'reconstruction/data/actor_routes.c'),
+                str(td / 'actor_runtime_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
 
     def test_input_poll_reports_held_and_rising_edge_dpad_bits(self):
         harness = r"""
@@ -269,6 +625,184 @@ typedef int32_t s32;
                 str(ROOT / 'reconstruction/data/level07_assets.c'),
                 str(td / 'movement_test.c'), '-o', str(exe),
             ], check=True, cwd=ROOT)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_stream_ring_translates_and_updates_rows_and_columns(self):
+        harness = r"""
+#include <graveblood/assets.h>
+#include <graveblood/stream.h>
+#include <stdio.h>
+
+static int require(int condition, const char* message)
+{
+    if(! condition)
+    {
+        fputs(message, stderr);
+        fputc('\n', stderr);
+        return 0;
+    }
+    return 1;
+}
+
+int main(void)
+{
+    static const u16 translation[25] = {
+        0,
+        0x0401, 0x0802, 0x0C03, 0x0004, 0x0005, 0x0006,
+        0x0007, 0x0008, 0x0009, 0x000A, 0x000B, 0x000C,
+        0x000D, 0x000E, 0x000F, 0x0010, 0x0011, 0x0012,
+        0x0013, 0x0014, 0x0015, 0x0016, 0x0017, 0x0018
+    };
+    static const u16 layer[24] = {
+         1,  2,  3,  4,  5,  6,
+         7,  8,  9, 10, 11, 12,
+        13, 14, 15, 16, 17, 18,
+        19, 20, 21, 22, 23, 24
+    };
+    GbLevelAssets level = { 0 };
+    level.world_width_tiles = 6;
+    level.world_height_tiles = 4;
+    level.translation = translation;
+    level.translation_count = 25;
+
+    u16 map[GB_STREAM_MAP_CELLS];
+    gb_stream_fill(&level, layer, -1, -1, map);
+    if(! require(map[0] == 0x0401, "world 0,0 must land at ring cell 0")) return 1;
+    if(! require(map[1] == 0x0802, "translation must preserve vflip")) return 1;
+    if(! require(map[2] == 0x0C03, "translation must preserve h/v flip bits")) return 1;
+    if(! require(map[31] == 0, "out-of-world left column must be blank")) return 1;
+    if(! require(map[31 * 32] == 0, "out-of-world top row must be blank")) return 1;
+
+    for(int i = 0; i < GB_STREAM_MAP_CELLS; ++i) map[i] = 0x7777;
+    gb_stream_fill_column(&level, layer, 5, 0, map);
+    if(! require(map[5] == 0x0006, "column first cell")) return 1;
+    if(! require(map[32 + 5] == 0x000C, "column second cell")) return 1;
+    if(! require(map[4] == 0x7777, "column update must not touch neighbor")) return 1;
+    if(! require(map[4 * 32 + 5] == 0, "column out-of-world tail must blank")) return 1;
+
+    for(int i = 0; i < GB_STREAM_MAP_CELLS; ++i) map[i] = 0x6666;
+    gb_stream_fill_row(&level, layer, 0, 3, map);
+    if(! require(map[3 * 32] == 0x0013, "row first cell")) return 1;
+    if(! require(map[3 * 32 + 5] == 0x0018, "row sixth cell")) return 1;
+    if(! require(map[2 * 32] == 0x6666, "row update must not touch neighbor")) return 1;
+    if(! require(map[3 * 32 + 6] == 0, "row out-of-world tail must blank")) return 1;
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'stream_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'stream_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/stream.c'),
+                str(td / 'stream_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_world_camera_drives_initial_incremental_and_jump_stream_updates(self):
+        harness = r"""
+#include <graveblood/world.h>
+#include <stdio.h>
+
+static int full_count;
+static int column_count;
+static int row_count;
+static int last_a;
+static int last_b;
+static s16 last_camera_x;
+static s16 last_camera_y;
+
+void gb_video_load_level(const GbLevelAssets* level) { (void) level; }
+void gb_video_set_camera(s16 x, s16 y) { last_camera_x = x; last_camera_y = y; }
+void gb_video_stream_full(const GbLevelAssets* level, s16 left, s16 top)
+{
+    (void) level; ++full_count; last_a = left; last_b = top;
+}
+void gb_video_stream_column(const GbLevelAssets* level, s16 world_x, s16 top)
+{
+    (void) level; ++column_count; last_a = world_x; last_b = top;
+}
+void gb_video_stream_row(const GbLevelAssets* level, s16 left, s16 world_y)
+{
+    (void) level; ++row_count; last_a = left; last_b = world_y;
+}
+
+static int require(int condition, const char* message)
+{
+    if(! condition) { fputs(message, stderr); fputc('\n', stderr); return 0; }
+    return 1;
+}
+
+int main(void)
+{
+    GbLevelAssets level = { 0 };
+    level.world_width_tiles = 100;
+    level.world_height_tiles = 100;
+    GbWorld world;
+    gb_world_load(&world, &level);
+    if(! require(world.stream_valid == 0, "load must invalidate stream origin")) return 1;
+
+    gb_world_update_camera(&world, 120, 88);
+    if(! require(full_count == 1 && column_count == 0 && row_count == 0, "initial camera must full-fill")) return 1;
+    if(! require(world.stream_valid == 1 && world.stream_tile_x == 0 && world.stream_tile_y == 0, "initial origin")) return 1;
+
+    gb_world_update_camera(&world, 128, 88);
+    if(! require(full_count == 1 && column_count == 1, "one-tile x crossing must update one column")) return 1;
+    if(! require(last_a == 32 && last_b == 0, "right edge column must be new origin + 31")) return 1;
+    if(! require(world.stream_tile_x == 1 && world.stream_tile_y == 0, "x origin update")) return 1;
+
+    gb_world_update_camera(&world, 128, 96);
+    if(! require(row_count == 1, "one-tile y crossing must update one row")) return 1;
+    if(! require(last_a == 1 && last_b == 32, "bottom row must use new origin + 31")) return 1;
+    if(! require(world.stream_tile_x == 1 && world.stream_tile_y == 1, "y origin update")) return 1;
+
+    gb_world_update_camera(&world, 160, 96);
+    if(! require(full_count == 2, "multi-tile jump must full-fill")) return 1;
+    if(! require(last_a == 5 && last_b == 1, "jump full-fill origin")) return 1;
+    if(! require(last_camera_x == 40 && last_camera_y == 8, "camera offsets must still apply")) return 1;
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'world_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'world_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/world.c'),
+                str(td / 'world_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
             subprocess.run([str(exe)], check=True, cwd=ROOT)
 
     def test_player_animation_preserves_timer_and_horizontal_facing_across_direction_changes(self):

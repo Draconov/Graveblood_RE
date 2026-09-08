@@ -55,13 +55,13 @@ Then rebuild normally.
 
 The current build is no longer a framebuffer/color smoke test. It boots directly into recovered Level 7 and provides:
 
-- Mode 0 8bpp tile rendering;
-- recovered Level 7 and Level 8 maps;
-- recovered player spawn points;
+- recovered four-background Mode 0 layout (BG0 UI, streamed BG1/BG2 world, quarter-speed BG3 parallax);
+- exact original BG graphics/palettes plus raw streamed world layers and translation tables for all **11 levels / 13 graphics variants**;
+- recovered player spawn points for every level;
 - recovered u16 8-pixel collision grids (`0 = walkable`, nonzero = blocked);
 - hardware OAM player sprite with the recovered 16-frame walk/idle animation set, retained horizontal facing, and right-facing H-flip;
-- scrolling camera in Level 8;
-- supported Level 7 <-> Level 8 recovered portals on fresh A.
+- 32x32 ring-buffer world streaming with incremental row/column updates as the camera crosses tile boundaries;
+- all 37 normal physical portal destinations loadable on fresh A; the special Level-9 target `524` is preserved but intentionally not treated as a level.
 
 Open `reconstruction/Graveblood_RE.gba` in **mGBA** or another accurate emulator. Real-hardware testing on a flash cartridge is recommended as the renderer grows.
 
@@ -76,16 +76,16 @@ reconstruction/
 │   ├── engine/
 │   └── game/
 ├── data/          # checked-in generated C assets
-└── maps/          # Tiled-compatible Level 7/8 maps + generated tilesheets
+└── maps/          # Tiled-compatible Level 7/8 inspection maps + generated tilesheets
 ```
 
 The runtime stays intentionally small and CFA-like. Add behavior to the smallest owning module instead of building a general-purpose engine first.
 
-## 5. Regenerate Level 7/8 reconstruction assets
+## 5. Regenerate all-level reconstruction assets
 
 Normal builds do not require this step.
 
-Asset regeneration uses the checked-in RE renders/actor metadata and the canonical demo ROM for collision grids plus the exact recovered Player animation source frames:
+Asset regeneration uses the checked-in RE metadata/renders and the canonical demo ROM for the exact BG graphics, palettes, streamed source layers, translation tables, fixed/parallax sources, collision grids, physical portal records, recovered Player animation frames, canonical actor descriptors/references, story overlays, NPC routes, and exact NPC/story frame-1 graphics across all 11 levels / 13 graphics variants:
 
 ```sh
 python3 tools/generate_cfa_assets.py \
@@ -93,15 +93,17 @@ python3 tools/generate_cfa_assets.py \
   --out reconstruction
 ```
 
-The generator recreates:
+The generated C assets contain the original `0xD800` BG graphics blobs, 256-entry BGR555 palettes, raw layer-A/layer-B source IDs, translation-table prefixes, fixed map sources, collision arrays, portal records, actor descriptor/index tables, story overlays, five six-waypoint routes, and exact deduplicated NPC/story frame-1 OBJ data. The generator recreates:
 
-- `reconstruction/data/level07_assets.c`
-- `reconstruction/data/level08_assets.c`
-- `reconstruction/data/player_sprite.c`
-- `reconstruction/include/graveblood/assets.h`
-- `reconstruction/maps/level07.tmx`
-- `reconstruction/maps/level08.tmx`
-- `reconstruction/maps/generated/*.png`
+- `reconstruction/data/level00_assets.c` through `level10_assets.c` (variant 0);
+- `reconstruction/data/level00_v1_assets.c` and `level00_v2_assets.c`;
+- `reconstruction/data/level_registry.c`;
+- `reconstruction/data/player_sprite.c`;
+- `reconstruction/data/actor_data.c`, `actor_routes.c`, and `actor_sprite_data.c`;
+- `reconstruction/include/graveblood/assets.h`;
+- the existing Level 7/8 Tiled inspection maps and generated tilesheets.
+
+Large worlds such as Level 9 (`782x128` tiles) are **not** flattened into editor tilesheets; the GBA runtime consumes their streamed source arrays directly.
 
 The generated results are deterministic and covered by `tools/test_cfa_assets.py`.
 

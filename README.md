@@ -22,7 +22,7 @@ The ROMs themselves are intentionally **not included** in this archive.
 
 `Graveblood_RE` now uses a permanent **CFA-style devkitPro/devkitARM + libgba** runtime. The temporary high-level-engine/debug-shell path has been removed. The build follows the original game's CFA lineage: Mode 0 tile backgrounds, 8x8 world cells, hardware OAM sprites, pixel-space actors/camera, and compact C modules.
 
-The current playable milestone boots directly into **recovered Level 7**, renders the recovered **Level 7 and Level 8** interiors, uses their recovered player spawn/collision data, drives the exact recovered 16-frame 16x32 Player walk/idle animation set through OAM, and supports the recovered Level 7 <-> Level 8 portal route. The movement runtime follows the original collision resolver semantics: **zero-valued 8-pixel cells are passable; nonzero cells block movement**.
+The current playable milestone still boots directly into **recovered Level 7**, but the streamed runtime can now load **all 11 canonical level records and all 13 recovered graphics variants** and populate them with the generated canonical actor data. Every level has exact ROM-derived BG graphics/palette, streamed A/B source layers, translation data, fixed/parallax source, collision grid, spawn point, physical portal records, and level actor references checked into the reconstruction. The actor runtime contains **241 unique non-Player physical descriptors referenced 290 times across levels**, appends the **16 story-overlay descriptors**, and follows the five recovered six-waypoint NPC routes. NPC/story sprites use 32 exact canonical frame-1 visual combinations; state-3 route motion uses the recovered `0x100` velocity in 21.11 fixed-point space, and state 1/2/4 contacts emit typed social/dialogue/collection events for later systems. Grass/leaves/foreground actors are populated but their still-unproven visual behavior remains intentionally disabled. All 37 normal physical portal destinations resolve to a loadable level; the one Level-9 special/out-of-range destination `524` is preserved losslessly and intentionally remains non-level until its special semantics are recovered. The exact recovered 16-frame 16x32 Player walk/idle animation remains driven through OAM. Movement follows the original collision resolver semantics: **zero-valued 8-pixel cells are passable; nonzero cells block movement**.
 
 Start here:
 
@@ -38,7 +38,7 @@ The normal reconstruction build does not require the original demo ROM. Developm
 
 The workspace now includes:
 
-- a buildable CFA-style devkitPro/libgba reconstruction under `reconstruction/`, currently covering playable Levels 7 and 8;
+- a buildable CFA-style devkitPro/libgba reconstruction under `reconstruction/`, with all 11 canonical worlds / 13 graphics variants generated and loadable through the streamed renderer;
 - local development/build/release instructions plus GitHub Actions ROM artifacts/releases;
 - canonical ROM/header metadata;
 - 11 corrected 0x40-byte level records;
@@ -54,7 +54,10 @@ The workspace now includes:
 - conservative story-entity identity export (two code-backed IQ 54 overlay instances, Stas, Julia, Katya, and five collection pickups);
 - decoded message/progression streams;
 - five NPC routes / 30 waypoints;
-- NPC state-mode semantics and exact NPC dynamic-sprite source formula;
+- generated actor-runtime data: 241 unique non-Player physical descriptors / 290 per-level references plus all 16 story overlays, with a maximum loaded population of 65;
+- exact frame-1 NPC/story rendering through 32 deduplicated canonical `(legsColor, subtype)` visual combinations, with deterministic bounded OAM staging;
+- state-3 NPC route following at the code-proven `0x100` velocity in original 21.11 fixed-point space;
+- code-proven NPC state 1/2/4 interaction geometry (5×5 social, conditional 4×4/5×5 dialogue, 4×4 collection), fresh-A gates, and typed interaction events for the deferred dialogue/progression layer;
 - Player/OBJ rendering pipeline evidence, story-entity sprite reconstruction, and executable five-sprite monster composite;
 - 10 fixed wardrobe-name slots plus the recovered `Player+0x240` browse/preview selector, preview OBJ/BG tables, and code-backed no-equip boundary;
 - exact-byte alpha↔latest matcher results;
@@ -79,6 +82,7 @@ Current canonical extraction counts:
 | Dialogue records | 58 |
 | NPC routes | 5 |
 | Route waypoints | 30 |
+| Code-proven NPC interaction geometry modes | 3 |
 | Message streams | 3 |
 | Initialized message records | 6 |
 | Wardrobe label slots | 10 |
@@ -502,6 +506,16 @@ Player+0x1EC = 1
 
 The common motion routine `0x08004670` then collision-tests `+0x18/+0x1C` against the world tile grid and applies permitted components to Player `+0x08/+0x0C`. The intended NPC interaction alignment is therefore **same Y, 19 pixels to one side of the NPC**, with collision resolution still honored. This closes the old `0x08009220` “generic X/Y target mover” hypothesis: it is a specific interaction-alignment bootstrap. See `data/player_npc_interaction_alignment.csv`.
 
+The NPC-side proximity gates feeding those interaction paths are now fully separated as well. `NPC_update` (`0x0800298C`) converts Player and actor coordinates to the same 11-bit-shifted grid, subtracts `0x1000` from actor X/Y (two interaction cells) to form the scan origin, and then uses state-specific rectangles:
+
+```text
+state 1 -> social_interaction     -> fixed 5x5 -> fresh A
+state 2 -> dialogue_interaction   -> 4x4 when actor+0x4E == 1, otherwise 5x5 -> fresh A
+state 4 -> collection_interaction -> fixed 4x4 -> fresh A
+```
+
+For all three states, **fresh A** is a real rising-edge test: input bit 0 must be set in `0x030006BC` (`keys_current`) and clear in `0x030006C0` (`keys_previous`). State 1 additionally requires `0x03000610 == 0`; on activation it copies actor `dial` (`+0x5C`) and X/Y into Player `+0x388/+0x390/+0x394`, marks actor `+0x4C`, and sets `0x03000610=1`. State 2 uses the serialized `actor+0x4E` field (exported as `legsColor`) as the only recovered 4×4-vs-5×5 geometry selector; when that field is not 1, the fresh-A path also copies actor X/Y into Player anchors and calls `0x080080A4` for the recovered vertical alignment handoff. State 4 sends the fresh-A contact into the `0x03000620` collection selector and its proven `4,-1,-1,5,6,0` progression. These are therefore **three different A-button proximity interactions**, not automatic collision pickups and not one generic “talk” rectangle. See `data/npc_interaction_geometry.csv`, `disasm/npc_interaction_geometry_0800298C.txt`, and `disasm/npc_interaction_activation_08002D96.txt`.
+
 The next Player interaction layer is now recovered as a **four-way action tree** backed by 20 fixed `0x2C`-byte records at `0x08018738`. The root page is `TALK / FLIRT / ASSAULT / SHARE`, and each root opens exactly four leaves:
 
 ```text
@@ -856,7 +870,8 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 - `data/actors.csv` — all 267 physical actor records.
 - `data/portal_edges.csv` — code-proven physical transition records.
 - `data/standalone_spawners.csv` — raw 16-record Graveblood-era story-overlay block.
-- `data/npc_state_modes.csv` — recovered behavior modes.
+- `data/npc_state_modes.csv` — recovered behavior modes with state 1/2/4 promoted to social/dialogue/collection interactions.
+- `data/npc_interaction_geometry.csv` — exact state 1/2/4 grid rectangles, fresh-A rule, actor-origin bias, and state-specific activation effects.
 - `data/spawn_type_factories.csv` — code-proven `npc/grass/fgtile` factory registry.
 - `data/npc_sprite_pipeline.csv` — NPC source/destination dynamic-OBJ formula and evidence.
 - `data/story_entity_sprite_sources.csv` — exact source rows selected for all 16 standalone records.
@@ -897,6 +912,8 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 
 - `disasm/wardrobe_label_draw_08006430.txt` — selected-label helper, including `Player+0x240` × 20 addressing into `Player+0x2B4`.
 - `disasm/wardrobe_player_update_path_08008DF0.txt` — internal `Player_update` Wardrobe browser path: title/prompt, preview loaders, navigation, and exit flow.
+- `disasm/npc_interaction_geometry_0800298C.txt` — NPC state dispatch plus state 1/2/4 proximity rectangle construction/scan loops.
+- `disasm/npc_interaction_activation_08002D96.txt` — state 2/1/4 fresh-A gates and their activation handoffs.
 
 ### Tools
 
@@ -906,7 +923,7 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 - `tools/render_maps.py` — corrected 8bpp world renderer.
 - `tools/render_sprites.py` — OBJ/OAM dynamic Player/NPC renderer library, including story-entity contact-sheet generation.
 - `tools/disasm_thumb_chunk.py` — focused Thumb disassembly helper.
-- `tools/test_*.py` — current ROM-backed regression suite (**93 tests** at this package checkpoint).
+- `tools/test_*.py` — current ROM-backed regression suite (**114 tests** at this package checkpoint).
 
 ---
 
@@ -914,15 +931,13 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 
 This workspace is **not** a decompiled source tree yet. It is a verified structural/semantic foundation for one.
 
-The public-demo Wardrobe selector/preview path is now statically bounded: selectors `0..6` browse preview data, but no confirm/equip action or live graphics-bank mutation is recovered. With that target closed, the highest-value next targets are:
+The public-demo Wardrobe selector/preview path and the state 1/2/4 NPC interaction rectangles are now statically bounded. The CFA reconstruction uses the recovered **BG0/BG1/BG2/BG3** layout across **all 11 levels / 13 graphics variants** and now includes the first clean-room actor runtime: 241 unique non-Player physical descriptors / 290 level references, 16 story overlays, exact frame-1 NPC/story graphics, state-3 route following, and typed state 1/2/4 interaction events. Story overlays are currently appended by matching level only; their later global/story activation gates are not yet executed. Grass/leaves/foreground records are retained in actor order but remain non-rendering until their exact visuals are sufficiently proved. Dialogue/progression and full scene flow are still missing. The highest-value next targets are:
 
-1. fully name state 1/2/4 interaction geometry and distinguish talk triggers from collectible/contact triggers;
-2. identify the remaining story-overlay records from dialogue/location/behavior evidence without assigning names from sprite appearance alone;
-3. continue past the now-recovered state-2 topic cursor and response banks: identify `Ask about` handling and the zero-count `JOKE / FLIRT / ASSAULT / SHARE` leaf effects without inventing semantics for their still-unused raw metadata;
-4. emulator/frame-trace `0x08004FE0` to reproduce the final expanding VRAM effect over time now that its exact copy-size equations are known;
-5. recover audio/SFX tables and identify SFX 13;
-6. inspect unused dialogue/message/Wardrobe branches for content beyond the public festival path, while keeping browse-only preview data separate from any unproven equip mechanic;
-7. expand the CFA-style devkitPro parity runtime from the current Level 7/8 slice toward the complete public demo before adding new story content.
+1. consume `GbInteractionEvent` in the recovered dialogue/message/social/collection state machines, including the six-step sketch/key progression and rusty-key gate without changing the actor-runtime API;
+2. finish physical-portal scene semantics around the one special Level-9 destination `524`, and recover story-overlay activation/global gates so overlay visibility matches progression rather than level alone;
+3. identify the remaining story-overlay records and continue the social-response RE (`Ask about`, zero-count `JOKE / FLIRT / ASSAULT / SHARE` leaves) without inventing unused semantics;
+4. recover sufficiently proved grass/leaves/foreground rendering behavior, then emulator/frame-trace `0x08004FE0` and reproduce the final expanding VRAM effect safely;
+5. recover audio/SFX tables and identify SFX 13, then finish title/scene parity and hardware/mGBA timing validation before adding new/restored content beyond the public demo.
 
 ### Confidence policy
 

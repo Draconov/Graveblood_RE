@@ -7,6 +7,9 @@ typedef struct {
     const GbLevelAssets* assets;
     s16 camera_x;
     s16 camera_y;
+    s16 stream_tile_x;
+    s16 stream_tile_y;
+    u8 stream_valid;
 } GbWorld;
 
 void gb_world_load(GbWorld* world, const GbLevelAssets* assets);
