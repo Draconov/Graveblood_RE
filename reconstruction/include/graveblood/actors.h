@@ -38,6 +38,9 @@ typedef struct {
     u8 facing_right;
     u8 active;
     u8 story_overlay_index;
+    s16 dialogue_step;
+    u8 consumed;
+    u8 story_visible;
 } GbActor;
 
 typedef struct {

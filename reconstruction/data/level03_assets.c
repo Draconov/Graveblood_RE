@@ -8374,6 +8374,15 @@ const u16 gb_level03_collision[40960] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
+const u16 gb_level03_bg0_ui_tiles[GB_BG0_UI_TILE_COUNT] = {
+    12, 13, 14, 76, 78, 80, 128, 149, 151, 175, 176, 177, 275, 276, 277, 278,
+    279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294,
+    295, 296, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315,
+    316, 317, 318, 319, 320, 321, 322, 323, 324, 325, 326, 327, 328, 334, 335, 336,
+    337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350, 351, 352,
+    353, 354, 355, 356, 357, 358, 359
+};
+
 const GbPortal gb_level03_portals[1] = {
     { 0, 0, 0, 0, 0, 0 }
 };
@@ -8396,6 +8405,7 @@ const GbLevelAssets gb_level03_assets = {
     .layer_b = gb_level03_layer_b,
     .fixed_map = gb_level03_fixed_map,
     .collision = gb_level03_collision,
+    .bg0_ui_tiles = gb_level03_bg0_ui_tiles,
     .portals = gb_level03_portals,
     .portal_count = 0,
 };

@@ -61,7 +61,9 @@ The current build is no longer a framebuffer/color smoke test. It boots directly
 - recovered u16 8-pixel collision grids (`0 = walkable`, nonzero = blocked);
 - hardware OAM player sprite with the recovered 16-frame walk/idle animation set, retained horizontal facing, and right-facing H-flip;
 - 32x32 ring-buffer world streaming with incremental row/column updates as the camera crosses tile boundaries;
-- all 37 normal physical portal destinations loadable on fresh A; the special Level-9 target `524` is preserved but intentionally not treated as a level.
+- 33 generic scene-portal records loadable on fresh A; the four Level-10 turn-4/5 records are handled separately by the rusty-key story gate, and the special Level-9 target `524` is preserved but intentionally not treated as a level;
+- generated canonical story content: 7 dialogue scripts / 58 records, six message records, Stas/Julia social tables, the original CFA proportional font, and five monster sprites;
+- a persistent clean-room story runtime that consumes state 1/2/4 interaction events, executes the six-step collection/key progression, persists consumed story pickups across level reloads, renders dialogue/social UI on BG0, and holds safely at `final_effect_pending` instead of reproducing the unsafe final VRAM-copy effect.
 
 Open `reconstruction/Graveblood_RE.gba` in **mGBA** or another accurate emulator. Real-hardware testing on a flash cartridge is recommended as the renderer grows.
 
@@ -85,7 +87,7 @@ The runtime stays intentionally small and CFA-like. Add behavior to the smallest
 
 Normal builds do not require this step.
 
-Asset regeneration uses the checked-in RE metadata/renders and the canonical demo ROM for the exact BG graphics, palettes, streamed source layers, translation tables, fixed/parallax sources, collision grids, physical portal records, recovered Player animation frames, canonical actor descriptors/references, story overlays, NPC routes, and exact NPC/story frame-1 graphics across all 11 levels / 13 graphics variants:
+Asset regeneration uses the checked-in RE metadata/renders and the canonical demo ROM for the exact BG graphics, palettes, streamed source layers, translation tables, fixed/parallax sources, collision grids, physical portal records, recovered Player animation frames, canonical actor descriptors/references, story overlays, NPC routes, exact NPC/story frame-1 graphics, dialogue/message/social tables, canonical font glyphs, and monster sprites across all 11 levels / 13 graphics variants:
 
 ```sh
 python3 tools/generate_cfa_assets.py \

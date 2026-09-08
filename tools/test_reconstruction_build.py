@@ -280,14 +280,15 @@ typedef int32_t s32;
         video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
         header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
         self.assertIn('void gb_video_draw_actors', header)
-        self.assertIn('#define GB_ACTOR_OAM_FIRST 1', video)
-        self.assertIn('#define GB_ACTOR_OAM_COUNT 56', video)
+        self.assertIn('#define GB_ACTOR_OAM_FIRST 5', video)
+        self.assertIn('#define GB_ACTOR_OAM_COUNT 52', video)
         self.assertIn('#define GB_OBJ_256_COLOR (1u << 13)', video)
         self.assertIn('#define GB_PLAYER_PALETTE_BANK 15', video)
         self.assertIn('gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256)', video)
         self.assertIn('OBJ_COLORS + GB_PLAYER_PALETTE_BANK * 16', video)
         self.assertIn('(GB_PLAYER_PALETTE_BANK << 12)', video)
         self.assertIn('GB_PLAYER_FRAME_COUNT * 128', video)
+        self.assertIn('GB_MONSTER_OBJ_TILE_BASE', video)
         self.assertIn('GB_ACTOR_FRAME_HALFWORDS', video)
         self.assertIn('actor->descriptor->actor_class != GB_ACTOR_NPC', video)
         self.assertIn('actor->descriptor->visual_index >= GB_ACTOR_VISUAL_COUNT', video)
@@ -346,6 +347,84 @@ extern volatile u16 gb_test_vram[0x18000 / 2];
             td = Path(td)
             (td / 'gba.h').write_text(gba_h, encoding='utf-8')
             obj = td / 'video.o'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                '-c', str(ROOT / 'reconstruction/source/engine/video.c'), '-o', str(obj),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            self.assertTrue(obj.is_file())
+
+    def test_story_video_uses_canonical_font_safe_bg0_tiles_and_monster_oam(self):
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
+        self.assertIn('void gb_video_clear_story_ui', header)
+        self.assertIn('void gb_video_draw_story_ui', header)
+        self.assertIn('void gb_video_draw_message', header)
+        self.assertIn('void gb_video_draw_player_state', header)
+        self.assertIn('#define GB_STORY_UI_COLUMNS 29', video)
+        self.assertIn('#define GB_STORY_UI_ROWS 3', video)
+        self.assertIn('#define GB_TEXT_BACKGROUND_INDEX 1', video)
+        self.assertIn('#define GB_TEXT_FOREGROUND_INDEX 2', video)
+        self.assertIn('level->bg0_ui_tiles', video)
+        self.assertIn('gb_font_glyphs', video)
+        self.assertIn('gb_monster_obj_frames', video)
+        self.assertIn('animation_counter - 20', video)
+        self.assertIn('animation_counter + 12', video)
+
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount;
+extern volatile u16 gb_test_dispcnt;
+extern volatile u16 gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256];
+extern volatile u16 gb_test_obj_colors[256];
+extern volatile u16 gb_test_oam[512];
+extern volatile u16 gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            obj = td / 'video_story.o'
             proc = subprocess.run([
                 'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
@@ -500,6 +579,365 @@ typedef int32_t s32;
                 str(ROOT / 'reconstruction/data/actor_data.c'),
                 str(ROOT / 'reconstruction/data/actor_routes.c'),
                 str(td / 'actor_runtime_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_story_game_loop_integration_and_level10_rusty_key_gate(self):
+        graveblood = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        self.assertIn('#include <graveblood/story.h>', graveblood)
+        self.assertIn('GbStoryRuntime story;', graveblood)
+        self.assertIn('gb_story_init(&story);', graveblood)
+        self.assertIn('gb_story_on_level_load(story, actors);', graveblood)
+        self.assertIn('gb_story_handle_interaction(&story, &actors, &interaction);', graveblood)
+        self.assertIn('gb_story_update(&story, &actors, &input);', graveblood)
+        self.assertIn('gb_story_try_level10_gate(&story, world.assets, &player, &input)', graveblood)
+        self.assertIn('gb_video_draw_story_ui(&story);', graveblood)
+        self.assertIn('gb_video_draw_player_state(&player, &story,', graveblood)
+
+        harness = r"""
+#include <assert.h>
+#include <graveblood/story.h>
+
+int main(void)
+{
+    GbStoryRuntime story;
+    GbLevelAssets level = {0};
+    GbPlayer player = {0};
+    GbInput input = {0};
+
+    gb_story_init(&story);
+    level.level_id = 10;
+    input.pressed = KEY_A;
+    input.held = KEY_A;
+
+    /* turn=4 gate: exact recovered contact grid, pre-key blocks generic portal. */
+    player.x = 808;
+    player.y = 392;
+    story.state.collection_progress = 3;
+    assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_BLOCKED);
+    assert(player.x == 808 && player.y == 392);
+
+    /* collection progress 3->4 activates the forced vertical path; X is not consumed. */
+    story.state.collection_progress = 4;
+    player.x = 810;
+    player.y = 392;
+    assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_TRAVERSED);
+    assert(player.x == 810);
+    assert(player.y == 360);
+
+    /* turn=5 uses the other recovered target. */
+    player.x = 808;
+    player.y = 360;
+    assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_TRAVERSED);
+    assert(player.x == 808);
+    assert(player.y == 410);
+
+    /* A held without a fresh press is not an interaction. */
+    input.pressed = 0;
+    input.held = KEY_A;
+    player.x = 808;
+    player.y = 392;
+    assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_NONE);
+    assert(player.y == 392);
+
+    /* Outside Level 10 the special gate path is inactive. */
+    input.pressed = KEY_A;
+    level.level_id = 9;
+    assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_NONE);
+
+    /* Raw portal rectangle outside the special contact grid is still blocked so
+       the turn-4/5 records can never fall through to generic portTo=8. */
+    level.level_id = 10;
+    story.state.collection_progress = 4;
+    player.x = 808;
+    player.y = 384;
+    assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_BLOCKED);
+    assert(player.y == 384);
+    return 0;
+}
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'gate_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'gate_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/story.c'),
+                str(ROOT / 'reconstruction/data/story_data.c'),
+                str(td / 'gate_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
+
+    def test_story_runtime_dialogue_collection_messages_social_and_actor_cursor(self):
+        harness = r"""
+#include <assert.h>
+#include <string.h>
+#include <graveblood/actors.h>
+#include <graveblood/story.h>
+
+static const GbActorDescriptor dialogue_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 2, .dial = 0, .visual_index = 0
+};
+static const GbActorDescriptor social_stas_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 1, .dial = 0, .visual_index = 0
+};
+static const GbActorDescriptor social_invalid_desc = {
+    .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+    .state = 1, .dial = 2, .visual_index = 0
+};
+
+static void one_actor(GbActorSystem* system, const GbActorDescriptor* desc, u8 overlay)
+{
+    system->count = 1;
+    system->actors[0].descriptor = desc;
+    system->actors[0].fixed_x = ((s32)desc->x) << GB_ACTOR_FIXED_SHIFT;
+    system->actors[0].fixed_y = ((s32)desc->y) << GB_ACTOR_FIXED_SHIFT;
+    system->actors[0].frame = 1;
+    system->actors[0].waypoint_index = 0;
+    system->actors[0].facing_right = 0;
+    system->actors[0].active = 1;
+    system->actors[0].story_overlay_index = overlay;
+    system->actors[0].dialogue_step = -1;
+    system->actors[0].consumed = 0;
+    system->actors[0].story_visible = 1;
+}
+
+static GbInteractionEvent event_for(GbInteractionType type, u8 dial)
+{
+    GbInteractionEvent event = { 0 };
+    event.type = type;
+    event.actor_index = 0;
+    event.dial = dial;
+    return event;
+}
+
+int main(void)
+{
+    GbStoryRuntime story;
+    GbActorSystem actors;
+    GbInput fresh_a = { KEY_A, KEY_A };
+    GbInput fresh_up = { KEY_UP, KEY_UP };
+    GbInput fresh_right = { KEY_RIGHT, KEY_RIGHT };
+    GbInput none = { 0, 0 };
+
+    gb_story_init(&story);
+    assert(story.state.collection_progress == 0);
+    assert(story.state.primary_message_stream == -1);
+    assert(story.state.auxiliary_message_streams[0] == -1);
+    assert(story.state.auxiliary_message_streams[1] == -1);
+    assert(story.state.auxiliary_message_streams[2] == -1);
+    assert(story.state.monster_render_enabled == 0);
+    assert(story.state.final_effect_pending == 0);
+    assert(story.state.social_profiles[0].topic_class[1] == 4);
+    assert(story.state.social_profiles[1].topic_class[6] == 4);
+
+    GbLevelAssets level0 = { 0 };
+    level0.level_id = 0;
+    gb_actor_system_load(&actors, &level0);
+    assert(actors.count != 0);
+    for(unsigned i = 0; i < actors.count; ++i)
+    {
+        assert(actors.actors[i].dialogue_step == -1);
+        assert(actors.actors[i].consumed == 0);
+        assert(actors.actors[i].story_visible == 1);
+    }
+
+    /* Normal dialogue starts from raw actor cursor + 1. */
+    one_actor(&actors, &dialogue_desc, GB_ACTOR_STORY_NONE);
+    GbInteractionEvent dialogue = event_for(GB_INTERACTION_DIALOGUE, 0);
+    gb_story_handle_interaction(&story, &actors, &dialogue);
+    assert(gb_story_ui_active(&story));
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[0]);
+    assert(strcmp(gb_story_dialogue_record(&story)->speaker, "Vika") == 0);
+    gb_story_update(&story, &actors, &fresh_a); /* step 1 */
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[1]);
+    gb_story_update(&story, &actors, &fresh_a); /* step 2 */
+    gb_story_update(&story, &actors, &fresh_a); /* runs -2, then -1 */
+    assert(! gb_story_ui_active(&story));
+    assert(story.state.primary_message_stream == 0);
+    assert(actors.actors[0].dialogue_step == 4);
+    assert(gb_story_message_primary(&story) == &gb_message_records[0]);
+
+    /* Re-entering the same NPC begins at raw cursor 4 + 1 = step 5. */
+    gb_story_handle_interaction(&story, &actors, &dialogue);
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[5]);
+    gb_story_update(&story, &actors, &fresh_a);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
+    assert(actors.actors[0].dialogue_step == 4);
+
+    /* Message lookup is clean-room bounded by extracted stream/stage rows. */
+    story.state.story_stage = 1;
+    assert(gb_story_message_primary(&story) == &gb_message_records[1]);
+    story.state.story_stage = 7;
+    assert(gb_story_message_primary(&story) == 0);
+    story.state.story_stage = 0;
+
+    /* Collection selector: progress 1/2 are silent, progress 3 runs script 5. */
+    static const GbActorDescriptor collection_desc = {
+        .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC,
+        .state = 4, .dial = 3, .level = 10, .visual_index = 0
+    };
+    GbInteractionEvent pickup = event_for(GB_INTERACTION_COLLECTION, 3);
+    one_actor(&actors, &collection_desc, 11);
+    story.state.collection_progress = 1;
+    gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(story.state.collection_progress == 2);
+    assert(actors.actors[0].consumed && ! actors.actors[0].active);
+    assert(story.state.consumed_story_overlays & (1u << 11));
+
+    one_actor(&actors, &collection_desc, 12);
+    story.state.collection_progress = 3;
+    gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[5].records[0]);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[5].records[1]);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
+    assert(story.state.collection_progress == 4);
+    assert(actors.actors[0].consumed);
+
+    /* Fifth pickup: -4 enables monster, -5 terminates safely without raw VRAM effect. */
+    one_actor(&actors, &collection_desc, 15);
+    story.state.collection_progress = 4;
+    gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[6].records[0]);
+    gb_story_update(&story, &actors, &fresh_a); /* -4 then content step 2 */
+    assert(story.state.monster_render_enabled == 1);
+    assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[6].records[2]);
+    gb_story_update(&story, &actors, &fresh_a); /* content step 3 */
+    gb_story_update(&story, &actors, &fresh_a); /* -5 terminal */
+    assert(story.state.final_effect_pending == 1);
+    assert(story.state.collection_progress == 5);
+    assert(actors.actors[0].consumed && ! actors.actors[0].active);
+    assert(! gb_story_ui_active(&story));
+
+    /* Consumed overlay persistence survives an actor-system reload. */
+    one_actor(&actors, &collection_desc, 15);
+    gb_story_on_level_load(&story, &actors);
+    assert(actors.actors[0].consumed && ! actors.actors[0].active);
+
+    /* Only the two code-proven social profile selectors are accepted. */
+    gb_story_init(&story);
+    one_actor(&actors, &social_invalid_desc, GB_ACTOR_STORY_NONE);
+    GbInteractionEvent social_bad = event_for(GB_INTERACTION_SOCIAL, 2);
+    gb_story_handle_interaction(&story, &actors, &social_bad);
+    assert(! gb_story_ui_active(&story));
+
+    one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
+    GbInteractionEvent social = event_for(GB_INTERACTION_SOCIAL, 0);
+    gb_story_handle_interaction(&story, &actors, &social);
+    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+    assert(strcmp(gb_story_social_profile_name(&story), "Stas") == 0);
+    gb_story_update(&story, &actors, &fresh_up); /* TALK submenu */
+    assert(story.social.page_base == 4);
+    gb_story_update(&story, &actors, &fresh_up); /* SUBJECT */
+    assert(story.social.state == GB_SOCIAL_SECONDARY);
+    assert(story.social.topic_count == 9);
+    gb_story_update(&story, &actors, &fresh_right); /* ignored in vertical topic list */
+    assert(story.social.topic_index == 0);
+    gb_story_update(&story, &actors, &fresh_a); /* sports, class 3 */
+    assert(story.social.state == GB_SOCIAL_RESPONSE);
+    assert(story.state.social_score_mirror == 0);
+    assert(story.state.social_profiles[0].score == 2);
+    assert(gb_story_social_response(&story) != 0);
+
+    /* Pure response lookup is bounded and class-2 is the recovered neutral line. */
+    assert(strcmp(gb_story_lookup_social_response(0, 0, 2, 0), "I don't really care") == 0);
+    assert(gb_story_lookup_social_response(0, 9, 3, 0) == 0);
+    assert(gb_story_lookup_social_response(3, 0, 9, 0) == 0);
+    assert(gb_story_message_auxiliary(&story, 3) == 0);
+
+    /* Fresh A dismisses response; follow-up leaves remain shared, not invented. */
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
+
+    gb_story_init(&story);
+    one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
+    gb_story_handle_interaction(&story, &actors, &social);
+    gb_story_update(&story, &actors, &fresh_up);    /* TALK */
+    gb_story_update(&story, &actors, &fresh_right); /* Ask about quadrant 1 */
+    assert(story.social.state == GB_SOCIAL_SECONDARY);
+    assert(story.social.topic_count == 5);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(story.social.state == GB_SOCIAL_RESPONSE);
+    assert(story.social.followup_armed == 1);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
+
+    /* Invalid dialogue/script and exhausted collection indices fail closed. */
+    gb_story_init(&story);
+    one_actor(&actors, &dialogue_desc, GB_ACTOR_STORY_NONE);
+    GbInteractionEvent invalid_dialogue = event_for(GB_INTERACTION_DIALOGUE, 99);
+    gb_story_handle_interaction(&story, &actors, &invalid_dialogue);
+    assert(! gb_story_ui_active(&story));
+    story.state.collection_progress = 6;
+    GbInteractionEvent exhausted_pickup = event_for(GB_INTERACTION_COLLECTION, 3);
+    gb_story_handle_interaction(&story, &actors, &exhausted_pickup);
+    assert(story.state.collection_progress == 6);
+    assert(! gb_story_ui_active(&story));
+
+    (void)none;
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'story_runtime_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'story_runtime_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/story.c'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(ROOT / 'reconstruction/data/story_data.c'),
+                str(ROOT / 'reconstruction/data/actor_data.c'),
+                str(ROOT / 'reconstruction/data/actor_routes.c'),
+                str(td / 'story_runtime_test.c'), '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(0, proc.returncode, proc.stderr)
             subprocess.run([str(exe)], check=True, cwd=ROOT)

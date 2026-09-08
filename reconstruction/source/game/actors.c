@@ -25,6 +25,9 @@ static void gb_actor_init(GbActor* actor, const GbActorDescriptor* descriptor, u
     actor->facing_right = 0;
     actor->active = 1;
     actor->story_overlay_index = overlay_index;
+    actor->dialogue_step = -1;
+    actor->consumed = 0;
+    actor->story_visible = 1;
 }
 
 static void gb_actor_append(GbActorSystem* system, const GbActorDescriptor* descriptor, u8 overlay_index)

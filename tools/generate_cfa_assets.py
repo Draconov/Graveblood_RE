@@ -45,6 +45,10 @@ ACTOR_CLASS_FGTILE = 2
 ACTOR_CLASS_LEAVES = 3
 ACTOR_CLASS_PLAYER = 4
 ACTOR_VISUAL_NONE = 0xFF
+FONT_TABLE_ADDR = 0x080199A0
+FONT_GLYPH_COUNT = 127
+MONSTER_TILE_ARGS = (0x159, 0x178, 0x17A, 0x198, 0x19A)
+BG0_UI_TILE_COUNT = 87
 
 
 @dataclass(frozen=True)
@@ -152,9 +156,209 @@ class PackedActorSpriteBank:
     data: bytes
 
 
+@dataclass(frozen=True)
+class DialogueRecordSpec:
+    speaker: str
+    text: str
+    opcode: int
+    argument: int
+
+
+@dataclass(frozen=True)
+class MessageRecordSpec:
+    stream_id: int
+    story_stage: int
+    title: str
+    sender: str
+    body: str
+
+
+@dataclass(frozen=True)
+class SocialProfileSpec:
+    selector: int
+    name: str
+    topic_ratings: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class SocialActionSpec:
+    index: int
+    label: str
+    node_type: int
+    field_24: int
+    field_28: int
+    child_base: int
+
+
+@dataclass(frozen=True)
+class SocialResponseSpec:
+    action: str
+    topic_index: int
+    slot: int
+    profile_value_class: int
+    variant: int
+    text: str
+
+
+@dataclass(frozen=True)
+class StoryRuntimeData:
+    dialogue_scripts: tuple[tuple[DialogueRecordSpec, ...], ...]
+    messages: tuple[MessageRecordSpec, ...]
+    social_profiles: tuple[SocialProfileSpec, ...]
+    social_actions: tuple[SocialActionSpec, ...]
+    subject_topics: tuple[str, ...]
+    ask_topics: tuple[str, ...]
+    criticize_topics: tuple[str, ...]
+    social_responses: tuple[SocialResponseSpec, ...]
+
+
+@dataclass(frozen=True)
+class FontGlyphSpec:
+    pixel_width: int
+    rows: tuple[int, ...]
+    control: bool
+
+
+@dataclass(frozen=True)
+class CanonicalFont:
+    bitmap_base_index: int
+    glyphs: tuple[FontGlyphSpec, ...]
+
+
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline='', encoding='utf-8') as f:
         return list(csv.DictReader(f))
+
+
+def build_story_runtime_data(root: Path) -> StoryRuntimeData:
+    dialogue_rows = _read_csv(root / 'data' / 'dialogue_scripts.csv')
+    scripts: list[list[DialogueRecordSpec]] = [[] for _ in range(7)]
+    for row in dialogue_rows:
+        dial = int(row['dial_index'])
+        step = int(row['step'])
+        if not 0 <= dial < len(scripts):
+            raise ValueError(f'unsupported dialogue script {dial}')
+        if step != len(scripts[dial]):
+            raise ValueError(f'non-contiguous dialogue script {dial} step {step}')
+        scripts[dial].append(DialogueRecordSpec(
+            speaker=row['speaker'],
+            text=row['text'],
+            opcode=int(row['opcode']),
+            argument=int(row['argument']),
+        ))
+
+    messages = tuple(
+        MessageRecordSpec(
+            stream_id=int(row['stream_id']),
+            story_stage=int(row['story_stage']),
+            title=row['title'],
+            sender=row['sender'],
+            body=row['body'],
+        )
+        for row in _read_csv(root / 'data' / 'message_streams.csv')
+    )
+
+    profile_rows = _read_csv(root / 'data' / 'player_interaction_social_profile_topics.csv')
+    grouped_profiles: dict[int, list[dict[str, str]]] = {0: [], 1: []}
+    for row in profile_rows:
+        selector = int(row['selector_index'])
+        if selector in grouped_profiles:
+            grouped_profiles[selector].append(row)
+    profiles: list[SocialProfileSpec] = []
+    for selector in (0, 1):
+        rows = sorted(grouped_profiles[selector], key=lambda r: int(r['topic_index']))
+        if len(rows) != 9 or [int(r['topic_index']) for r in rows] != list(range(9)):
+            raise ValueError(f'incomplete social profile {selector}')
+        profiles.append(SocialProfileSpec(
+            selector=selector,
+            name=rows[0]['name'],
+            topic_ratings=tuple(int(r['rating']) for r in rows),
+        ))
+
+    actions = tuple(
+        SocialActionSpec(
+            index=int(row['index']),
+            label=row['label'],
+            node_type=int(row['node_type']),
+            field_24=int(row['field_24']),
+            field_28=int(row['field_28']),
+            child_base=int(row['child_base']) if row['child_base'] else 0,
+        )
+        for row in _read_csv(root / 'data' / 'player_interaction_action_table.csv')
+    )
+
+    secondary = {
+        row['action_label']: tuple(part for part in row['topics'].split('|') if part)
+        for row in _read_csv(root / 'data' / 'player_interaction_secondary_topics.csv')
+    }
+    responses = tuple(
+        SocialResponseSpec(
+            action=row['action'],
+            topic_index=int(row['topic_index']),
+            slot=int(row['slot']),
+            profile_value_class=int(row['profile_value_class']),
+            variant=int(row['variant']),
+            text=row['text'],
+        )
+        for row in _read_csv(root / 'data' / 'player_interaction_topic_response_texts.csv')
+    )
+    return StoryRuntimeData(
+        dialogue_scripts=tuple(tuple(script) for script in scripts),
+        messages=messages,
+        social_profiles=tuple(profiles),
+        social_actions=actions,
+        subject_topics=secondary['SUBJECT'],
+        ask_topics=secondary['Ask about'],
+        criticize_topics=secondary['CRITICIZE'],
+        social_responses=responses,
+    )
+
+
+def extract_canonical_font(rom: bytes) -> CanonicalFont:
+    off = FONT_TABLE_ADDR - ROM_BASE
+    if off < 0 or off + FONT_GLYPH_COUNT * 2 > len(rom):
+        raise ValueError('canonical font table outside ROM')
+    entries = struct.unpack_from(f'<{FONT_GLYPH_COUNT}H', rom, off)
+    bitmap_base = entries[0]
+    glyphs: list[FontGlyphSpec] = []
+    for code, raw in enumerate(entries):
+        signed = raw if raw < 0x8000 else raw - 0x10000
+        if code == 0 or signed < 0:
+            glyphs.append(FontGlyphSpec(0, (0,) * 8, code != 0))
+            continue
+        pair_width = (signed >> 10) & 0x1F
+        pixel_width = pair_width * 2
+        bitmap_offset = raw & 0x03FF
+        rows = [0] * 8
+        for pair in range(pair_width):
+            word_off = off + 2 * (bitmap_base + bitmap_offset + pair)
+            if word_off + 2 > len(rom):
+                raise ValueError(f'font glyph {code} bitmap outside ROM')
+            word = struct.unpack_from('<H', rom, word_off)[0]
+            for y in range(8):
+                bits = (word >> (y * 2)) & 0x03
+                if bits & 1:
+                    rows[y] |= 1 << (pair * 2)
+                if bits & 2:
+                    rows[y] |= 1 << (pair * 2 + 1)
+        glyphs.append(FontGlyphSpec(pixel_width, tuple(rows), False))
+    return CanonicalFont(bitmap_base, tuple(glyphs))
+
+
+def pack_monster_sprite_bank(rom: bytes) -> PackedActorSpriteBank:
+    src_base = OBJ_TILES_SOURCE - ROM_BASE
+    if src_base < 0 or src_base + 0x8000 > len(rom):
+        raise ValueError('initial OBJ source outside ROM')
+    initial = rom[src_base:src_base + 0x8000]
+    packed = bytearray()
+    for tile_arg in MONSTER_TILE_ARGS:
+        base = tile_arg & 0x1FF
+        for logical in (base, base + 1, base + 16, base + 17):
+            start = logical * 64
+            packed.extend(initial[start:start + 64])
+    palette_off = OBJ_PALETTE_SOURCE - ROM_BASE
+    palette = struct.unpack_from('<256H', rom, palette_off)
+    return PackedActorSpriteBank(len(MONSTER_TILE_ARGS), tuple(palette), bytes(packed))
 
 
 def build_graphics_variants(root: Path) -> dict[tuple[int, int], GraphicsVariantSpec]:
@@ -425,6 +629,20 @@ def load_runtime_background(
     )
 
 
+def select_bg0_ui_tiles(runtime: RuntimeBackground, count: int = BG0_UI_TILE_COUNT) -> tuple[int, ...]:
+    """Return world-unreferenced 8bpp tile IDs below screenblock 27."""
+    used_sources = set(runtime.layer_a) | set(runtime.layer_b) | set(runtime.fixed_map)
+    used_tiles = {
+        runtime.translation[source] & 0x03FF
+        for source in used_sources
+        if source < len(runtime.translation)
+    }
+    safe = tuple(tile for tile in range(864) if tile not in used_tiles)
+    if len(safe) < count:
+        raise ValueError(f'need {count} BG0 UI tiles, only {len(safe)} world-safe IDs exist')
+    return safe[:count]
+
+
 def load_world_image(root: Path, level: int) -> Image.Image:
     return Image.open(root / 'renders' / 'maps' / f'level{level:02d}_v0_world.png').convert('RGB')
 
@@ -590,6 +808,7 @@ def _asset_c(
     portals = ',\n'.join(portal_rows) if portal_rows else '    { 0, 0, 0, 0, 0, 0 }'
     name = _asset_symbol(level, variant)
     tile_words = _bytes_to_u16(runtime.tile_bytes)
+    ui_tiles = select_bg0_ui_tiles(runtime)
     return f"""#include <graveblood/assets.h>
 
 const u16 {name}_bg_palette[256] = {{
@@ -620,6 +839,10 @@ const u16 {name}_collision[{len(collision)}] = {{
 {_c_values(collision, 24)}
 }};
 
+const u16 {name}_bg0_ui_tiles[GB_BG0_UI_TILE_COUNT] = {{
+{_c_values(ui_tiles, 16)}
+}};
+
 const GbPortal {name}_portals[{max(1, len(spec.portals))}] = {{
 {portals}
 }};
@@ -642,6 +865,7 @@ const GbLevelAssets {name}_assets = {{
     .layer_b = {name}_layer_b,
     .fixed_map = {name}_fixed_map,
     .collision = {name}_collision,
+    .bg0_ui_tiles = {name}_bg0_ui_tiles,
     .portals = {name}_portals,
     .portal_count = {len(spec.portals)},
 }};
@@ -728,6 +952,97 @@ const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS] 
 """
 
 
+def _c_string(value: str) -> str:
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r') + '"'
+
+
+def _story_data_c(data: StoryRuntimeData) -> str:
+    record_blocks: list[str] = []
+    script_rows: list[str] = []
+    for dial, script in enumerate(data.dialogue_scripts):
+        rows = ',\n'.join(
+            f'    {{ {_c_string(rec.speaker)}, {_c_string(rec.text)}, {rec.opcode}, {rec.argument} }}'
+            for rec in script
+        )
+        record_blocks.append(
+            f'static const GbDialogueRecord gb_dialogue_script_{dial}[{len(script)}] = {{\n{rows}\n}};'
+        )
+        script_rows.append(f'    {{ gb_dialogue_script_{dial}, {len(script)} }}')
+
+    message_rows = ',\n'.join(
+        f'    {{ {m.stream_id}, {m.story_stage}, {_c_string(m.title)}, {_c_string(m.sender)}, {_c_string(m.body)} }}'
+        for m in data.messages
+    )
+    profile_rows = ',\n'.join(
+        '    { ' + _c_string(p.name) + ', { ' + ', '.join(str(v) for v in p.topic_ratings) + ' } }'
+        for p in data.social_profiles
+    )
+    action_rows = ',\n'.join(
+        f'    {{ {_c_string(a.label)}, {a.node_type}, {a.field_24}, {a.field_28}, {a.child_base} }}'
+        for a in data.social_actions
+    )
+
+    def string_array(name: str, values: tuple[str, ...]) -> str:
+        rows = ',\n'.join(f'    {_c_string(value)}' for value in values)
+        return f'const char* const {name}[{len(values)}] = {{\n{rows}\n}};'
+
+    response_rows = ',\n'.join(
+        f'    {{ {0 if r.action == "SUBJECT" else 3}, {r.topic_index}, {r.slot}, '
+        f'{r.profile_value_class}, {r.variant}, {_c_string(r.text)} }}'
+        for r in data.social_responses
+    )
+    return f"""#include <graveblood/assets.h>
+
+{chr(10).join(record_blocks)}
+
+const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT] = {{
+{',\n'.join(script_rows)}
+}};
+
+const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT] = {{
+{message_rows}
+}};
+
+const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT] = {{
+{profile_rows}
+}};
+
+const GbSocialActionData gb_social_actions[GB_SOCIAL_ACTION_COUNT] = {{
+{action_rows}
+}};
+
+{string_array('gb_social_subject_topics', data.subject_topics)}
+{string_array('gb_social_ask_topics', data.ask_topics)}
+{string_array('gb_social_criticize_topics', data.criticize_topics)}
+
+const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT] = {{
+{response_rows}
+}};
+"""
+
+
+def _font_data_c(font: CanonicalFont) -> str:
+    rows = ',\n'.join(
+        f'    {{ {glyph.pixel_width}, {{ ' + ', '.join(f'0x{row:04X}' for row in glyph.rows) + ' } }'
+        for glyph in font.glyphs
+    )
+    return f"""#include <graveblood/assets.h>
+
+const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT] = {{
+{rows}
+}};
+"""
+
+
+def _monster_sprite_c(monster: PackedActorSpriteBank) -> str:
+    return f"""#include <graveblood/assets.h>
+
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(monster.data), 12, 4)}
+}};
+"""
+
+
 def _assets_h(variants: dict[tuple[int, int], GraphicsVariantSpec]) -> str:
     declarations = '\n'.join(
         f'extern const GbLevelAssets {_asset_symbol(level, variant)}_assets;'
@@ -795,6 +1110,53 @@ typedef struct {{
 }} GbActorVisualSpec;
 
 typedef struct {{
+    const char* speaker;
+    const char* text;
+    s16 opcode;
+    s16 argument;
+}} GbDialogueRecord;
+
+typedef struct {{
+    const GbDialogueRecord* records;
+    u16 count;
+}} GbDialogueScript;
+
+typedef struct {{
+    u8 stream_id;
+    s8 story_stage;
+    const char* title;
+    const char* sender;
+    const char* body;
+}} GbMessageRecord;
+
+typedef struct {{
+    const char* name;
+    s8 topic_ratings[9];
+}} GbSocialProfileData;
+
+typedef struct {{
+    const char* label;
+    u8 node_type;
+    u8 field_24;
+    u8 field_28;
+    u8 child_base;
+}} GbSocialActionData;
+
+typedef struct {{
+    u8 quadrant;
+    u8 topic_index;
+    u8 slot;
+    u8 profile_value_class;
+    u8 variant;
+    const char* text;
+}} GbSocialResponseData;
+
+typedef struct {{
+    u8 pixel_width;
+    u16 rows[8];
+}} GbFontGlyph;
+
+typedef struct {{
     u8 level_id;
     u8 graphics_variant;
     u16 world_width_tiles;
@@ -812,6 +1174,7 @@ typedef struct {{
     const u16* layer_b;
     const u16* fixed_map;
     const u16* collision;
+    const u16* bg0_ui_tiles;
     const GbPortal* portals;
     u8 portal_count;
 }} GbLevelAssets;
@@ -829,6 +1192,19 @@ enum {{
     GB_ACTOR_ROUTE_POINTS = 6,
     GB_ACTOR_VISUAL_COUNT = 32,
     GB_ACTOR_FRAME_HALFWORDS = 256,
+    GB_DIALOGUE_SCRIPT_COUNT = 7,
+    GB_DIALOGUE_RECORD_COUNT = 58,
+    GB_MESSAGE_RECORD_COUNT = 6,
+    GB_SOCIAL_PROFILE_COUNT = 2,
+    GB_SOCIAL_ACTION_COUNT = 20,
+    GB_SOCIAL_SUBJECT_TOPIC_COUNT = 9,
+    GB_SOCIAL_ASK_TOPIC_COUNT = 5,
+    GB_SOCIAL_CRITICIZE_TOPIC_COUNT = 9,
+    GB_SOCIAL_RESPONSE_COUNT = 216,
+    GB_FONT_GLYPH_COUNT = 127,
+    GB_MONSTER_SPRITE_COUNT = 5,
+    GB_MONSTER_SPRITE_HALFWORDS = 128,
+    GB_BG0_UI_TILE_COUNT = 87,
 }};
 
 extern const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT];
@@ -839,6 +1215,16 @@ extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_P
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
 extern const u16 gb_actor_obj_palette[256];
 extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS];
+extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
+extern const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT];
+extern const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT];
+extern const GbSocialActionData gb_social_actions[GB_SOCIAL_ACTION_COUNT];
+extern const char* const gb_social_subject_topics[GB_SOCIAL_SUBJECT_TOPIC_COUNT];
+extern const char* const gb_social_ask_topics[GB_SOCIAL_ASK_TOPIC_COUNT];
+extern const char* const gb_social_criticize_topics[GB_SOCIAL_CRITICIZE_TOPIC_COUNT];
+extern const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT];
+extern const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT];
+extern const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS];
 
 enum {{ GB_PLAYER_FRAME_COUNT = 16 }};
 
@@ -924,6 +1310,9 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     rom = rom_file.read_bytes()
     actor_data = build_actor_runtime_data(root)
     actor_sprites = pack_actor_sprite_bank(rom, actor_data.visuals)
+    story_data = build_story_runtime_data(root)
+    font = extract_canonical_font(rom)
+    monster = pack_monster_sprite_bank(rom)
 
     for level, variant in sorted(variants):
         spec = specs[level]
@@ -947,6 +1336,9 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     (out / 'data' / 'actor_data.c').write_text(_actor_data_c(actor_data), encoding='utf-8')
     (out / 'data' / 'actor_routes.c').write_text(_actor_routes_c(actor_data), encoding='utf-8')
     (out / 'data' / 'actor_sprite_data.c').write_text(_actor_sprite_c(actor_data, actor_sprites), encoding='utf-8')
+    (out / 'data' / 'story_data.c').write_text(_story_data_c(story_data), encoding='utf-8')
+    (out / 'data' / 'font_data.c').write_text(_font_data_c(font), encoding='utf-8')
+    (out / 'data' / 'monster_sprite.c').write_text(_monster_sprite_c(monster), encoding='utf-8')
     (out / 'data' / 'level_registry.c').write_text(_registry_c(variants), encoding='utf-8')
     (out / 'include' / 'graveblood' / 'assets.h').write_text(_assets_h(variants), encoding='utf-8')
 

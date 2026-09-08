@@ -12,14 +12,15 @@ Controls:
 - **D-pad** — move the recovered 16x32 player sprite;
 - the player uses the recovered 6-frame regular walk, 6-frame up/back walk, mirrored 8-phase idle, retained horizontal facing, and right-facing H-flip behavior;
 - movement uses the recovered **8x8 u16 collision grid** (`0 = walkable`, nonzero = blocked);
-- **A** while standing on a recovered physical `fgtile` portal — change to its normal destination level;
-- all 37 normal physical portal destinations (levels 0..10) resolve through the runtime registry;
-- the one Level-9 special/out-of-range destination `524` is preserved as a 16-bit target and remains inert until its non-level semantics are recovered.
+- **A** near a state-1/2/4 NPC/story actor — enter the recovered social, dialogue, or collection path;
+- **A** on a normal recovered `fgtile` portal — change to its destination level through the generic portal path;
+- after the fourth collection advances progress `3 -> 4`, **A** on the Level-10 `turn=4/5` gate uses the recovered forced vertical traversal (Y=360 or Y=410) rather than `portTo=8`;
+- 33 generic scene-portal records resolve through the runtime registry; the four Level-10 gate records remain special, and the one Level-9 destination `524` remains inert until its non-level semantics are recovered.
 
 All 11 levels use the recovered multi-layer world architecture rather than a flattened runtime background. BG1 and BG2 are 32x32 ring-buffer windows streamed from the original visual world layers, while BG3 uses the recovered fixed parallax map at quarter camera speed. Level 0 additionally exposes recovered graphics variants 1 and 2 through `gb_level_assets(0, variant)`; normal portal entry currently selects variant 0.
 
 
-The same level-entry path now rebuilds a fixed-capacity actor pool from generated canonical descriptors. It loads **241 unique non-Player physical descriptors through 290 level references**, then appends the **16 story-overlay descriptors** that match the current level; the maximum current population is 65 actors. NPC/story actors use 32 deduplicated exact frame-1 8bpp visual combinations and a bounded 56-slot OAM range after the Player. State-3 route followers keep 21.11 fixed-point positions and move by the constructor-proven `0x100` fixed units (1/8 pixel) per update toward the five recovered six-waypoint routes. Fresh-A state 1/2/4 contacts emit typed `social`, `dialogue`, or `collection` events, but this milestone deliberately does not execute dialogue, social menus, collection progression, or story scripting. State-1's original interaction-active global gate therefore belongs to the next downstream interaction-state phase. Grass/leaves/foreground descriptors are populated and ordered but remain non-rendering until their visual behavior is proved; physical portals continue to be handled only by `portal.c`.
+The same level-entry path rebuilds a fixed-capacity actor pool from generated canonical descriptors. It loads **241 unique non-Player physical descriptors through 290 level references**, then appends the **16 story-overlay descriptors** that match the current level; the maximum current population is 65 actors. NPC/story actors use 32 deduplicated exact frame-1 8bpp visual combinations and a bounded OAM range after the Player. State-3 route followers keep 21.11 fixed-point positions and move by the constructor-proven `0x100` fixed units (1/8 pixel) per update toward the five recovered six-waypoint routes. Fresh-A state 1/2/4 contacts now feed `GbStoryRuntime`: all 7 scripts/58 dialogue records are generated into the build, normal-vs-state4 opcodes stay context-specific, Stas/Julia social menus use the recovered action/topic/response tables, the six collection steps persist consumed overlays, and the fourth/fifth steps trigger the rusty-key and monster/cliffhanger paths. BG0 uses the recovered CFA font for dialogue/social text. State4 `-5` intentionally stops at `final_effect_pending` and holds the presentation rather than issuing the unsafe original expanding-VRAM writes. Story overlays still start from level-only activation except for consumed-state persistence; grass/leaves/foreground descriptors remain non-rendering until their visual behavior is proved. Generic physical portals remain in `portal.c`, while the four Level-10 turn-4/5 records are intercepted by the separate story-gate path.
 
 ## Runtime architecture
 
@@ -36,6 +37,8 @@ The same level-entry path now rebuilds a fixed-capacity actor pool from generate
 - hardware OAM Player plus bounded NPC/story actor sprites;
 - 16 losslessly packed recovered Player animation frames in OBJ palette bank 15, coexisting with the exact 8bpp actor palette/frames;
 - generated actor descriptors, per-level reference spans, story overlays, route tables, and exact NPC/story frame-1 assets;
+- generated canonical story assets: 7 dialogue scripts / 58 records, six message records, two reachable social profiles, action/topic/response tables, CFA font glyphs, and five monster sprites;
+- persistent `GbStoryRuntime` with context-sensitive dialogue opcodes, collection/consumption state, social menus, safe message lookups, special Level-10 gate handling, and a safe `final_effect_pending` terminal boundary;
 - pixel-space player/camera coordinates;
 - small C modules under `source/engine` and `source/game`;
 - generated C assets under `data/`;

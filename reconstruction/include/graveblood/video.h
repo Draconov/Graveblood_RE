@@ -4,6 +4,7 @@
 #include <graveblood/actor.h>
 #include <graveblood/actors.h>
 #include <graveblood/assets.h>
+#include <graveblood/story.h>
 
 void gb_video_init(void);
 void gb_video_wait_vblank(void);
@@ -14,5 +15,10 @@ void gb_video_stream_row(const GbLevelAssets* level, s16 left, s16 world_y);
 void gb_video_set_camera(s16 x, s16 y);
 void gb_video_draw_actors(const GbActorSystem* system, s16 camera_x, s16 camera_y);
 void gb_video_draw_player(const GbPlayer* player, s16 camera_x, s16 camera_y);
+void gb_video_clear_story_ui(void);
+void gb_video_draw_story_ui(const GbStoryRuntime* story);
+void gb_video_draw_message(const GbMessageRecord* message);
+void gb_video_draw_player_state(const GbPlayer* player, const GbStoryRuntime* story,
+                                s16 camera_x, s16 camera_y);
 
 #endif

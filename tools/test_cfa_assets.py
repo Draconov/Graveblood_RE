@@ -119,6 +119,47 @@ class CfaAssetTests(unittest.TestCase):
             self.assertIn('GB_ACTOR_VISUAL_COUNT = 32', header)
             self.assertIn('GB_ACTOR_ROUTE_COUNT = 5', header)
 
+    def test_story_runtime_data_and_canonical_font_contract(self):
+        g = self._module()
+        story = g.build_story_runtime_data(ROOT)
+        self.assertEqual(7, len(story.dialogue_scripts))
+        self.assertEqual(58, sum(len(script) for script in story.dialogue_scripts))
+        self.assertEqual(6, len(story.messages))
+        self.assertEqual(('Stas', 'Julia'), tuple(profile.name for profile in story.social_profiles))
+        self.assertEqual(18, sum(len(profile.topic_ratings) for profile in story.social_profiles))
+        self.assertEqual(20, len(story.social_actions))
+        self.assertEqual(216, len(story.social_responses))
+
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        font = g.extract_canonical_font(rom)
+        self.assertEqual(127, len(font.glyphs))
+        self.assertEqual(127, font.bitmap_base_index)
+        self.assertTrue(all(font.glyphs[i].control for i in range(1, 32)))
+        self.assertEqual(4, font.glyphs[32].pixel_width)
+        self.assertEqual(6, font.glyphs[ord('A')].pixel_width)
+        self.assertEqual(4, font.glyphs[ord('i')].pixel_width)
+        self.assertEqual((0, 0, 0, 0, 0, 0, 0, 0), font.glyphs[32].rows)
+        self.assertNotEqual((0, 0, 0, 0, 0, 0, 0, 0), font.glyphs[ord('A')].rows)
+
+    def test_generator_emits_story_font_and_monster_runtime_assets(self):
+        g = self._module()
+        rom_path = Path(os.environ['GRAVEBLOOD_ROM'])
+        monster = g.pack_monster_sprite_bank(rom_path.read_bytes())
+        self.assertEqual(5, monster.frame_count)
+        self.assertEqual(5 * 256, len(monster.data))
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            g.generate_all(ROOT, out, rom_path)
+            for rel in ('data/story_data.c', 'data/font_data.c', 'data/monster_sprite.c'):
+                self.assertTrue((out / rel).is_file(), rel)
+            header = (out / 'include/graveblood/assets.h').read_text(encoding='utf-8')
+            self.assertIn('GB_DIALOGUE_SCRIPT_COUNT = 7', header)
+            self.assertIn('GB_DIALOGUE_RECORD_COUNT = 58', header)
+            self.assertIn('GB_MESSAGE_RECORD_COUNT = 6', header)
+            self.assertIn('GB_SOCIAL_PROFILE_COUNT = 2', header)
+            self.assertIn('GB_SOCIAL_RESPONSE_COUNT = 216', header)
+            self.assertIn('GB_MONSTER_SPRITE_COUNT = 5', header)
+
     def test_runtime_background_asset_model_uses_exact_streamed_sources(self):
         g = self._module()
         self.assertTrue(hasattr(g, 'load_runtime_background'))
@@ -132,6 +173,36 @@ class CfaAssetTests(unittest.TestCase):
             self.assertEqual(expected_cells, len(runtime.layer_b))
             self.assertEqual(2048, len(runtime.fixed_map))
             self.assertEqual(634, len(runtime.translation))
+
+    def test_every_level_variant_has_87_world_safe_bg0_ui_tiles(self):
+        g = self._module()
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        specs = g.build_level_specs(ROOT)
+        variants = g.build_graphics_variants(ROOT)
+        for level, variant in sorted(variants):
+            runtime = g.load_runtime_background(ROOT, rom, specs[level], variant)
+            ui_tiles = g.select_bg0_ui_tiles(runtime, 87)
+            self.assertEqual(87, len(ui_tiles), (level, variant))
+            self.assertEqual(87, len(set(ui_tiles)), (level, variant))
+            self.assertTrue(all(0 <= tile < 864 for tile in ui_tiles), (level, variant))
+
+            used_sources = set(runtime.layer_a) | set(runtime.layer_b) | set(runtime.fixed_map)
+            used_tiles = {
+                runtime.translation[source] & 0x03FF
+                for source in used_sources
+                if source < len(runtime.translation)
+            }
+            self.assertTrue(set(ui_tiles).isdisjoint(used_tiles), (level, variant))
+
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            g.generate_all(ROOT, out, Path(os.environ['GRAVEBLOOD_ROM']))
+            header = (out / 'include' / 'graveblood' / 'assets.h').read_text(encoding='utf-8')
+            self.assertIn('GB_BG0_UI_TILE_COUNT = 87', header)
+            self.assertIn('const u16* bg0_ui_tiles;', header)
+            sample = (out / 'data' / 'level00_assets.c').read_text(encoding='utf-8')
+            self.assertIn('gb_level00_bg0_ui_tiles[GB_BG0_UI_TILE_COUNT]', sample)
+            self.assertIn('.bg0_ui_tiles = gb_level00_bg0_ui_tiles', sample)
 
     def test_checked_in_level_assets_use_streamed_model_and_16bit_dimensions(self):
         assets_h = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')

@@ -60,6 +60,53 @@ typedef struct {
 } GbActorVisualSpec;
 
 typedef struct {
+    const char* speaker;
+    const char* text;
+    s16 opcode;
+    s16 argument;
+} GbDialogueRecord;
+
+typedef struct {
+    const GbDialogueRecord* records;
+    u16 count;
+} GbDialogueScript;
+
+typedef struct {
+    u8 stream_id;
+    s8 story_stage;
+    const char* title;
+    const char* sender;
+    const char* body;
+} GbMessageRecord;
+
+typedef struct {
+    const char* name;
+    s8 topic_ratings[9];
+} GbSocialProfileData;
+
+typedef struct {
+    const char* label;
+    u8 node_type;
+    u8 field_24;
+    u8 field_28;
+    u8 child_base;
+} GbSocialActionData;
+
+typedef struct {
+    u8 quadrant;
+    u8 topic_index;
+    u8 slot;
+    u8 profile_value_class;
+    u8 variant;
+    const char* text;
+} GbSocialResponseData;
+
+typedef struct {
+    u8 pixel_width;
+    u16 rows[8];
+} GbFontGlyph;
+
+typedef struct {
     u8 level_id;
     u8 graphics_variant;
     u16 world_width_tiles;
@@ -77,6 +124,7 @@ typedef struct {
     const u16* layer_b;
     const u16* fixed_map;
     const u16* collision;
+    const u16* bg0_ui_tiles;
     const GbPortal* portals;
     u8 portal_count;
 } GbLevelAssets;
@@ -106,6 +154,19 @@ enum {
     GB_ACTOR_ROUTE_POINTS = 6,
     GB_ACTOR_VISUAL_COUNT = 32,
     GB_ACTOR_FRAME_HALFWORDS = 256,
+    GB_DIALOGUE_SCRIPT_COUNT = 7,
+    GB_DIALOGUE_RECORD_COUNT = 58,
+    GB_MESSAGE_RECORD_COUNT = 6,
+    GB_SOCIAL_PROFILE_COUNT = 2,
+    GB_SOCIAL_ACTION_COUNT = 20,
+    GB_SOCIAL_SUBJECT_TOPIC_COUNT = 9,
+    GB_SOCIAL_ASK_TOPIC_COUNT = 5,
+    GB_SOCIAL_CRITICIZE_TOPIC_COUNT = 9,
+    GB_SOCIAL_RESPONSE_COUNT = 216,
+    GB_FONT_GLYPH_COUNT = 127,
+    GB_MONSTER_SPRITE_COUNT = 5,
+    GB_MONSTER_SPRITE_HALFWORDS = 128,
+    GB_BG0_UI_TILE_COUNT = 87,
 };
 
 extern const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT];
@@ -116,6 +177,16 @@ extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_P
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
 extern const u16 gb_actor_obj_palette[256];
 extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS];
+extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
+extern const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT];
+extern const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT];
+extern const GbSocialActionData gb_social_actions[GB_SOCIAL_ACTION_COUNT];
+extern const char* const gb_social_subject_topics[GB_SOCIAL_SUBJECT_TOPIC_COUNT];
+extern const char* const gb_social_ask_topics[GB_SOCIAL_ASK_TOPIC_COUNT];
+extern const char* const gb_social_criticize_topics[GB_SOCIAL_CRITICIZE_TOPIC_COUNT];
+extern const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT];
+extern const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT];
+extern const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS];
 
 enum { GB_PLAYER_FRAME_COUNT = 16 };
 
