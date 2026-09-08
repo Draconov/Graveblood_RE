@@ -1,0 +1,5 @@
+profile_field,proper_profile_initial_values,runtime_usage,evidence_sites,working_name,selector_literal_ref_count,confidence
++0x00,Stas|Julia,profile/name text source,0x080091EC,name/text prefix,15,high
++0x10,Stas:0|Julia:0,no selector-derived read found in recovered interaction code,all 15 recovered profile-table load sites inventoried,reserved/unused in recovered interaction runtime,15,high for absence within recovered selector-use sites
++0x14,Stas:0|Julia:0,relationship-like score read/write,0x080085AC|0x080090F8|0x08009504,relationship-like social score,15,high behavior / medium-high semantic name
++0x18..+0x38,nine 0..4 topic classes per proper profile,nine topic-class reads,0x0800948C response dispatch and related selector-derived paths,topic preference classes,15,high

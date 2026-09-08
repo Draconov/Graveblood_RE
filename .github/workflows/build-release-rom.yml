@@ -20,18 +20,11 @@ jobs:
       - name: Checkout Graveblood_RE
         uses: actions/checkout@v4
 
-      - name: Checkout pinned Butano
-        uses: actions/checkout@v4
-        with:
-          repository: GValiente/butano
-          ref: 77dcbcb3d8783596a9f333c64eedbccec77b05dc
-          path: vendor/butano
-
       - name: Build Graveblood_RE ROM
         shell: bash
         run: |
           set -euo pipefail
-          make -C reconstruction LIBBUTANO=../vendor/butano/butano -j"$(nproc)"
+          make -C reconstruction -j"$(nproc)"
           test -s reconstruction/Graveblood_RE.gba
           sha256sum reconstruction/Graveblood_RE.gba \
             > reconstruction/Graveblood_RE.gba.sha256

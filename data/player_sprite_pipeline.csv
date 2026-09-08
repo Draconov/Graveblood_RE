@@ -7,6 +7,9 @@ dynamic_obj_upload,0x08004F04,ROM OBJ source -> OBJ VRAM tile copy
 oam_submit,0x0800A8F0,constructs 8-byte OAM entries
 graphics_stride_field,player+0x1DC = 192,constructor writes 0xC0; player draw multiplies animation/bank selection by field
 wardrobe_labels,10 slots x 20 bytes @ 0x080198A0 -> player+0x2B4,constructor copies 0xC8 bytes
-shared_avatar_menu_state,0x03001254,Player_draw reads first fields; Wardrobe UI consumes later/shared fields; semantics not reduced to outfit index
+wardrobe_selector,player+0x240,constructor initializes 0; Wardrobe label/highlight/navigation paths read/write this field; normal arrow range 0..6
+animation_state_block,0x03001254,Player_draw/Player_update state+frame block; old shared wardrobe/avatar label rejected by full xref trace
+live_graphics_bank,0x0300103C = 15 at startup,Player_draw source-bank multiplier; recovered Wardrobe path previews alternatives but does not mutate this live bank
 known_character_source_sample,source base 2198,valid 16x32 Vika-style frame reconstruction; not claimed as constructor/default outfit
-initialized_branch_candidate,source base 3468 if player+0x1E0 == 0,derived from initialized globals and 0x08006B3A branch; allocator/default for +0x1E0 not yet proven
+normal_idle_branch,source base 3468 at bank 15 / idle phase 1,draw branch when player+0x1E0 == 0; reconstruction explicitly chooses selector-0 behavior
+player_plus_1e0,constructor leaves field uninitialized,constructor skips +0x1E0 and malloc/new allocator is not zero-filling; draw/update read it

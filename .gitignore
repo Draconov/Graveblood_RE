@@ -8,9 +8,6 @@ reconstruction/*.sym
 reconstruction/*.d
 reconstruction/*.o
 
-# Local external dependency checkout
-vendor/
-
 # Python cache files must never enter packaged RE workspaces
 __pycache__/
 *.pyc

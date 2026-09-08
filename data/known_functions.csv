@@ -38,13 +38,13 @@ address,name,evidence
 0x08005ED8,bx_r3_trampoline,interworking/indirect-call trampoline
 0x0800621C,Player_constructor,player factory constructor; initializes sprite stride and copies 10x20-byte wardrobe label table to object+0x2B4
 0x08006418,Player_factory,registered player actor factory; allocates/constructs Player object
+0x08006430,Wardrobe_draw_selected_label,standalone helper used by Player_update Wardrobe path; draws label at Player+0x2B4 + Player+0x240*20
 0x080065FC,Player_draw,stages dynamic 8bpp OBJ rows and submits stacked hardware sprites for the player
 0x080068BC,Player_draw_state4_monster_branch,entered when 0x0300061C==1; submits five 16x16 OBJ sprites forming reconstructed dark creature composite
 0x080080A4,Player_apply_vertical_target_delta,"reads Player+0x394 interaction Y, stores targetY-currentY at +0x1C, then clears dual-purpose fields +0x390/+0x394"
 0x080081B0,Player_update,Player vtable update method at 0x08019694; dispatches 0x03000610 interaction-active state through Player+0x1EC
 0x08005EDA,bx_r5_trampoline,interworking/indirect-call trampoline
 0x08006D6C,message_selector_slot_copy_candidate,selects one of four message selector slots for Messages UI
-0x08008E30,Wardrobe_ui_update_candidate,Wardrobe screen routine; consumes fields from shared 0x03001254 state block
 0x0800A208,configure_gameplay_backgrounds,programs BG0..BG3 as 8bpp text backgrounds at screenblocks 27..30 with priorities 0..3
 0x0800A8F0,submit_obj_oam,"writes OAM entry from screen position, logical 8bpp tile, Graveblood size enum, flips and priority"
 0x0800D968,register_spawn_factories_npc_grass,binds literal spawnType keys npc/grass to concrete factory callbacks

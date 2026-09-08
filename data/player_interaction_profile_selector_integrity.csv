@@ -1,2 +1,2 @@
-proper_social_profiles,null_entries,wrong_layout_entries,wrong_layout_topic_reads,wrong_layout_reads_in_0_4,runtime_profile_deref,selector_null_guard,null_selector_index,actor_selector_source,parity_warning,behavior_confidence
-2,1,6,54,23,0x0800948C,none before profile/topic dereference,2,actor+0x5C -> Player+0x388,do not normalize selector table in faithful demo mode,high
+proper_social_profiles,null_entries,wrong_layout_entries,wrong_layout_topic_reads,wrong_layout_reads_in_0_4,runtime_profile_deref,selector_null_guard,null_selector_index,actor_selector_source,canonical_reachable_selectors,latent_selectors,hazard_scope,parity_warning,behavior_confidence
+2,1,6,54,23,0x0800948C,none before profile/topic dereference,2,actor+0x5C -> Player+0x388,0|1,2|3|4|5|6|7|8,latent under canonical initialized state-1 NPC path; external mutation not ruled out,"preserve malformed selector table for demo parity, but do not treat selectors 2..8 as normally reached",high

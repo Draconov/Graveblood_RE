@@ -1,0 +1,11 @@
+slot,label,normal_navigation_reachable,preview_obj_bank,preview_bg_page,matches_startup_live_bank,equippable_in_demo,evidence,confidence
+0,Favorite Skirt,yes,15,6,yes,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+1,Not for demo,yes,13,2,no,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+2,Not for demo,yes,12,1,no,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+3,Not for demo,yes,11,0,no,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+4,Not for demo,yes,6,3,no,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+5,Not for demo,yes,4,4,no,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+6,Not for demo,yes,5,5,no,no proven equip action,normal selector range 0..6; first preview group and selector-indexed BG-page table,high
+7,Not for demo,no,,,no,no proven equip action,outside normal 0..6 Left/Right selector range,high
+8,,no,,,no,no proven equip action,outside normal 0..6 Left/Right selector range,high
+9,,no,,,no,no proven equip action,outside normal 0..6 Left/Right selector range,high

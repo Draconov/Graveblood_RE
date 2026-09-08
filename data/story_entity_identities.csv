@@ -4,8 +4,8 @@ index,identity,semantic_role,identity_confidence,evidence
 2,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
 3,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
 4,IQ 54,walking story character,high,"overlay #4 has dial=2, state=3, route=0; script 2 is spoken by IQ 54 and asks Vika to find five sketches"
-5,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-6,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
+5,Stas,social-interaction character,high,"overlay #5 is state=1,dial=0; the sole state-1 social bootstrap copies dial to profile selector 0, whose proper social profile name is Stas"
+6,Julia,social-interaction character,high,"overlay #6 is state=1,dial=1; the sole state-1 social bootstrap copies dial to profile selector 1, whose proper social profile name is Julia"
 7,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
 8,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
 9,IQ 54,story character,high,"overlay #9 is level=10, state=2, dial=2; dial is the proven dialogue-script index and script 2's speaking NPC is IQ 54"

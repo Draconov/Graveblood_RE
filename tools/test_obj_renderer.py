@@ -87,6 +87,29 @@ class ObjRendererTests(unittest.TestCase):
         self.assertEqual(image.getpixel((1, 0)), (180, 213, 41, 255))
         self.assertEqual(image.getpixel((7, 23)), (213, 230, 255, 255))
 
+    def test_player_animation_initializers_are_read_from_startup_data(self):
+        init = mod.player_animation_initializers_from_rom(self.data)
+        self.assertEqual(init['bank'], 15)
+        self.assertEqual(init['state'], 8)
+        self.assertEqual(init['frame'], 1)
+        self.assertEqual(init['countdown'], 5)
+
+    def test_default_player_animation_source_bases_match_draw_branches(self):
+        sources = mod.player_animation_source_bases(15)
+        self.assertEqual(sources['regular_walk'], (3456, 3458, 3460, 3462, 3464, 3466))
+        self.assertEqual(sources['up_walk'], (3520, 3522, 3524, 3526, 3528, 3530))
+        self.assertEqual(sources['idle_unique'], (3468, 3470, 3532, 3534))
+        self.assertEqual(
+            sources['idle_sequence'],
+            (3468, 3470, 3532, 3534, 3534, 3532, 3470, 3468),
+        )
+
+    def test_default_player_animation_has_sixteen_unique_packed_frames(self):
+        sources = mod.player_animation_source_bases(15)
+        packed = sources['regular_walk'] + sources['up_walk'] + sources['idle_unique']
+        self.assertEqual(len(packed), 16)
+        self.assertEqual(len(set(packed)), 16)
+
 
     def test_npc_source_bias_comes_from_initialized_iwram_field(self):
         self.assertEqual(mod.npc_source_bias_from_rom(self.data), 0xE00)

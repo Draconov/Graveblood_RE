@@ -1,0 +1,17 @@
+fact,value,evidence
+startup_graphics_bank,15,0x0300103C startup initializer from ROM 0x08A8DFEC
+startup_animation_state,8,0x03001254 startup initializer from ROM 0x08A8E204
+startup_animation_frame,1,0x03001258 startup initializer from ROM 0x08A8E208
+startup_animation_countdown,5,0x030012A8 startup initializer from ROM 0x08A8E258
+graphics_bank_stride,192,Player constructor writes player+0x1DC=0xC0 and Player_draw multiplies bank by this stride
+regular_walk_sources,"3456;3458;3460;3462;3464;3466",Player_draw states 2..6 use bank*192+0x240+2*(frame-1)
+up_walk_sources,"3520;3522;3524;3526;3528;3530",Player_draw state 7 uses bank*192+0x280+2*(frame-1)
+idle_sources_8_phase,"3468;3470;3532;3534;3534;3532;3470;3468",Player_draw state-8 normal branch mirrors four unique poses across eight phases
+unique_packed_frames,16,6 regular + 6 up/back + 4 unique idle poses
+moving_countdown_reset,5,Player_update animation cadence path for non-state-8/alternate branch
+normal_idle_countdown_reset,8,Player_update preserves state-8 value when player+0x1E0==0
+frame_continuity,direction changes do not reset shared frame/countdown,animation advance/clamp occurs before later direction-selected state write in Player_update
+right_facing,H flip,Player+0x4C feeds tile-argument bit 0x400 and OAM submit maps it to horizontal flip
+vertical_facing,retains horizontal H-flip state,vertical state selection does not require resetting left/right presentation
+player_plus_1e0_initialization,uninitialized by constructor,constructor skips +0x1E0 while malloc/new allocator is not zero-filling; draw/update read field before any recovered Player-path store
+reconstruction_plus_1e0_policy,explicit normal selector-0 behavior,clean-room runtime avoids reproducing original stale-heap dependence

@@ -36,5 +36,6 @@ address,name,evidence
 0x03001810,message_selector_aux1,first auxiliary selector; initialized -1; filled by opcode -3 first-free policy
 0x03001814,message_selector_primary,primary selector; initialized -1; set by dialogue opcode -2
 0x03001818,npc_route_pointer_table,five route pointers; state==3 indexes this table with actor.route
-0x03001254,avatar_menu_shared_state_block,"shared initialized state block consumed by Player_draw, Wardrobe UI and other menu systems; not a proven outfit-only variable"
+0x0300103C,player_live_graphics_bank,initialized to 15; Player_draw uses it as the live ROM-side graphics-bank selector; no Wardrobe mutation recovered in the public demo
+0x03001254,player_animation_state_block,"Player animation state at +0 and frame at +4; direct xrefs are Player draw/update animation paths, not Wardrobe state"
 0x03007FFC,irq_callback_slot,startup/main installs 0x08002268 here

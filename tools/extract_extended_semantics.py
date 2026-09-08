@@ -19,6 +19,19 @@ WARDROBE_LABELS_ADDR = 0x080198A0
 WARDROBE_LABEL_COUNT = 10
 WARDROBE_LABEL_SIZE = 20
 PLAYER_WARDROBE_DST_OFFSET = 0x2B4
+PLAYER_WARDROBE_SELECTOR_OFFSET = 0x240
+PLAYER_WARDROBE_PREVIEW_OBJ_OFFSET = 0x244
+PLAYER_WARDROBE_PREVIEW_BG_OFFSET = 0x27C
+WARDROBE_PREVIEW_OBJ_ROM = 0x080197B0
+WARDROBE_PREVIEW_BG_ROM = 0x080197E8
+WARDROBE_PREVIEW_TABLE_COUNT = 14
+WARDROBE_NORMAL_CHOICE_COUNT = 7
+WARDROBE_LABEL_DRAW = 0x08006430
+WARDROBE_PLAYER_UPDATE_PATH = 0x08008E30
+WARDROBE_TITLE_ADDR = 0x08A8C47C
+WARDROBE_EXIT_PROMPT_ADDR = 0x08A8C488
+PLAYER_ANIMATION_STATE_RAM = 0x03001254
+PLAYER_LIVE_GRAPHICS_BANK_RAM = 0x0300103C
 OBJ_TILES_SOURCE = 0x08310654
 OBJ_PALETTE_SOURCE = 0x08366E58
 OBJ_INITIAL_COPY_BYTES = 0x8000
@@ -260,6 +273,20 @@ def extract_story_entity_identities() -> list[dict]:
                 "identity_confidence": "high",
                 "evidence": "overlay #4 has dial=2, state=3, route=0; script 2 is spoken by IQ 54 and asks Vika to find five sketches",
             })
+        elif index == 5:
+            row.update({
+                "identity": "Stas",
+                "semantic_role": "social-interaction character",
+                "identity_confidence": "high",
+                "evidence": "overlay #5 is state=1,dial=0; the sole state-1 social bootstrap copies dial to profile selector 0, whose proper social profile name is Stas",
+            })
+        elif index == 6:
+            row.update({
+                "identity": "Julia",
+                "semantic_role": "social-interaction character",
+                "identity_confidence": "high",
+                "evidence": "overlay #6 is state=1,dial=1; the sole state-1 social bootstrap copies dial to profile selector 1, whose proper social profile name is Julia",
+            })
         elif index == 9:
             row.update({
                 "identity": "IQ 54",
@@ -344,9 +371,16 @@ PLAYER_INTERACTION_STATE2_FRESH_A_GATE = 0x0800960E
 PLAYER_INTERACTION_SOCIAL_PROFILE_RECORD_SIZE = 0x3C
 PLAYER_INTERACTION_NPC_METADATA_RECORD_SIZE = 0x30
 PLAYER_INTERACTION_PROFILE_NAME_SIZE = 0x10
+PLAYER_INTERACTION_PROFILE_FIELD10 = 0x10
 PLAYER_INTERACTION_PROFILE_FIELD14 = 0x14
 PLAYER_INTERACTION_PROFILE_TOPIC_BASE = 0x18
 PLAYER_INTERACTION_PROFILE_SCORE_UPDATE = 0x08009504
+NPC_ACTOR_TYPE_KEY = 0x08A8C2E0
+NPC_UPDATE_FUNCTION = 0x0800298C
+NPC_STATE1_ENTRY = 0x08002ACA
+NPC_STATE1_SOCIAL_HANDOFF = 0x08002B52
+NPC_SOCIAL_PRELUDE = 0x08002FA2
+NPC_SOCIAL_BOOTSTRAP = 0x08002FCE
 
 ENDING_VRAM_EFFECT = 0x08004FE0
 ENDING_VRAM_LITERALS = 0x08005038
@@ -355,6 +389,86 @@ COPY_BYTES_HELPER = 0x08010C54
 
 def _unpack_halfwords(data: bytes, addr: int, count: int) -> tuple[int, ...]:
     return struct.unpack_from(f"<{count}H", data, addr - ROM_BASE)
+
+
+def _rom_cstr(data: bytes, addr: int, max_len: int = 128) -> str | None:
+    if not (ROM_BASE <= addr < ROM_BASE + len(data)):
+        return None
+    off = addr - ROM_BASE
+    end = data.find(b"\0", off, min(len(data), off + max_len))
+    if end < 0:
+        return None
+    raw = data[off:end]
+    try:
+        return raw.decode("ascii")
+    except UnicodeDecodeError:
+        return None
+
+
+def _parse_serialized_actor(data: bytes, off: int) -> tuple[dict[str, str], int] | None:
+    if off < 0 or off + 8 > len(data) or struct.unpack_from("<I", data, off)[0] != NPC_ACTOR_TYPE_KEY:
+        return None
+    props: dict[str, str] = {}
+    p = off
+    for _ in range(64):
+        if p + 4 > len(data):
+            return None
+        key_addr = struct.unpack_from("<I", data, p)[0]
+        if key_addr == 0:
+            return props, p + 4
+        if p + 8 > len(data):
+            return None
+        value_addr = struct.unpack_from("<I", data, p + 4)[0]
+        key = _rom_cstr(data, key_addr)
+        value = _rom_cstr(data, value_addr)
+        if key is None or value is None:
+            return None
+        props.setdefault(key, value)
+        p += 8
+    return None
+
+
+def _scan_serialized_actors(data: bytes) -> list[tuple[int, dict[str, str]]]:
+    needle = struct.pack("<I", NPC_ACTOR_TYPE_KEY)
+    out: dict[int, dict[str, str]] = {}
+    start = 0
+    while True:
+        off = data.find(needle, start)
+        if off < 0:
+            break
+        if off % 4 == 0:
+            parsed = _parse_serialized_actor(data, off)
+            if parsed is not None:
+                out[off] = parsed[0]
+        start = off + 1
+    return sorted(out.items())
+
+
+def _thumb_unconditional_b_target(addr: int, halfword: int) -> int | None:
+    if halfword & 0xF800 != 0xE000:
+        return None
+    imm11 = halfword & 0x07FF
+    if imm11 & 0x0400:
+        imm11 -= 0x0800
+    return addr + 4 + (imm11 << 1)
+
+
+def _thumb_literal_refs_to(data: bytes, literal_value: int, start_addr: int = 0x08000000,
+                           end_addr: int = 0x08018000) -> list[int]:
+    refs = []
+    start = max(start_addr, ROM_BASE)
+    end = min(end_addr, ROM_BASE + len(data))
+    for addr in range(start, end, 2):
+        hw = struct.unpack_from("<H", data, addr - ROM_BASE)[0]
+        if hw & 0xF800 != 0x4800:
+            continue
+        literal_addr = ((addr + 4) & ~3) + ((hw & 0xFF) << 2)
+        if literal_addr + 4 > ROM_BASE + len(data):
+            continue
+        value = struct.unpack_from("<I", data, literal_addr - ROM_BASE)[0]
+        if value == literal_value:
+            refs.append(addr)
+    return refs
 
 
 def extract_level10_collection_gate_policy(data: bytes) -> list[dict]:
@@ -1198,6 +1312,177 @@ def extract_player_interaction_profile_topic_layout_mismatch(data: bytes) -> lis
     return rows
 
 
+def extract_player_interaction_profile_selector_reachability(data: bytes) -> list[dict]:
+    """Prove canonical initialized social actors reach only selectors 0 and 1.
+
+    NPC_update dispatches state==1 to 0x08002ACA.  Its proximity success is the
+    sole unconditional branch in NPC_update to 0x08002FA2, whose fresh-A edge
+    reaches 0x08002FCE and copies actor+0x5C (dial) into Player+0x388.  Scanning
+    the serialized canonical actors finds exactly two initialized state-1 NPCs,
+    with dials 0 and 1.  This is a canonical-initial-state reachability proof;
+    mutation by code outside this recovered path is deliberately not excluded.
+    """
+    dispatch = (0x235A, 0x5EEB, 0x2B03, 0xD100, 0xE0CD)
+    if _unpack_halfwords(data, NPC_UPDATE_FUNCTION + 0x40, len(dispatch)) != dispatch:
+        raise ValueError("NPC state dispatch drifted")
+    state1_test = (0x2B02, 0xD00A, 0x2B01, 0xD067)
+    if _unpack_halfwords(data, 0x080029F2, len(state1_test)) != state1_test:
+        raise ValueError("NPC state-1 dispatch drifted")
+    handoff_hw = struct.unpack_from("<H", data, NPC_STATE1_SOCIAL_HANDOFF - ROM_BASE)[0]
+    if _thumb_unconditional_b_target(NPC_STATE1_SOCIAL_HANDOFF, handoff_hw) != NPC_SOCIAL_PRELUDE:
+        raise ValueError("NPC state-1 social handoff drifted")
+    all_handoffs = []
+    for addr in range(NPC_UPDATE_FUNCTION, 0x080037F6, 2):
+        hw = struct.unpack_from("<H", data, addr - ROM_BASE)[0]
+        if _thumb_unconditional_b_target(addr, hw) == NPC_SOCIAL_PRELUDE:
+            all_handoffs.append(addr)
+    if all_handoffs != [NPC_STATE1_SOCIAL_HANDOFF]:
+        raise ValueError(f"unexpected NPC_update handoffs to social prelude: {[hex(x) for x in all_handoffs]}")
+    fresh_a = (0x4B0D, 0x681B, 0x4013, 0xD000, 0xE515, 0x20E2, 0x4664, 0x6DEE)
+    if _unpack_halfwords(data, 0x08002FC4, len(fresh_a)) != fresh_a:
+        raise ValueError("NPC social fresh-A selector bootstrap drifted")
+
+    actors = []
+    for off, props in _scan_serialized_actors(data):
+        if props.get("spawnType") != "npc":
+            continue
+        try:
+            state = int(props.get("state", "0"), 0)
+            dial = int(props.get("dial", "0"), 0)
+        except ValueError:
+            continue
+        if state == 1:
+            actors.append((off, props, dial))
+    actual = [(ROM_BASE + off, dial) for off, _, dial in actors]
+    expected = [(0x08019100, 0), (0x0801917C, 1)]
+    if actual != expected:
+        raise ValueError(f"canonical state-1 NPC set drifted: {[(hex(a), d) for a,d in actual]}")
+
+    actor_by_dial = {dial: (off, props) for off, props, dial in actors}
+    selectors = extract_player_interaction_profile_selector_table(data)
+    # NPC_update has no direct word store to actor+0x5C.  Its register-offset
+    # halfword stores to actor are a small, canonical set used for facing/UI
+    # fields; state+0x5A is only loaded in the recovered function.
+    dial_writes = []
+    register_strh_sites = []
+    for addr in range(NPC_UPDATE_FUNCTION, 0x080037F6, 2):
+        hw = struct.unpack_from("<H", data, addr - ROM_BASE)[0]
+        if (hw & 0xF800) == 0x6000:  # STR (immediate)
+            base = (hw >> 3) & 7
+            byte_off = ((hw >> 6) & 0x1F) * 4
+            if base == 5 and byte_off == 0x5C:
+                dial_writes.append(addr)
+        if (hw & 0xFE00) == 0x5200 and ((hw >> 3) & 7) == 5:  # STRH register offset, base r5
+            register_strh_sites.append(addr)
+    expected_strh_sites = [0x08002BEE, 0x08002BF6, 0x08002BFC,
+                           0x08002D46, 0x08002D64, 0x08002D82, 0x08002DEC, 0x08002FEE,
+                           0x08003274, 0x08003282, 0x08003286, 0x0800329E, 0x080032A6,
+                           0x080032C2, 0x080035C0]
+    if dial_writes:
+        raise ValueError(f"unexpected NPC_update actor+0x5C writes: {[hex(x) for x in dial_writes]}")
+    if register_strh_sites != expected_strh_sites:
+        raise ValueError(f"NPC_update register-offset halfword-store inventory drifted: {[hex(x) for x in register_strh_sites]}")
+    state_read_signatures = {
+        0x080029CC: (0x235A, 0x5EEB),
+        0x08002F96: (0x235A, 0x5EEB),
+        0x0800320A: (0x235A, 0x5EEB),
+        0x0800363E: (0x2300, 0x465A, 0x6293, 0x335A, 0x5EEB),
+    }
+    for addr, sig in state_read_signatures.items():
+        if _unpack_halfwords(data, addr, len(sig)) != sig:
+            raise ValueError(f"NPC_update state+0x5A read signature drifted at 0x{addr:08X}")
+
+    rows = []
+    for selector in selectors:
+        idx = selector["selector_index"]
+        actor = actor_by_dial.get(idx)
+        rows.append({
+            "selector_index": idx,
+            "profile_name": selector["name"],
+            "profile_kind": selector["record_kind"],
+            "canonical_reachability": "reachable" if actor else "not reached by initialized state-1 NPC",
+            "actor_rom_addr": f"0x{ROM_BASE + actor[0]:08X}" if actor else "",
+            "actor_state": 1 if actor else "",
+            "actor_dial": idx if actor else "",
+            "actor_level": int(actor[1].get("level", "0"), 0) if actor else "",
+            "social_bootstrap": f"0x{NPC_SOCIAL_BOOTSTRAP:08X}",
+            "only_npc_update_handoff": f"0x{NPC_STATE1_SOCIAL_HANDOFF:08X} -> 0x{NPC_SOCIAL_PRELUDE:08X}",
+            "selector_copy": "actor+0x5C -> Player+0x388",
+            "npc_update_state_write": "none in 0x0800298C..0x080037F6",
+            "npc_update_dial_write": "none in 0x0800298C..0x080037F6",
+            "reachability_scope": "canonical initialized actors plus NPC_update; external mutation not ruled out",
+            "confidence": "high",
+        })
+    return rows
+
+
+def extract_player_interaction_profile_field_usage(data: bytes) -> list[dict]:
+    """Inventory recovered selector-derived profile-field uses, including +0x10 absence.
+
+    Every PC-relative Thumb load of the profile-selector-table address in the
+    recovered Player interaction code is inventoried.  None of those recovered
+    data-flow sites reads +0x10; +0x14 is the score and +0x18..+0x38 are topic
+    classes.  Absence is intentionally scoped to these recovered selector-use
+    sites rather than asserted as a whole-program theorem.
+    """
+    refs = _thumb_literal_refs_to(data, PLAYER_INTERACTION_PROFILE_TABLE_RAM)
+    expected_refs = [
+        0x080085BA, 0x08008CD4, 0x080090FE, 0x080091EE, 0x08009492,
+        0x08009698, 0x0800992C, 0x080099CE, 0x08009ADA, 0x08009B0E,
+        0x08009B30, 0x08009BBA, 0x08009CFC, 0x08009D30, 0x08009D52,
+    ]
+    if refs != expected_refs:
+        raise ValueError(f"profile selector-table reference inventory drifted: {[hex(x) for x in refs]}")
+    profiles = extract_player_interaction_profile_selector_table(data)[:2]
+    initial_field10 = []
+    initial_field14 = []
+    for profile in profiles:
+        ptr = int(profile["profile_ptr"], 16)
+        rec_off = init_ram_to_rom_off(ptr)
+        initial_field10.append((profile["name"], struct.unpack_from("<i", data, rec_off + PLAYER_INTERACTION_PROFILE_FIELD10)[0]))
+        initial_field14.append((profile["name"], struct.unpack_from("<i", data, rec_off + PLAYER_INTERACTION_PROFILE_FIELD14)[0]))
+    if initial_field10 != [("Stas", 0), ("Julia", 0)]:
+        raise ValueError(f"proper profile +0x10 initializer drifted: {initial_field10}")
+    return [
+        {
+            "profile_field": "+0x00",
+            "proper_profile_initial_values": "Stas|Julia",
+            "runtime_usage": "profile/name text source",
+            "evidence_sites": "0x080091EC",
+            "working_name": "name/text prefix",
+            "selector_literal_ref_count": len(refs),
+            "confidence": "high",
+        },
+        {
+            "profile_field": "+0x10",
+            "proper_profile_initial_values": "|".join(f"{n}:{v}" for n,v in initial_field10),
+            "runtime_usage": "no selector-derived read found in recovered interaction code",
+            "evidence_sites": "all 15 recovered profile-table load sites inventoried",
+            "working_name": "reserved/unused in recovered interaction runtime",
+            "selector_literal_ref_count": len(refs),
+            "confidence": "high for absence within recovered selector-use sites",
+        },
+        {
+            "profile_field": "+0x14",
+            "proper_profile_initial_values": "|".join(f"{n}:{v}" for n,v in initial_field14),
+            "runtime_usage": "relationship-like score read/write",
+            "evidence_sites": "0x080085AC|0x080090F8|0x08009504",
+            "working_name": "relationship-like social score",
+            "selector_literal_ref_count": len(refs),
+            "confidence": "high behavior / medium-high semantic name",
+        },
+        {
+            "profile_field": "+0x18..+0x38",
+            "proper_profile_initial_values": "nine 0..4 topic classes per proper profile",
+            "runtime_usage": "nine topic-class reads",
+            "evidence_sites": "0x0800948C response dispatch and related selector-derived paths",
+            "working_name": "topic preference classes",
+            "selector_literal_ref_count": len(refs),
+            "confidence": "high",
+        },
+    ]
+
+
 def extract_player_interaction_profile_selector_integrity(data: bytes) -> dict:
     """Summarize the selector table's demo-parity integrity hazards.
 
@@ -1217,6 +1502,9 @@ def extract_player_interaction_profile_selector_integrity(data: bytes) -> dict:
 
     selectors = extract_player_interaction_profile_selector_table(data)
     mismatch = extract_player_interaction_profile_topic_layout_mismatch(data)
+    reachability = extract_player_interaction_profile_selector_reachability(data)
+    reached = [str(r["selector_index"]) for r in reachability if r["canonical_reachability"] == "reachable"]
+    latent = [str(r["selector_index"]) for r in reachability if r["canonical_reachability"] != "reachable"]
     return {
         "proper_social_profiles": sum(r["record_kind"] == "social_profile_0x3C" for r in selectors),
         "null_entries": sum(r["record_kind"] == "null" for r in selectors),
@@ -1227,7 +1515,10 @@ def extract_player_interaction_profile_selector_integrity(data: bytes) -> dict:
         "selector_null_guard": "none before profile/topic dereference",
         "null_selector_index": 2,
         "actor_selector_source": "actor+0x5C -> Player+0x388",
-        "parity_warning": "do not normalize selector table in faithful demo mode",
+        "canonical_reachable_selectors": "|".join(reached),
+        "latent_selectors": "|".join(latent),
+        "hazard_scope": "latent under canonical initialized state-1 NPC path; external mutation not ruled out",
+        "parity_warning": "preserve malformed selector table for demo parity, but do not treat selectors 2..8 as normally reached",
         "behavior_confidence": "high",
     }
 
@@ -1663,6 +1954,204 @@ def extract_wardrobe_labels(data: bytes) -> list[dict]:
     return rows
 
 
+def _find_u32_literals(data: bytes, value: int) -> list[int]:
+    """Return ROM addresses containing an exact little-endian u32 value."""
+    needle = struct.pack("<I", value)
+    rows = []
+    start = 0
+    while True:
+        off = data.find(needle, start)
+        if off < 0:
+            break
+        rows.append(ROM_BASE + off)
+        start = off + 1
+    return rows
+
+
+def extract_player_wardrobe_state_semantics(data: bytes) -> list[dict]:
+    """Export the code-backed Player wardrobe browser state.
+
+    The older workspace label treated 0x03001254 as a shared wardrobe/avatar
+    block because one literal reference occurs late in Player_update.  Full
+    xref tracing shows that address is the Player animation state/frame block;
+    the actual wardrobe selector is Player+0x240 and the wardrobe presentation
+    lives inside Player_update rather than at a standalone function entry.
+
+    The demo exposes preview/navigation behavior but no recovered confirm/equip
+    action.  In particular, the live Player graphics-bank global remains a
+    read-only input along the recovered wardrobe path.
+    """
+    # Constructor 0x0800621C: zero Player+0x23C and then Player+0x240 before
+    # copying the two 14-dword preview tables.
+    ctor_signature = (0x238F, 0x4E32, 0x0031, 0x009B, 0x50E5, 0x3304, 0x50E5)
+    if _unpack_halfwords(data, 0x08006332, len(ctor_signature)) != ctor_signature:
+        raise ValueError("Player wardrobe selector initializer drifted")
+    if struct.unpack_from("<I", data, 0x08006400 - ROM_BASE)[0] != 0x08019780:
+        raise ValueError("Player wardrobe preview-table base literal drifted")
+    if struct.unpack_from("<I", data, 0x08006404 - ROM_BASE)[0] != WARDROBE_LABELS_ADDR:
+        raise ValueError("Player wardrobe label-table literal drifted")
+
+    obj_values = struct.unpack_from(
+        f"<{WARDROBE_PREVIEW_TABLE_COUNT}I",
+        data,
+        WARDROBE_PREVIEW_OBJ_ROM - ROM_BASE,
+    )
+    bg_values = struct.unpack_from(
+        f"<{WARDROBE_PREVIEW_TABLE_COUNT}I",
+        data,
+        WARDROBE_PREVIEW_BG_ROM - ROM_BASE,
+    )
+
+    # 0x0800650A..0x08006524 computes Player+0x2B4 + selector*20 and
+    # forwards it to the text renderer.
+    label_signature = (
+        0x2390, 0x9A03, 0x009B, 0x58D3, 0x0099, 0x18C9,
+        0x23AD, 0x009B, 0x469C, 0x0089, 0x4461, 0x4694, 0x4461,
+    )
+    if _unpack_halfwords(data, 0x0800650A, len(label_signature)) != label_signature:
+        raise ValueError("Wardrobe label selector formula drifted")
+
+    # Wardrobe heading and prompt are drawn from inside Player_update.
+    if fixed_cstr(data, WARDROBE_TITLE_ADDR - ROM_BASE, 32) != "Wardrobe":
+        raise ValueError("Wardrobe title literal drifted")
+    if fixed_cstr(data, WARDROBE_EXIT_PROMPT_ADDR - ROM_BASE, 32) != "(B) to exit":
+        raise ValueError("Wardrobe exit prompt literal drifted")
+
+    # Selected preview page: Player+0x27C + selector*4 -> 0x08004F6C.
+    preview_select_signature = (
+        0x2390, 0x009B, 0x58E3, 0x339E, 0x009B, 0x18E3, 0x6858,
+    )
+    if _unpack_halfwords(data, 0x08008E6C, len(preview_select_signature)) != preview_select_signature:
+        raise ValueError("Wardrobe selected-preview page formula drifted")
+
+    # Normal browser input checks are Left (0x20), Right (0x10), then B (0x02).
+    # Right increments only from 0..5, producing the normal 0..6 range;
+    # Left decrements only when >0.  0x080093F4 is a defensive high-value
+    # clamp to 7, not a value reached from constructor state by normal arrows.
+    left_signature = (0x2220, 0x4B49, 0x469A, 0x681B, 0x421A)
+    right_signature = (0x2210, 0x421A)
+    b_signature = (0x4652, 0x2302, 0x6812, 0x421A)
+    if _unpack_halfwords(data, 0x08008FB8, len(left_signature)) != left_signature:
+        raise ValueError("Wardrobe Left-key path drifted")
+    if _unpack_halfwords(data, 0x08008FD2, len(right_signature)) != right_signature:
+        raise ValueError("Wardrobe Right-key path drifted")
+    if _unpack_halfwords(data, 0x08008FE8, len(b_signature)) != b_signature:
+        raise ValueError("Wardrobe B-key path drifted")
+    if _unpack_halfwords(data, 0x0800951E, 2) != (0x2805, 0xDD00):
+        raise ValueError("Wardrobe selector upper-bound path drifted")
+    if _unpack_halfwords(data, 0x08009588, 4) != (0x2690, 0x1E43, 0x00B6, 0x51A3):
+        raise ValueError("Wardrobe selector decrement path drifted")
+
+    live_bank_init_off = init_ram_to_rom_off(PLAYER_LIVE_GRAPHICS_BANK_RAM)
+    live_bank_start = struct.unpack_from("<I", data, live_bank_init_off)[0]
+    if live_bank_start != 15:
+        raise ValueError(f"Player startup graphics bank drifted: {live_bank_start}")
+    live_bank_literals = _find_u32_literals(data, PLAYER_LIVE_GRAPHICS_BANK_RAM)
+    if live_bank_literals != [0x08006978, 0x08006CF8]:
+        raise ValueError(
+            "unexpected direct Player graphics-bank literal set: "
+            + ",".join(f"0x{x:08X}" for x in live_bank_literals)
+        )
+
+    return [
+        {"fact":"selector_field", "value":"player+0x240",
+         "evidence":"Player constructor zeros +0x240; Wardrobe text/highlight/navigation code reads and writes this field",
+         "confidence":"high"},
+        {"fact":"selector_initial_value", "value":"0",
+         "evidence":"0x0800633C writes constructor zero register to Player+0x240",
+         "confidence":"high"},
+        {"fact":"normal_navigation_range", "value":"0..6",
+         "evidence":"Left decrements only above 0; Right path 0x0800951E increments only when selector<=5; 0x080093F4 is defensive clamp-to-7 for an already-high value",
+         "confidence":"high"},
+        {"fact":"normal_navigation_inputs", "value":"Left;Right;B",
+         "evidence":"fresh-key checks at 0x08008FBE/0x08008FD2/0x08008FE8 use GBA masks 0x20/0x10/0x02",
+         "confidence":"high"},
+        {"fact":"confirm_input", "value":"none recovered",
+         "evidence":"Wardrobe browser input path exposes Left/Right navigation and '(B) to exit'; no A-confirm/equip branch is present in the recovered browser path",
+         "confidence":"high"},
+        {"fact":"wardrobe_title", "value":"Wardrobe",
+         "evidence":"literal 0x08A8C47C drawn at Player_update internal path 0x08008E30",
+         "confidence":"high"},
+        {"fact":"wardrobe_exit_prompt", "value":"(B) to exit",
+         "evidence":"literal 0x08A8C488 drawn at 0x08008E60",
+         "confidence":"high"},
+        {"fact":"label_draw_function", "value":f"0x{WARDROBE_LABEL_DRAW:08X}",
+         "evidence":"called from Player_update at 0x08008E68 and after selector changes at 0x08009406/0x0800953A",
+         "confidence":"high"},
+        {"fact":"label_formula", "value":"player+0x2B4 + selector*20",
+         "evidence":"0x0800650A..0x08006524 computes selector*5*4 then adds Player+0x2B4 before text draw",
+         "confidence":"high"},
+        {"fact":"preview_obj_bank_table", "value":"player+0x244 <- 0x080197B0",
+         "evidence":"constructor copies 0x38 bytes; Wardrobe preview loop 0x08008EC6 consumes 14 dwords and multiplies each by Player+0x1DC (192) before dynamic OBJ upload",
+         "confidence":"high"},
+        {"fact":"preview_obj_bank_values_first_group", "value":";".join(str(x) for x in obj_values[:7]),
+         "evidence":"first seven dwords of canonical ROM table 0x080197B0; seven normal browser choices use the matching preview row",
+         "confidence":"high"},
+        {"fact":"preview_obj_bank_values_second_group", "value":";".join(str(x) for x in obj_values[7:]),
+         "evidence":"second seven dwords of canonical ROM table 0x080197CC; all are zero in the public demo",
+         "confidence":"high"},
+        {"fact":"preview_bg_page_table", "value":"player+0x27C <- 0x080197E8",
+         "evidence":"constructor copies 0x38 bytes; selector-indexed load at 0x08008E6C/0x0800952C/0x08009590 feeds 0x08004F6C",
+         "confidence":"high"},
+        {"fact":"preview_bg_page_values_normal_range", "value":";".join(str(x) for x in bg_values[:7]),
+         "evidence":"selector 0..6 directly indexes the first seven dwords copied to Player+0x27C",
+         "confidence":"high"},
+        {"fact":"preview_bg_loader", "value":"0x08004F6C",
+         "evidence":"copies 0x2000 bytes for selected page into BG VRAM 0x06003000; page contributes source offset page*0x2000",
+         "confidence":"high"},
+        {"fact":"live_player_graphics_bank", "value":"0x0300103C = 15 at startup",
+         "evidence":"initialized-data source 0x08A8DFEC contains 15; Player_draw uses this as the live graphics-bank multiplier",
+         "confidence":"high"},
+        {"fact":"live_bank_wardrobe_mutation", "value":"none recovered",
+         "evidence":"canonical ROM contains only two direct 0x0300103C literals (0x08006978,0x08006CF8), both used read-only by Player draw paths; wardrobe navigation writes only Player+0x240 and preview loaders",
+         "confidence":"high"},
+        {"fact":"animation_state_block", "value":"0x03001254",
+         "evidence":"direct literal xrefs are in Player_draw and Player_update animation/frame logic (state at +0, frame at +4); Wardrobe selector is object field Player+0x240 instead",
+         "confidence":"high"},
+        {"fact":"old_wardrobe_state_label", "value":"rejected",
+         "evidence":"0x08008E30 is inside Player_update (entry 0x080081B0), not a standalone Wardrobe function; its later 0x03001254 reference belongs to animation logic after the Wardrobe browser block",
+         "confidence":"high"},
+        {"fact":"reconstruction_policy", "value":"keep proven default outfit only",
+         "evidence":"the demo proves browse/preview data but no equip action or live-bank mutation; alternate wardrobe graphics must not be made gameplay-selectable without new evidence",
+         "confidence":"high"},
+    ]
+
+
+def extract_player_wardrobe_slots(data: bytes) -> list[dict]:
+    """Combine labels with the seven normally navigable preview choices."""
+    labels = extract_wardrobe_labels(data)
+    obj_values = struct.unpack_from(
+        f"<{WARDROBE_PREVIEW_TABLE_COUNT}I",
+        data,
+        WARDROBE_PREVIEW_OBJ_ROM - ROM_BASE,
+    )
+    bg_values = struct.unpack_from(
+        f"<{WARDROBE_PREVIEW_TABLE_COUNT}I",
+        data,
+        WARDROBE_PREVIEW_BG_ROM - ROM_BASE,
+    )
+    live_bank = struct.unpack_from("<I", data, init_ram_to_rom_off(PLAYER_LIVE_GRAPHICS_BANK_RAM))[0]
+    rows = []
+    for slot, label_row in enumerate(labels):
+        normal = slot < WARDROBE_NORMAL_CHOICE_COUNT
+        rows.append({
+            "slot": slot,
+            "label": label_row["label"].strip(),
+            "normal_navigation_reachable": "yes" if normal else "no",
+            "preview_obj_bank": obj_values[slot] if normal else "",
+            "preview_bg_page": bg_values[slot] if normal else "",
+            "matches_startup_live_bank": "yes" if normal and obj_values[slot] == live_bank else "no",
+            "equippable_in_demo": "no proven equip action",
+            "evidence": (
+                "normal selector range 0..6; first preview group and selector-indexed BG-page table"
+                if normal else
+                "outside normal 0..6 Left/Right selector range"
+            ),
+            "confidence": "high",
+        })
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("rom", type=Path)
@@ -1678,6 +2167,17 @@ def main():
     write_csv(args.out / "wardrobe_labels.csv",
               ["slot","source_rom_addr","source_rom_offset","player_object_offset","label","literal_status"],
               wardrobe_rows)
+
+    wardrobe_state_rows = extract_player_wardrobe_state_semantics(data)
+    write_csv(args.out / "player_wardrobe_state_semantics.csv",
+              ["fact","value","evidence","confidence"],
+              wardrobe_state_rows)
+
+    wardrobe_slot_rows = extract_player_wardrobe_slots(data)
+    write_csv(args.out / "player_wardrobe_slots.csv",
+              ["slot","label","normal_navigation_reachable","preview_obj_bank","preview_bg_page",
+               "matches_startup_live_bank","equippable_in_demo","evidence","confidence"],
+              wardrobe_slot_rows)
 
     spawn_factory_rows = extract_spawn_factories(data)
     write_csv(args.out / "spawn_type_factories.csv",
@@ -1718,9 +2218,12 @@ def main():
         {"fact":"oam_submit", "value":"0x0800A8F0", "evidence":"constructs 8-byte OAM entries"},
         {"fact":"graphics_stride_field", "value":"player+0x1DC = 192", "evidence":"constructor writes 0xC0; player draw multiplies animation/bank selection by field"},
         {"fact":"wardrobe_labels", "value":"10 slots x 20 bytes @ 0x080198A0 -> player+0x2B4", "evidence":"constructor copies 0xC8 bytes"},
-        {"fact":"shared_avatar_menu_state", "value":"0x03001254", "evidence":"Player_draw reads first fields; Wardrobe UI consumes later/shared fields; semantics not reduced to outfit index"},
+        {"fact":"wardrobe_selector", "value":"player+0x240", "evidence":"constructor initializes 0; Wardrobe label/highlight/navigation paths read/write this field; normal arrow range 0..6"},
+        {"fact":"animation_state_block", "value":"0x03001254", "evidence":"Player_draw/Player_update state+frame block; old shared wardrobe/avatar label rejected by full xref trace"},
+        {"fact":"live_graphics_bank", "value":"0x0300103C = 15 at startup", "evidence":"Player_draw source-bank multiplier; recovered Wardrobe path previews alternatives but does not mutate this live bank"},
         {"fact":"known_character_source_sample", "value":"source base 2198", "evidence":"valid 16x32 Vika-style frame reconstruction; not claimed as constructor/default outfit"},
-        {"fact":"initialized_branch_candidate", "value":"source base 3468 if player+0x1E0 == 0", "evidence":"derived from initialized globals and 0x08006B3A branch; allocator/default for +0x1E0 not yet proven"},
+        {"fact":"normal_idle_branch", "value":"source base 3468 at bank 15 / idle phase 1", "evidence":"draw branch when player+0x1E0 == 0; reconstruction explicitly chooses selector-0 behavior"},
+        {"fact":"player_plus_1e0", "value":"constructor leaves field uninitialized", "evidence":"constructor skips +0x1E0 and malloc/new allocator is not zero-filling; draw/update read it"},
     ]
     write_csv(args.out / "player_sprite_pipeline.csv", ["fact","value","evidence"], player_rows)
 
@@ -1868,6 +2371,18 @@ def main():
                "selector_source","behavior_confidence"],
               interaction_profile_selector_rows)
 
+    interaction_profile_reachability_rows = extract_player_interaction_profile_selector_reachability(data)
+    write_csv(args.out / "player_interaction_profile_selector_reachability.csv",
+              ["selector_index","profile_name","profile_kind","canonical_reachability","actor_rom_addr",
+               "actor_state","actor_dial","actor_level","social_bootstrap","only_npc_update_handoff",
+               "selector_copy","npc_update_state_write","npc_update_dial_write","reachability_scope","confidence"],
+              interaction_profile_reachability_rows)
+
+    interaction_profile_field_usage_rows = extract_player_interaction_profile_field_usage(data)
+    write_csv(args.out / "player_interaction_profile_field_usage.csv",
+              ["profile_field","proper_profile_initial_values","runtime_usage","evidence_sites","working_name",
+               "selector_literal_ref_count","confidence"], interaction_profile_field_usage_rows)
+
     interaction_social_profile_topic_rows = extract_player_interaction_social_profile_topics(data)
     write_csv(args.out / "player_interaction_social_profile_topics.csv",
               ["selector_index","profile_ptr","name","profile_field_14_initial","topic_index","topic",
@@ -1944,7 +2459,7 @@ def main():
     write_csv(args.out / "message_selectors.csv",
               ["address","role","initial_value","writer"], selector_rows)
 
-    print(f"exported {len(route_rows)} route waypoints, {len(message_rows)} message records, {len(state_rows)} NPC state modes, {len(wardrobe_rows)} wardrobe labels, {len(spawn_factory_rows)} spawn factories")
+    print(f"exported {len(route_rows)} route waypoints, {len(message_rows)} message records, {len(state_rows)} NPC state modes, {len(wardrobe_rows)} wardrobe labels, {len(wardrobe_slot_rows)} wardrobe slots, {len(spawn_factory_rows)} spawn factories")
 
 if __name__ == "__main__":
     main()

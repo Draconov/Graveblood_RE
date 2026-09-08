@@ -31,6 +31,65 @@ class WardrobeExtractionTests(unittest.TestCase):
         self.assertEqual(rows[0]['player_object_offset'], '+0x2B4')
         self.assertEqual(rows[9]['player_object_offset'], '+0x368')
 
+    def test_wardrobe_selector_and_preview_tables_are_code_backed(self):
+        self.assertTrue(
+            hasattr(mod, 'extract_player_wardrobe_state_semantics'),
+            'missing Player wardrobe-state semantics extractor',
+        )
+        rows = mod.extract_player_wardrobe_state_semantics(self.data)
+        by_fact = {row['fact']: row for row in rows}
+
+        self.assertEqual(by_fact['selector_field']['value'], 'player+0x240')
+        self.assertEqual(by_fact['selector_initial_value']['value'], '0')
+        self.assertEqual(by_fact['normal_navigation_range']['value'], '0..6')
+        self.assertEqual(by_fact['label_draw_function']['value'], '0x08006430')
+        self.assertEqual(by_fact['label_formula']['value'], 'player+0x2B4 + selector*20')
+        self.assertEqual(by_fact['preview_obj_bank_table']['value'], 'player+0x244 <- 0x080197B0')
+        self.assertEqual(by_fact['preview_obj_bank_values_first_group']['value'], '15;13;12;11;6;4;5')
+        self.assertEqual(by_fact['preview_bg_page_table']['value'], 'player+0x27C <- 0x080197E8')
+        self.assertEqual(by_fact['preview_bg_page_values_normal_range']['value'], '6;2;1;0;3;4;5')
+        self.assertEqual(by_fact['preview_bg_loader']['value'], '0x08004F6C')
+        self.assertIn('0x06003000', by_fact['preview_bg_loader']['evidence'])
+
+    def test_demo_wardrobe_is_browse_only_and_does_not_prove_equipping(self):
+        rows = mod.extract_player_wardrobe_state_semantics(self.data)
+        by_fact = {row['fact']: row for row in rows}
+
+        self.assertEqual(by_fact['wardrobe_title']['value'], 'Wardrobe')
+        self.assertEqual(by_fact['wardrobe_exit_prompt']['value'], '(B) to exit')
+        self.assertEqual(by_fact['normal_navigation_inputs']['value'], 'Left;Right;B')
+        self.assertEqual(by_fact['confirm_input']['value'], 'none recovered')
+        self.assertEqual(by_fact['live_player_graphics_bank']['value'], '0x0300103C = 15 at startup')
+        self.assertEqual(by_fact['live_bank_wardrobe_mutation']['value'], 'none recovered')
+        self.assertIn('read-only', by_fact['live_bank_wardrobe_mutation']['evidence'])
+        self.assertEqual(by_fact['reconstruction_policy']['value'], 'keep proven default outfit only')
+
+    def test_03001254_is_player_animation_state_not_wardrobe_state(self):
+        rows = mod.extract_player_wardrobe_state_semantics(self.data)
+        by_fact = {row['fact']: row for row in rows}
+
+        self.assertEqual(by_fact['animation_state_block']['value'], '0x03001254')
+        self.assertEqual(by_fact['animation_state_block']['confidence'], 'high')
+        self.assertIn('Player_draw', by_fact['animation_state_block']['evidence'])
+        self.assertIn('Player_update', by_fact['animation_state_block']['evidence'])
+        self.assertEqual(by_fact['old_wardrobe_state_label']['value'], 'rejected')
+        self.assertIn('0x08008E30 is inside Player_update', by_fact['old_wardrobe_state_label']['evidence'])
+
+    def test_wardrobe_slot_export_marks_only_normal_arrow_reachable_choices(self):
+        self.assertTrue(
+            hasattr(mod, 'extract_player_wardrobe_slots'),
+            'missing Player wardrobe slot export',
+        )
+        rows = mod.extract_player_wardrobe_slots(self.data)
+        self.assertEqual(len(rows), 10)
+        self.assertEqual([row['normal_navigation_reachable'] for row in rows[:7]], ['yes'] * 7)
+        self.assertEqual([row['normal_navigation_reachable'] for row in rows[7:]], ['no'] * 3)
+        self.assertEqual([row['label'] for row in rows[:7]], ['Favorite Skirt'] + ['Not for demo'] * 6)
+        self.assertEqual([row['preview_obj_bank'] for row in rows[:7]], [15, 13, 12, 11, 6, 4, 5])
+        self.assertEqual([row['preview_bg_page'] for row in rows[:7]], [6, 2, 1, 0, 3, 4, 5])
+        self.assertEqual(rows[0]['matches_startup_live_bank'], 'yes')
+        self.assertTrue(all(row['equippable_in_demo'] == 'no proven equip action' for row in rows))
+
 
 class SpawnFactoryExtractionTests(unittest.TestCase):
     @classmethod
@@ -120,8 +179,14 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(keyed[9]["identity_confidence"], "high")
         self.assertIn("level=10", keyed[9]["evidence"])
         self.assertIn("dial=2", keyed[9]["evidence"])
+        self.assertEqual(keyed[5]["identity"], "Stas")
+        self.assertEqual(keyed[5]["identity_confidence"], "high")
+        self.assertIn("selector 0", keyed[5]["evidence"])
+        self.assertEqual(keyed[6]["identity"], "Julia")
+        self.assertEqual(keyed[6]["identity_confidence"], "high")
+        self.assertIn("selector 1", keyed[6]["evidence"])
         self.assertEqual([keyed[i]["semantic_role"] for i in range(11, 16)], ["collection pickup"] * 5)
-        self.assertTrue(all(keyed[i]["identity"] == "unidentified" for i in (0, 1, 2, 3, 5, 6, 7, 8)))
+        self.assertTrue(all(keyed[i]["identity"] == "unidentified" for i in (0, 1, 2, 3, 7, 8)))
 
     def test_level10_gate_policy_switches_exactly_after_rusty_key_progress(self):
         rows = mod.extract_level10_collection_gate_policy(self.data)
@@ -423,6 +488,48 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertTrue(any(r["ascii_le"] == "Popu" for r in evelina))
         self.assertTrue(all(r["behavior_confidence"] == "high" for r in rows))
 
+    def test_interaction_profile_selector_reachability_is_limited_to_canonical_state1_dials_0_and_1(self):
+        self.assertTrue(
+            hasattr(mod, "extract_player_interaction_profile_selector_reachability"),
+            "missing canonical selector-reachability extractor",
+        )
+        rows = mod.extract_player_interaction_profile_selector_reachability(self.data)
+        keyed = {row["selector_index"]: row for row in rows}
+        self.assertEqual(sorted(keyed), list(range(9)))
+        self.assertEqual(keyed[0]["canonical_reachability"], "reachable")
+        self.assertEqual(keyed[0]["actor_rom_addr"], "0x08019100")
+        self.assertEqual(keyed[0]["actor_state"], 1)
+        self.assertEqual(keyed[0]["actor_dial"], 0)
+        self.assertEqual(keyed[0]["profile_name"], "Stas")
+        self.assertEqual(keyed[1]["canonical_reachability"], "reachable")
+        self.assertEqual(keyed[1]["actor_rom_addr"], "0x0801917C")
+        self.assertEqual(keyed[1]["actor_state"], 1)
+        self.assertEqual(keyed[1]["actor_dial"], 1)
+        self.assertEqual(keyed[1]["profile_name"], "Julia")
+        self.assertTrue(all(keyed[i]["canonical_reachability"] == "not reached by initialized state-1 NPC"
+                            for i in range(2, 9)))
+        self.assertTrue(all(row["social_bootstrap"] == "0x08002FCE" for row in rows))
+        self.assertTrue(all(row["only_npc_update_handoff"] == "0x08002B52 -> 0x08002FA2" for row in rows))
+        self.assertTrue(all(row["npc_update_state_write"] == "none in 0x0800298C..0x080037F6" for row in rows))
+        self.assertTrue(all(row["npc_update_dial_write"] == "none in 0x0800298C..0x080037F6" for row in rows))
+        self.assertTrue(all(row["reachability_scope"] == "canonical initialized actors plus NPC_update; external mutation not ruled out"
+                            for row in rows))
+
+    def test_interaction_profile_plus_0x10_has_no_recovered_social_runtime_consumer(self):
+        self.assertTrue(
+            hasattr(mod, "extract_player_interaction_profile_field_usage"),
+            "missing social-profile field-usage extractor",
+        )
+        rows = mod.extract_player_interaction_profile_field_usage(self.data)
+        keyed = {row["profile_field"]: row for row in rows}
+        self.assertEqual(keyed["+0x10"]["proper_profile_initial_values"], "Stas:0|Julia:0")
+        self.assertEqual(keyed["+0x10"]["runtime_usage"], "no selector-derived read found in recovered interaction code")
+        self.assertEqual(keyed["+0x10"]["working_name"], "reserved/unused in recovered interaction runtime")
+        self.assertEqual(keyed["+0x10"]["confidence"], "high for absence within recovered selector-use sites")
+        self.assertEqual(keyed["+0x14"]["runtime_usage"], "relationship-like score read/write")
+        self.assertEqual(keyed["+0x18..+0x38"]["runtime_usage"], "nine topic-class reads")
+        self.assertEqual(keyed["+0x00"]["runtime_usage"], "profile/name text source")
+
     def test_interaction_profile_selector_integrity_exposes_demo_layout_hazard(self):
         self.assertTrue(
             hasattr(mod, "extract_player_interaction_profile_selector_integrity"),
@@ -438,7 +545,10 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(row["selector_null_guard"], "none before profile/topic dereference")
         self.assertEqual(row["null_selector_index"], 2)
         self.assertEqual(row["actor_selector_source"], "actor+0x5C -> Player+0x388")
-        self.assertEqual(row["parity_warning"], "do not normalize selector table in faithful demo mode")
+        self.assertEqual(row["canonical_reachable_selectors"], "0|1")
+        self.assertEqual(row["latent_selectors"], "2|3|4|5|6|7|8")
+        self.assertEqual(row["hazard_scope"], "latent under canonical initialized state-1 NPC path; external mutation not ruled out")
+        self.assertEqual(row["parity_warning"], "preserve malformed selector table for demo parity, but do not treat selectors 2..8 as normally reached")
         self.assertEqual(row["behavior_confidence"], "high")
 
     def test_interaction_followup_moves_player_39c_toward_profile_field14_times_ten(self):

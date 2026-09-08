@@ -30,6 +30,11 @@ OBJ_SHAPES = ((8, 8), (8, 16), (16, 8), (16, 16))
 INIT_ROM_OFFSET = 0x00A8D738
 INIT_RAM_START = 0x03000788
 NPC_SOURCE_BIAS_RAM = 0x030007FC
+PLAYER_BANK_RAM = 0x0300103C
+PLAYER_ANIMATION_STATE_RAM = 0x03001254
+PLAYER_ANIMATION_FRAME_RAM = 0x03001258
+PLAYER_ANIMATION_COUNTDOWN_RAM = 0x030012A8
+PLAYER_ANIMATION_BANK_STRIDE = 192
 
 
 def obj_source_tile_capacity() -> int:
@@ -203,6 +208,58 @@ def npc_source_bias_from_rom(data: bytes) -> int:
     if off < 0 or off + 4 > len(data):
         raise ValueError("NPC source-bias initializer is outside ROM")
     return struct.unpack_from("<I", data, off)[0]
+
+
+def _initialized_iwram_u32(data: bytes, ram_addr: int) -> int:
+    """Read one startup-initialized IWRAM dword from the canonical data copy."""
+    off = INIT_ROM_OFFSET + (ram_addr - INIT_RAM_START)
+    if off < 0 or off + 4 > len(data):
+        raise ValueError(f"IWRAM initializer 0x{ram_addr:08X} is outside ROM")
+    return struct.unpack_from("<I", data, off)[0]
+
+
+def player_animation_initializers_from_rom(data: bytes) -> dict[str, int]:
+    """Return the startup values consumed by Player_draw/update animation code.
+
+    These are copied by the normal startup data initializer before the Player
+    object is constructed.  The bank is the shared avatar/wardrobe graphics
+    bank; state/frame/countdown are the shared animation state used by the
+    Player draw/update routines.
+    """
+    return {
+        "bank": _initialized_iwram_u32(data, PLAYER_BANK_RAM),
+        "state": _initialized_iwram_u32(data, PLAYER_ANIMATION_STATE_RAM),
+        "frame": _initialized_iwram_u32(data, PLAYER_ANIMATION_FRAME_RAM),
+        "countdown": _initialized_iwram_u32(data, PLAYER_ANIMATION_COUNTDOWN_RAM),
+    }
+
+
+def player_animation_source_bases(bank: int) -> dict[str, tuple[int, ...]]:
+    """Return the exact normal-branch Player source bases for one graphics bank.
+
+    Player_draw uses one six-frame sequence for states 2..6, a second six-frame
+    sequence for state 7, and an eight-phase idle for state 8.  The idle has
+    only four unique packed poses because phases 5..8 mirror phases 4..1.
+    """
+    base = bank * PLAYER_ANIMATION_BANK_STRIDE
+    regular = tuple(base + 0x240 + 2 * frame for frame in range(6))
+    up = tuple(base + 0x280 + 2 * frame for frame in range(6))
+    idle_unique = (
+        base + 0x24C,
+        base + 0x24E,
+        base + 0x28C,
+        base + 0x28E,
+    )
+    idle_sequence = (
+        idle_unique[0], idle_unique[1], idle_unique[2], idle_unique[3],
+        idle_unique[3], idle_unique[2], idle_unique[1], idle_unique[0],
+    )
+    return {
+        "regular_walk": regular,
+        "up_walk": up,
+        "idle_unique": idle_unique,
+        "idle_sequence": idle_sequence,
+    }
 
 
 def npc_source_base(shared_source_bias: int, legs_color: int, subtype: int, frame: int) -> int:

@@ -1,0 +1,21 @@
+fact,value,evidence,confidence
+selector_field,player+0x240,Player constructor zeros +0x240; Wardrobe text/highlight/navigation code reads and writes this field,high
+selector_initial_value,0,0x0800633C writes constructor zero register to Player+0x240,high
+normal_navigation_range,0..6,Left decrements only above 0; Right path 0x0800951E increments only when selector<=5; 0x080093F4 is defensive clamp-to-7 for an already-high value,high
+normal_navigation_inputs,Left;Right;B,fresh-key checks at 0x08008FBE/0x08008FD2/0x08008FE8 use GBA masks 0x20/0x10/0x02,high
+confirm_input,none recovered,Wardrobe browser input path exposes Left/Right navigation and '(B) to exit'; no A-confirm/equip branch is present in the recovered browser path,high
+wardrobe_title,Wardrobe,literal 0x08A8C47C drawn at Player_update internal path 0x08008E30,high
+wardrobe_exit_prompt,(B) to exit,literal 0x08A8C488 drawn at 0x08008E60,high
+label_draw_function,0x08006430,called from Player_update at 0x08008E68 and after selector changes at 0x08009406/0x0800953A,high
+label_formula,player+0x2B4 + selector*20,0x0800650A..0x08006524 computes selector*5*4 then adds Player+0x2B4 before text draw,high
+preview_obj_bank_table,player+0x244 <- 0x080197B0,constructor copies 0x38 bytes; Wardrobe preview loop 0x08008EC6 consumes 14 dwords and multiplies each by Player+0x1DC (192) before dynamic OBJ upload,high
+preview_obj_bank_values_first_group,15;13;12;11;6;4;5,first seven dwords of canonical ROM table 0x080197B0; seven normal browser choices use the matching preview row,high
+preview_obj_bank_values_second_group,0;0;0;0;0;0;0,second seven dwords of canonical ROM table 0x080197CC; all are zero in the public demo,high
+preview_bg_page_table,player+0x27C <- 0x080197E8,constructor copies 0x38 bytes; selector-indexed load at 0x08008E6C/0x0800952C/0x08009590 feeds 0x08004F6C,high
+preview_bg_page_values_normal_range,6;2;1;0;3;4;5,selector 0..6 directly indexes the first seven dwords copied to Player+0x27C,high
+preview_bg_loader,0x08004F6C,copies 0x2000 bytes for selected page into BG VRAM 0x06003000; page contributes source offset page*0x2000,high
+live_player_graphics_bank,0x0300103C = 15 at startup,initialized-data source 0x08A8DFEC contains 15; Player_draw uses this as the live graphics-bank multiplier,high
+live_bank_wardrobe_mutation,none recovered,"canonical ROM contains only two direct 0x0300103C literals (0x08006978,0x08006CF8), both used read-only by Player draw paths; wardrobe navigation writes only Player+0x240 and preview loaders",high
+animation_state_block,0x03001254,"direct literal xrefs are in Player_draw and Player_update animation/frame logic (state at +0, frame at +4); Wardrobe selector is object field Player+0x240 instead",high
+old_wardrobe_state_label,rejected,"0x08008E30 is inside Player_update (entry 0x080081B0), not a standalone Wardrobe function; its later 0x03001254 reference belongs to animation logic after the Wardrobe browser block",high
+reconstruction_policy,keep proven default outfit only,the demo proves browse/preview data but no equip action or live-bank mutation; alternate wardrobe graphics must not be made gameplay-selectable without new evidence,high

@@ -12,6 +12,9 @@ ROM_PATH = Path(os.environ.get('GRAVEBLOOD_ROM', '/mnt/data/Graveblood 0.0.1.1.5
 SPEC = importlib.util.spec_from_file_location('extract_structure', ROOT / 'tools' / 'extract_structure.py')
 mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mod)
+DISASM_SPEC = importlib.util.spec_from_file_location('disasm_thumb_chunk', ROOT / 'tools' / 'disasm_thumb_chunk.py')
+disasm = importlib.util.module_from_spec(DISASM_SPEC)
+DISASM_SPEC.loader.exec_module(disasm)
 
 class LevelStructureTests(unittest.TestCase):
     @classmethod
@@ -55,6 +58,34 @@ class LevelStructureTests(unittest.TestCase):
         )
         self.assertNotIn('/tmp/', result.stdout)
         self.assertIn('chunk.o:', result.stdout)
+
+    def test_disasm_helper_has_capstone_fallback_formatter(self):
+        class FakeInsn:
+            address = 0x0800D870
+            mnemonic = 'movs'
+            op_str = 'r0, #1'
+            bytes = b'\x01\x20'
+
+        class FakeCs:
+            def __init__(self, arch, mode):
+                self.arch = arch
+                self.mode = mode
+
+            def disasm(self, blob, base):
+                self.blob = blob
+                self.base = base
+                return [FakeInsn()]
+
+        class FakeCapstone:
+            CS_ARCH_ARM = 1
+            CS_MODE_THUMB = 2
+            CS_MODE_LITTLE_ENDIAN = 4
+            Cs = FakeCs
+
+        text = disasm.disassemble_with_capstone(b'\x01\x20', 0x0800D870, FakeCapstone)
+        self.assertIn('0800d870', text.lower())
+        self.assertIn('movs', text)
+        self.assertIn('r0, #1', text)
 
 if __name__ == '__main__':
     unittest.main()

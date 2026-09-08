@@ -1,30 +1,44 @@
 # Graveblood_RE
 
-Unofficial fan reverse-engineering and reconstruction project for Graveblood, a game by Cojam.
+Unofficial fan reverse-engineering and reconstruction project for Graveblood, developed with permission from Cojam.
 
-This repository documents and reproducibly extracts structures from the **canonical latest public demo ROM**.
+This repository documents and reproducibly extracts structures from the **canonical latest public demo ROM**:
 
-## Buildable clean-room reconstruction
+`Graveblood 0.0.1.1.5.2 demo.gba`
 
-`Graveblood_RE` includes a separate `reconstruction/` Butano project that builds a new GBA ROM from source without using the original ROM as a build input. The current ROM is deliberately a minimal development shell; it proves the toolchain and CI/release path before recovered gameplay is implemented.
+Expected SHA-256:
+
+`e0d7878d2f41dcdeedcc306585bdaf18f39abc2ae42a4bc338514d49feb9449b`
+
+The older **Pre Pre Pre Alpha** build is used **only as a differential reference** to identify inherited CFA-era code and later Graveblood additions. Alpha content is not treated as canonical game content.
+
+Alpha reference SHA-256:
+
+`f63e1604c3887a9f018961cadca6365fe621f006b83f458702c68b079e0b0f0a`
+
+The ROMs themselves are intentionally **not included** in this archive.
+
+## Buildable CFA/devkitPro reconstruction
+
+`Graveblood_RE` now uses a permanent **CFA-style devkitPro/devkitARM + libgba** runtime. The temporary high-level-engine/debug-shell path has been removed. The build follows the original game's CFA lineage: Mode 0 tile backgrounds, 8x8 world cells, hardware OAM sprites, pixel-space actors/camera, and compact C modules.
+
+The current playable milestone boots directly into **recovered Level 7**, renders the recovered **Level 7 and Level 8** interiors, uses their recovered player spawn/collision data, drives the exact recovered 16-frame 16x32 Player walk/idle animation set through OAM, and supports the recovered Level 7 <-> Level 8 portal route. The movement runtime follows the original collision resolver semantics: **zero-valued 8-pixel cells are passable; nonzero cells block movement**.
 
 Start here:
 
-- `DEVELOPING_AND_BUILDING.md` — Windows/macOS/Linux setup, pinned Butano checkout, build, emulator/hardware testing, and release tags.
-- `reconstruction/` — clean-room C++/Butano project.
-- `.github/workflows/build-release-rom.yml` — CI build artifacts plus `Graveblood_RE_v*-dev` tagged GitHub releases.
+- `DEVELOPING_AND_BUILDING.md` — devkitPro/devkitARM/libgba setup, build, emulator/hardware testing, asset regeneration, and release tags.
+- `reconstruction/` — CFA-style C runtime and checked-in generated assets.
+- `.github/workflows/build-release-rom.yml` — direct devkitPro CI build artifacts plus `Graveblood_RE_v*-dev` tagged releases.
 
-The reconstruction currently outputs `reconstruction/Graveblood_RE.gba`. It should not be confused with the canonical demo ROM documented by the RE tools.
-
-Development releases use tags such as `Graveblood_RE_v0.0.1-dev`; GitHub Actions publishes the versioned ROM asset as `Graveblood_RE_v0.0.1.gba`.
+The normal reconstruction build does not require the original demo ROM. Development releases still use tags such as `Graveblood_RE_v0.0.1-dev`; GitHub Actions publishes the versioned ROM asset as `Graveblood_RE_v0.0.1.gba`.
 
 ---
 
 ## 1. What this repository contains
 
-The workspace includes:
+The workspace now includes:
 
-- a buildable clean-room Butano reconstruction shell under `reconstruction/`;
+- a buildable CFA-style devkitPro/libgba reconstruction under `reconstruction/`, currently covering playable Levels 7 and 8;
 - local development/build/release instructions plus GitHub Actions ROM artifacts/releases;
 - canonical ROM/header metadata;
 - 11 corrected 0x40-byte level records;
@@ -37,12 +51,12 @@ The workspace includes:
 - 7 dialogue scripts / 58 fixed records;
 - context-sensitive normal-vs-state4 dialogue opcode semantics;
 - six-step state-4 collection selector, including rusty-key and fifth-sketch transitions;
-- conservative story-entity identity export (IQ 54, Katya, and five collection pickups);
+- conservative story-entity identity export (two code-backed IQ 54 overlay instances, Stas, Julia, Katya, and five collection pickups);
 - decoded message/progression streams;
 - five NPC routes / 30 waypoints;
 - NPC state-mode semantics and exact NPC dynamic-sprite source formula;
 - Player/OBJ rendering pipeline evidence, story-entity sprite reconstruction, and executable five-sprite monster composite;
-- 10 fixed wardrobe-name slots copied by the Player constructor;
+- 10 fixed wardrobe-name slots plus the recovered `Player+0x240` browse/preview selector, preview OBJ/BG tables, and code-backed no-equip boundary;
 - exact-byte alpha↔latest matcher results;
 - corrected 8bpp world renderer;
 - raw world-layer A/B, composited world, and actor-overlay renders for all levels/graphics variants;
@@ -435,7 +449,14 @@ fifth collection
    -> gameplay repeatedly advances 0x03000674 and feeds it to 0x08004FE0
 ```
 
-`0x08004FE0` performs large expanding copies into VRAM beginning at `0x06000000` and `0x06010000`. The workspace keeps the conservative name `ending_vram_effect_candidate`: the control flow is proven, while the exact intended frame-by-frame corruption/reveal still deserves emulator or hardware tracing.
+`0x08004FE0` is now statically quantified. It first biases its argument by 64, then uses byte-counted copy helper `0x08010C54` for two writes:
+
+```text
+0x06000000 <- 1500 * (argument + 64) bytes
+0x06010000 <-  250 * (argument + 64) bytes
+```
+
+At argument 0 those are **96,000 bytes** and **16,000 bytes**. The first copy grows by 1,500 bytes per step and exceeds the nominal 96 KiB VRAM span from `0x06000000` once the argument reaches 2. The workspace still keeps the conservative name `ending_vram_effect_candidate`: the byte equations and call sites are proven, while the intended visible frame-by-frame corruption/reveal still deserves emulator or hardware tracing. See `data/ending_vram_effect_copy_model.csv` and `disasm/ending_vram_effect_08004FE0.txt`.
 
 ### Rusty-key threshold and level-10 gate actors
 
@@ -455,12 +476,83 @@ progress <= 3  -> pre-key path at 0x08003BE6
 progress >  3  -> post-key collision/interaction path at 0x0800404A
 ```
 
-For these `turn=4/5` gate tiles, the machine code therefore proves **gate behavior activation after the rusty-key collection**. v4 deliberately does not claim that `0x0800404A` itself performs the `portTo=8` scene transition on the same frame; the branch first manipulates collision/player state, so the eventual transition timing remains a separate proof target.
+For these `turn=4/5` gate tiles, the machine code proves **gate behavior activation after the rusty-key collection**, and the post-key action is now traced further. While the Player overlaps the gate collision geometry, a **fresh A-button press** dispatches directly by `turn`:
+
+```text
+turn=4 -> 0x080042AE -> target X=826, target Y=360
+turn=5 -> 0x080042C4 -> target X=826, target Y=410
+                         -> call 0x080080A4
+```
+
+Player `+0x390/+0x394` are **dual-purpose fields**, not durable generic target slots. Scripted interaction paths temporarily place 24.8 fixed-point anchor X/Y values there, but the Player constructor initializes both to `1`, and normal `Player_update` writes both back to the sentinel value `1` at `0x0800842A`. `0x080080A4` reads only the temporary Y value, writes `anchorY-currentY` to Player `+0x1C`, then clears **both** fields. The X value written by the gate is therefore not consumed by this helper. A static Thumb-BL scan of the recovered low-ROM code finds exactly three callers of `0x080080A4`: `0x08002DD6`, `0x080041C8`, and `0x080042BE`. The first NPC/dialogue path also writes X/Y before calling the same vertical-only helper; another Fgtile path writes only Y=512. Because `0x080080A4` clears `+0x390` before returning, the gate's X=826 write is not available for a later frame through this path.
+
+A **different NPC fresh-A path** at `0x08002FCE` explains why the same two fields sometimes really do carry both axes. It copies actor `dial` (`+0x5C`) to Player `+0x388`, actor X/Y to Player `+0x390/+0x394`, and sets `0x03000610` (`player_interaction_active_flag`) to `1`. `Player_update` (`0x080081B0`) sees that flag at `0x08008BC8`; when Player `+0x1EC == 0`, it enters the full-X/Y bootstrap at `0x0800921A`:
+
+```text
+if anchorX >= playerX:
+    Player+0x18 = anchorX - playerX - 19px
+    Player+0x4C = 1
+else:
+    Player+0x18 = anchorX - playerX + 19px
+    Player+0x4C = 0
+
+Player+0x1C = anchorY - playerY
+Player+0x1EC = 1
+```
+
+The common motion routine `0x08004670` then collision-tests `+0x18/+0x1C` against the world tile grid and applies permitted components to Player `+0x08/+0x0C`. The intended NPC interaction alignment is therefore **same Y, 19 pixels to one side of the NPC**, with collision resolution still honored. This closes the old `0x08009220` “generic X/Y target mover” hypothesis: it is a specific interaction-alignment bootstrap. See `data/player_npc_interaction_alignment.csv`.
+
+The next Player interaction layer is now recovered as a **four-way action tree** backed by 20 fixed `0x2C`-byte records at `0x08018738`. The root page is `TALK / FLIRT / ASSAULT / SHARE`, and each root opens exactly four leaves:
+
+```text
+TALK    -> SUBJECT / Ask about / JOKE / CRITICIZE
+FLIRT   -> KISS CHEEK / KISS LIPS / DIRTY JOKE / BREAKUP
+ASSAULT -> SWEAR / FIGHT / unused / SCAM
+SHARE   -> GIFT / ACTIVITY / A Number / ASK
+```
+
+Player `+0x1E8` stores the current four-record page base and `+0x1E4` stores the selected quadrant. In state 1, `Up / Right / Down / Left` select slots `0 / 1 / 2 / 3`. A confirmation indexes `base+choice`; record `+0x20 == 0` means submenu and copies record `+0x24` back to `+0x1E8`, while `+0x20 == 1` enters secondary state 2.
+
+State 2 is now partly decoded instead of being treated as opaque. `Player+0x1F0` is a real vertical secondary cursor: leaf entry initializes it to `0`, fresh Up decrements it when positive, and fresh Down increments it through the mechanical range `0..8`; either move rebuilds the secondary UI through `0x080074D8` and `0x08006E00`. The builder reads leaf `+0x28` as a **secondary-topic count**. If that count is positive, leaf `+0x24` is the start index into the fixed 15-byte topic-label table at `0x080114B4`; if the count is zero, the builder exits before using `+0x24` as a topic-table index. In this demo only three leaves expose counted lists: `SUBJECT` = `sports / movies / fashion / video games / school / future / parties / last event / mysteries`; `Ask about` = `hobbies / fav. music / best places / fav. meals / dreams`; `CRITICIZE` reuses the same nine-topic list as `SUBJECT`. Do not assign a meaning to `+0x24` on the thirteen zero-count leaves yet.
+
+Two topic-response paths are also code-proven. `SUBJECT` uses 16 fixed 108-byte responses per topic through the pointer table at `0x030007D4`; `CRITICIZE` uses 8 per topic through `0x030007AC`. Both index the selector table at `0x0300110C` with Player `+0x388`, then *expect* a 0..4 topic class at `profile + 4*(topic_index+6)`. Value `2` uses the shared neutral line `I don't really care`; the other valid values select randomized class-specific slots in the topic bank. Topic indices 7 (`last event`) and 8 (`mysteries`) deliberately point at the same response bank in this demo. All 216 fixed SUBJECT/CRITICIZE response records are exported verbatim as structured rows in `data/player_interaction_topic_response_texts.csv`.
+
+The initialized selector table is now recovered exactly, and it proves this social subsystem is only partly coherent in the demo. Selector `0` points to a genuine `0x3C` **Stas** social profile at `0x030010D0`, selector `1` to a genuine `0x3C` **Julia** profile at `0x03001094`, selector `2` is null, and selectors `3..8` point to six incompatible `0x30` NPC metadata/card records (`Stas / IQ 54 / Kate / Kiata / Alex / Evelina`). The two proper profiles each contain nine numeric topic classes: Stas = `3,4,0,2,1,1,3,2,2`; Julia = `1,2,2,0,1,2,4,2,3`. By contrast, applying the runtime topic-class formula to selectors `3..8` yields 54 reads of which only 23 happen to fall in `0..4`; many others are pieces of descriptor text such as `Just` or `Popu`. `0x0800948C` dereferences the selected pointer/topic directly with no null guard before that read.
+
+The malformed entries are now also bounded by **canonical reachability** instead of being treated as equally likely runtime hazards. The only initialized `state=1` NPC records are overlay #5 at `0x08019100` (`dial=0`) and overlay #6 at `0x0801917C` (`dial=1`). NPC update sends only its state-1 proximity success through `0x08002B52 -> 0x08002FA2`; a fresh A then reaches `0x08002FCE`, which copies actor `+0x5C` into Player `+0x388`. Therefore the canonical initialized social path reaches only selectors `0` and `1`, identifying overlay **#5 as Stas** and **#6 as Julia**. NPC update itself reads but does not write actor state `+0x5A` or dial `+0x5C`; selectors `2..8` are best described as **latent prototype defects** under the recovered normal path. External mutation by another subsystem is not ruled out, so exact-parity data should still preserve the table unchanged. See `data/player_interaction_profile_selector_reachability.csv` and the selector-integrity CSV.
+
+A selector-use inventory also closes the current question around proper-profile `+0x10`: both genuine profiles initialize it to zero, and none of the 15 recovered PC-relative loads of selector table `0x0300110C` lead to a proved `+0x10` read. Recovered social code instead uses the profile/name prefix, `+0x14`, and topic slots `+0x18..+0x38`. Use **reserved/unused in recovered interaction runtime** as the working label for `+0x10`; this is a high-confidence absence claim within the recovered selector-use sites, not a whole-program proof. See `data/player_interaction_profile_field_usage.csv`.
+
+The later response dispatcher exposes an important demo limitation: `0x08009200` keys **only on Player `+0x1E4` (the quadrant)** and does not read the current page base `+0x1E8`. Quadrant 0 goes to the SUBJECT response-bank path, quadrant 3 goes to CRITICIZE, and quadrants 1/2 share a path that sets Player `+0x382=1`. Consequently labels on the FLIRT/ASSAULT/SHARE pages are not proof of sixteen unique implemented social effects in this build: `KISS CHEEK`, `SWEAR`, and `GIFT`, for example, reach the same quadrant-0 response code as SUBJECT at this dispatcher. Preserve the labels as recovered menu data, but reconstruct the observed runtime dispatch separately.
+
+The shared quadrant-1/2 flag has a proved follow-up handshake. At `0x0800852E`, while Player `+0x382` is armed, a **fresh A** clears Player `+0x382`, `+0x381`, and interaction state `+0x1EC`, then writes `1` to global `0x03000610`. The same accepted edge compares Player `+0x39C` with `10 * current_profile[+0x14]` and nudges `+0x39C` by exactly one toward that target. An independent write in the quadrant-0 topic-response path at `0x08009504` proves `profile+0x14 += 2 * (topic_class - 2)`, giving class deltas `-4,-2,0,+2,+4`; both genuine Stas/Julia profiles initialize `+0x14` to zero. A second independent path at `0x080090F8`, before the quadrant-specific response branch, directly computes and stores **`Player+0x39C = 10 * profile+0x14`**. This upgrades `+0x39C` to a **scaled relationship-like score mirror/follower** rather than an unrelated counter. No distinct rendering consumer has been proved yet, so do not call it a visible relationship meter. The previously noticed `8/16/24` values belong to incompatible `0x30` metadata records and must not be interpreted as proper social-score initial values. See `data/player_interaction_social_score_semantics.csv`, `data/player_interaction_score_mirror_semantics.csv`, and `data/player_interaction_profile_target_step.csv`.
+
+Player `+0x38C` is also a nested interaction-depth counter: submenu confirmation increments it, leaf entry reloads then increments it through the same shared block, and the B-return path decrements it. In state 2, the fresh-A gate at `0x0800960E` reaches state 3 only when depth is positive **and page base is 4 (TALK)**. Page bases 8/12/16 take an internal Player-update exit branch at this gate without changing `+0x1EC`. Fresh B from state 2 is therefore only named a **return to state 0** here; static code still does not prove whether its game-level meaning is cancel, commit, or leaf-dependent. State 3 remains interaction teardown: it resets page/state scratch, clears `0x03000610`, restores scene graphics, and sets Player `+0x381=1`. See `data/player_interaction_action_table.csv`, `data/player_interaction_secondary_topics.csv`, `data/player_interaction_state2_cursor.csv`, `data/player_interaction_topic_response_banks.csv`, `data/player_interaction_topic_response_texts.csv`, `data/player_interaction_runtime_dispatch.csv`, `data/player_interaction_followup_handshake.csv`, `data/player_interaction_profile_target_step.csv`, `data/player_interaction_profile_selector_table.csv`, `data/player_interaction_social_profile_topics.csv`, `data/player_interaction_social_score_semantics.csv`, `data/player_interaction_profile_topic_layout_mismatch.csv`, `data/player_interaction_profile_selector_integrity.csv`, `data/player_interaction_depth_semantics.csv`, and `data/player_interaction_state_transitions.csv`.
+
+The post-key collision geometry is now exact as well. Graveblood converts biased 24.8 coordinates to an 8-pixel grid:
+
+```text
+PX = (playerX -  8px) >> 11
+PY = (playerY - 24px) >> 11
+AX = (actorX  -  8px) >> 11
+AY = (actorY  - 16px) >> 11
+
+contact = PX in {AX, AX+1} and PY in {AY, AY+1}
+```
+
+On contact, the code sets Fgtile `+0x8C/+0x8D` and Player `+0x1C0`, then tests current-vs-previous A state (`0x030006BC` / `0x030006C0`) for the rising edge. The best machine-level description is therefore a **fresh-A forced vertical gate traversal/reposition**, not a scene portal.
+
+This also resolves the old `portTo=8` ambiguity. The generic Fgtile portal block at `0x08004258` does read actor `+0x52` (`portTo`) and calls `request_scene` (`0x08005C30`), but the post-key `turn=4/5` A-button dispatch jumps straight to `0x080042AE/0x080042C4` and returns through the movement path. **That active gate branch does not read `portTo` or request a scene.** The four records still contain `portTo=8` as metadata, but current code evidence does not use it for the rusty-key crossing.
 
 Machine-readable exports:
 
 - `data/level10_collection_gate_policy.csv`
+- `data/level10_gate_forced_motion.csv`
+- `data/level10_gate_collision_geometry.csv`
+- `data/player_vertical_target_calls.csv`
+- `data/player_npc_interaction_alignment.csv`
 - `data/state4_collection_progression.csv`
+- `data/ending_vram_effect_copy_model.csv`
 - `renders/sprites/state4_monster_composite.png`
 
 ---
@@ -477,6 +569,8 @@ factory       0x08006418
 constructor   0x0800621C
       ↓
 vtable        0x08019688
+      ├─ update 0x080081B0
+      │    └─ collision-resolved motion 0x08004670
       ↓
 draw          0x080065FC
       ↓
@@ -532,7 +626,23 @@ The offline renderer independently stages the same OBJ-VRAM data and reproduces 
 
 **Important caution:** source base `2198` is a known-valid Vika-style 16×32 sample, but v4 does **not** claim it is the constructor/default outfit.
 
-A second source base, `3468`, follows from initialized globals and the `0x08006B3A` draw branch **if `player+0x1E0 == 0`**. Because that field's allocator/default state has not yet been proven, the packaged image is named `player_branch_candidate_3468.png`, not “default Vika.”
+### Player animation bank and frame selection
+
+The normal avatar animation path is now recovered far enough to drive the CFA reconstruction directly. Startup initializes the shared graphics bank at `0x0300103C` to **15**, animation state `0x03001254` to **8**, frame `0x03001258` to **1**, and countdown `0x030012A8` to **5**. Player `+0x1DC` supplies the constructor-proven bank stride of **192 source tiles**.
+
+For bank 15 the normal draw branches select exactly:
+
+```text
+states 2..6: 3456 3458 3460 3462 3464 3466   (6-frame regular walk)
+state 7:     3520 3522 3524 3526 3528 3530   (6-frame up/back walk)
+state 8:     3468 3470 3532 3534 3534 3532 3470 3468
+```
+
+The eight-phase idle therefore contains four unique packed poses. Across the two walking banks plus those four idle poses there are **16 unique 16×32 frames**. All 16 use the same 15 opaque RGB colors, so the reconstruction stores them losslessly in one 4bpp OBJ palette plus transparency. Right-facing rendering is the original horizontal-flip path; vertical movement keeps the existing horizontal facing instead of resetting it.
+
+The shared frame counter is not reset when direction/state changes. `Player_update` first advances/clamps the existing frame/countdown, then commits the direction-selected animation state. Normal moving states use a reset countdown of `5`; normal state-8 idle uses `8`. This is why the reconstruction preserves timer/frame continuity rather than restarting a walk cycle on every turn.
+
+`Player+0x1E0` is now bounded more precisely rather than silently assumed to be zero. The Player constructor initializes nearby `+0x1C0` but **skips `+0x1E0`**, while both draw/update read `+0x1E0`. The factory allocates the `0x3A0`-byte Player through the normal malloc/new path, not a zero-filling allocator, and the recovered Player path has no pre-use store to `+0x1E0`. Static RE therefore cannot honestly claim a deterministic original value at first use. The CFA reconstruction explicitly initializes the corresponding clean-room behavior to the normal selector-0 branch instead of reproducing dependence on stale heap contents. The old `player_branch_candidate_3468.png` remains an evidence artifact, but the runtime no longer depends on that single candidate image.
 
 ---
 
@@ -579,10 +689,13 @@ It passes that selected list to `0x080010A4`, then passes the physical level act
 The overlay can now be labeled conservatively from combined dialogue + metadata evidence:
 
 - **overlay #4 = IQ 54** (high confidence): `dial=2`, `state=3`, `route=0`; script 2 is IQ's sketch-quest conversation;
+- **overlay #5 = Stas** (high confidence): `state=1`, `dial=0`; the only state-1 social bootstrap copies that dial into profile selector 0, whose proper profile name is Stas;
+- **overlay #6 = Julia** (high confidence): `state=1`, `dial=1`; the same path selects profile 1, whose proper profile name is Julia;
+- **overlay #9 = IQ 54** (high confidence): level 10, `state=2`, `dial=2`; `dial` is the proven script index and script 2's speaking NPC is IQ 54, so this is a second level-specific instance of the same character rather than a new identity;
 - **overlay #10 = Katya** (high confidence): `dial=3`; script 3 is Katya's sister/bicycle conversation;
 - **overlay #11–15 = five collection pickups** (high confidence role, not person identity): all use `state=4` and the same paper/sketch graphics family, matching IQ's explicit request to find five sketches.
 
-The remaining human-looking overlay records remain **unidentified** rather than being assigned names from appearance alone. See `data/story_entity_identities.csv`.
+The remaining human-looking overlay records (#0–3, #7–8) remain **unidentified** rather than being assigned names from appearance alone. See `data/story_entity_identities.csv`.
 
 Machine-readable exports:
 
@@ -591,41 +704,46 @@ Machine-readable exports:
 - `data/story_entity_sprite_sources.csv`
 - `renders/sprites/story_entity_contact_sheet.png`
 
-Implementation guidance for the eventual clean-room rebuild is in `BUTANO_REBUILD_NOTES.md`. The Butano snapshot reviewed for those notes is pinned to commit `77dcbcb3d8783596a9f333c64eedbccec77b05dc` (2026-08-06); Butano is not used as evidence for original Graveblood behavior.
+Implementation guidance for the playable rebuild now lives in `reconstruction/README.md`, `DEVELOPING_AND_BUILDING.md`, and the CFA/devkitPro migration spec under `docs/superpowers/specs/`. The reconstruction follows the original CFA/devkitPro lineage while keeping the canonical ROM RE data as the behavioral source of truth.
 
 ---
 
-## 10. Wardrobe table — code-backed
+## 10. Wardrobe browser and preview state — code-backed
 
-The Player constructor copies exactly:
+The Player constructor still proves the fixed wardrobe-label storage exactly: it copies `0xC8 = 200 bytes` from ROM `0x080198A0` into `Player+0x2B4`, giving **10 slots × 20 bytes**.
 
-`0xC8 = 200 bytes`
+| Slot | Literal | Normal Left/Right reachable | Preview OBJ bank | Preview BG page |
+|---:|---|:---:|---:|---:|
+| 0 | `Favorite Skirt` | yes | 15 | 6 |
+| 1 | `Not for demo` | yes | 13 | 2 |
+| 2 | `Not for demo` | yes | 12 | 1 |
+| 3 | `Not for demo` | yes | 11 | 0 |
+| 4 | `Not for demo` | yes | 6 | 3 |
+| 5 | `Not for demo` | yes | 4 | 4 |
+| 6 | `Not for demo` | yes | 5 | 5 |
+| 7 | `Not for demo` | no | — | — |
+| 8–9 | empty | no | — | — |
 
-from ROM:
+The actual browser selector is **`Player+0x240`**, initialized to `0` by the Player constructor. The standalone helper at `0x08006430` draws the selected label using the code-proven formula `Player+0x2B4 + selector*20`. The previously labeled `0x08008E30` “Wardrobe function” is not a function entry at all: it is an internal Wardrobe presentation path inside `Player_update` (`0x080081B0`).
 
-`0x080198A0`
+Normal browser input is **Left / Right / B**. Starting from constructor state, Left/Right can reach selectors `0..6`; the path at `0x080093F4` that writes `7` is a defensive clamp for an already-high value, not a seventh Right step. The browser displays `(B) to exit`. No A-button confirmation/equip path is present in the recovered browser control flow.
 
-into:
+The constructor also copies two 14-dword preview tables:
 
-`player + 0x2B4`
+- `Player+0x244 <- ROM 0x080197B0`: first group `15,13,12,11,6,4,5`; second group is seven zeroes. The Wardrobe preview loop consumes these as dynamic OBJ source-bank selectors.
+- `Player+0x27C <- ROM 0x080197E8`: normal selector pages `6,2,1,0,3,4,5`. The selected value feeds `0x08004F6C`, which copies one `0x2000`-byte page into BG VRAM at `0x06003000`.
 
-The copied region is exactly **10 fixed slots × 20 bytes**:
+This also corrects an older state-label mistake. **`0x03001254` is the Player animation state/frame block**, not shared Wardrobe state. The live gameplay graphics-bank global is **`0x0300103C`**, initialized to `15`; its two direct canonical-ROM literal references are both read-only Player drawing paths. No recovered Wardrobe path writes that live bank. The public demo therefore proves a **browse/preview interface, not a gameplay equip action**.
 
-| Slot | Literal |
-|---:|---|
-| 0 | `Favorite Skirt` |
-| 1–7 | `Not for demo` |
-| 8–9 | empty |
-
-This makes the relationship to the Player object code-proven rather than a guess based on nearby strings.
-
-The initialized RAM block at `0x03001254` is consumed both by `Player_draw` and by the Wardrobe/menu code around `0x08008E30`, but it is a **larger shared avatar/menu state block**. v4 intentionally does not reduce the first dword to an unsupported name such as `equipped_outfit`.
+For reconstruction parity, alternate `Not for demo` preview banks remain evidence data only. The CFA runtime keeps the proven startup/default outfit and does not make those preview choices gameplay-selectable without new evidence.
 
 Machine-readable exports:
 
-- `data/wardrobe_labels.csv`
-- `data/player_sprite_pipeline.csv`
-- `data/obj_graphics_summary.csv`
+- `data/wardrobe_labels.csv` — raw 10×20-byte label slots (including ROM padding);
+- `data/player_wardrobe_state_semantics.csv` — selector, navigation, preview tables, corrected global roles, and no-equip result;
+- `data/player_wardrobe_slots.csv` — normalized per-slot reachability and preview mapping;
+- `data/player_sprite_pipeline.csv` — Player graphics/animation anchors;
+- `data/obj_graphics_summary.csv` — OBJ bank/hardware summary.
 
 ---
 
@@ -682,7 +800,7 @@ Requirements:
 
 - Python 3;
 - Pillow for image rendering;
-- `clang` + `llvm-objdump` only if regenerating focused disassembly snapshots.
+- `clang` + `llvm-objdump` for focused disassembly snapshots when available, or Python `capstone` as the fallback disassembler.
 
 Set the canonical ROM path:
 
@@ -747,15 +865,38 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 - `data/dialogue_context_semantics.csv` — authoritative normal-vs-state4 opcode semantics.
 - `data/state4_collection_progression.csv` — six-step state-4 selector (`4,-1,-1,5,6,0`).
 - `data/level10_collection_gate_policy.csv` — code-proven pre-key/post-key branch threshold for the four level-10 gate tiles.
+- `data/level10_gate_forced_motion.csv` — exact post-key fresh-A turn 4/5 target coordinates, Player offsets, helper behavior, and separation from generic `portTo`.
+- `data/level10_gate_collision_geometry.csv` — exact 8-pixel-grid overlap formulas and contact flags for the post-key gate.
+- `data/player_vertical_target_calls.csv` — all three recovered static callers of `0x080080A4`, including which temporary anchor fields each caller writes and the helper's X-discard/Y-consume behavior.
+- `data/player_npc_interaction_alignment.csv` — fresh-A NPC source path, interaction-active flag/state-0 dispatch, exact ±19 px X alignment equations, Y alignment, and collision-resolved motion handoff.
+- `data/player_interaction_action_table.csv` — all 20 four-way interaction records, root-to-child page links, visual selectors, and conservatively raw leaf payload fields.
+- `data/player_interaction_profile_selector_table.csv` — exact nine-entry social selector table: two real `0x3C` profiles, one null slot, and six incompatible `0x30` metadata/card pointers.
+- `data/player_interaction_profile_selector_reachability.csv` — canonical state-1 actor/dial reachability proving selectors 0/1 are the normal initialized social path; selectors 2..8 remain latent unless externally mutated.
+- `data/player_interaction_profile_field_usage.csv` — recovered selector-derived profile-field inventory, including the absence of a `+0x10` consumer in the recovered interaction runtime.
+- `data/player_interaction_social_profile_topics.csv` — the nine valid 0..4 topic ratings for the genuine Stas and Julia social profiles.
+- `data/player_interaction_social_score_semantics.csv` — centered topic-class update of profile `+0x14` and its relationship-like working interpretation.
+- `data/player_interaction_score_mirror_semantics.csv` — direct `Player+0x39C = 10 * profile+0x14` synchronization plus the later one-step follower behavior.
+- `data/player_interaction_profile_topic_layout_mismatch.csv` — all 54 wrong-layout topic reads for selectors 3..8, including ASCII overlap and valid-class accidents.
+- `data/player_interaction_profile_selector_integrity.csv` — compact parity warning/counts plus the unguarded response dereference site.
+- `data/player_interaction_state_transitions.csv` — code-proven state 0→1 setup, state-1 directional choices, branch/leaf confirmation, state-2 B return/back transition, and state-3 teardown.
+- `data/ending_vram_effect_copy_model.csv` — exact byte-count equations/source biases/destinations for the final `0x08004FE0` effect.
 - `data/npc_routes.csv` — five six-waypoint routes.
 - `data/dialogue_scripts.csv` — all 58 decoded dialogue records.
 - `data/dialogue_opcode_semantics.csv` — normal-context compatibility opcode view.
 - `data/message_streams.csv` / `message_selectors.csv` — inbox/progression data.
-- `data/wardrobe_labels.csv` — ten fixed Player wardrobe-name slots.
+- `data/wardrobe_labels.csv` — ten fixed Player wardrobe-name slots, byte-faithful to the ROM.
+- `data/player_wardrobe_state_semantics.csv` — code-backed browser selector, navigation, preview tables, corrected global roles, and no-equip result.
+- `data/player_wardrobe_slots.csv` — normalized per-slot reachability and preview OBJ/BG mappings.
 - `data/obj_graphics_summary.csv` — OBJ bank/hardware summary.
 - `data/player_sprite_pipeline.csv` — code-backed Player graphics anchors and caveats.
+- `data/player_animation_semantics.csv` — startup animation values, exact bank-15 frame sources, cadence, flip behavior, and the bounded `+0x1E0` caveat.
 - `data/crossbuild_matches.csv` / `crossbuild_summary.json` — alpha differential.
 - `data/graveblood_001152.sym` — working symbol map.
+
+### Focused disassembly
+
+- `disasm/wardrobe_label_draw_08006430.txt` — selected-label helper, including `Player+0x240` × 20 addressing into `Player+0x2B4`.
+- `disasm/wardrobe_player_update_path_08008DF0.txt` — internal `Player_update` Wardrobe browser path: title/prompt, preview loaders, navigation, and exit flow.
 
 ### Tools
 
@@ -765,7 +906,7 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 - `tools/render_maps.py` — corrected 8bpp world renderer.
 - `tools/render_sprites.py` — OBJ/OAM dynamic Player/NPC renderer library, including story-entity contact-sheet generation.
 - `tools/disasm_thumb_chunk.py` — focused Thumb disassembly helper.
-- `tools/test_*.py` — current ROM-backed regression suite (count verified at package time).
+- `tools/test_*.py` — current ROM-backed regression suite (**93 tests** at this package checkpoint).
 
 ---
 
@@ -773,16 +914,15 @@ Every canonical extractor rejects a ROM with the wrong SHA-256 unless the explic
 
 This workspace is **not** a decompiled source tree yet. It is a verified structural/semantic foundation for one.
 
-Highest-value next targets are:
+The public-demo Wardrobe selector/preview path is now statically bounded: selectors `0..6` browse preview data, but no confirm/equip action or live graphics-bank mutation is recovered. With that target closed, the highest-value next targets are:
 
-1. trace the post-key `Fgtile` branch from `0x0800404A` through the exact eventual `portTo=8` handoff and Player/collision state changes;
-2. identify the remaining human story-overlay records from dialogue/location/behavior evidence without assigning names from sprite appearance alone;
-3. finish the Player animation-bank/wardrobe selector and prove the actual equipped-state fields;
-4. fully name state 1/2/4 interaction geometry and distinguish talk triggers from collectible/contact triggers;
-5. emulator/frame-trace `0x08004FE0` to reproduce the final expanding VRAM effect over time, now that the creature composite itself is reconstructed;
-6. recover audio/SFX tables and identify SFX 13;
-7. inspect any unused dialogue/message/wardrobe branches for content beyond the public festival path;
-8. build a Butano parity prototype of the public demo using the recovered data before adding new story content.
+1. fully name state 1/2/4 interaction geometry and distinguish talk triggers from collectible/contact triggers;
+2. identify the remaining story-overlay records from dialogue/location/behavior evidence without assigning names from sprite appearance alone;
+3. continue past the now-recovered state-2 topic cursor and response banks: identify `Ask about` handling and the zero-count `JOKE / FLIRT / ASSAULT / SHARE` leaf effects without inventing semantics for their still-unused raw metadata;
+4. emulator/frame-trace `0x08004FE0` to reproduce the final expanding VRAM effect over time now that its exact copy-size equations are known;
+5. recover audio/SFX tables and identify SFX 13;
+6. inspect unused dialogue/message/Wardrobe branches for content beyond the public festival path, while keeping browse-only preview data separate from any unproven equip mechanic;
+7. expand the CFA-style devkitPro parity runtime from the current Level 7/8 slice toward the complete public demo before adding new story content.
 
 ### Confidence policy
 
@@ -791,3 +931,5 @@ This workspace intentionally separates:
 - **proven machine behavior** — directly supported by traced code/data;
 - **working names** — useful conservative labels whose original developer names are unknown;
 - **candidates** — plausible interpretations that still need another proof step.
+
+That distinction matters if this work later becomes the basis for a finished Graveblood reconstruction: recovered facts should not quietly turn into invented “original” design.
