@@ -51,6 +51,11 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertNotIn('LIBBUTANO', text)
         self.assertNotIn('butano.mak', text)
 
+    def test_makefile_exposes_project_headers_to_angle_bracket_includes(self):
+        text = (ROOT / 'reconstruction/Makefile').read_text(encoding='utf-8')
+        self.assertIn('$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir))', text)
+        self.assertNotIn('$(foreach dir,$(INCLUDES),-iquote $(CURDIR)/$(dir))', text)
+
     def test_runtime_is_mode0_cfa_style_and_not_mode3_debug_shell(self):
         combined = '\n'.join(
             p.read_text(encoding='utf-8')
