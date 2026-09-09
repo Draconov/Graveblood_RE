@@ -66,6 +66,7 @@ typedef struct {
     GbSocialRuntime social;
     u8 generic_record_action_pending;
     s16 generic_record_action_argument;
+    s8 pending_sfx;
 } GbStoryRuntime;
 
 void gb_story_init(GbStoryRuntime* story);
@@ -84,6 +85,7 @@ const GbMessageRecord* gb_story_message_primary(const GbStoryRuntime* story);
 const GbMessageRecord* gb_story_message_auxiliary(const GbStoryRuntime* story, u8 slot);
 const char* gb_story_social_profile_name(const GbStoryRuntime* story);
 const char* gb_story_social_response(const GbStoryRuntime* story);
+int gb_story_take_pending_sfx(GbStoryRuntime* story);
 const char* gb_story_lookup_social_response(u8 quadrant, u8 topic_index,
                                             s8 profile_value_class, u8 variant);
 

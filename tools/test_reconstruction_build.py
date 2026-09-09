@@ -20,17 +20,26 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
             'reconstruction/source/engine/video.c',
             'reconstruction/source/engine/input.c',
             'reconstruction/source/engine/collision.c',
+            'reconstruction/source/engine/audio.c',
             'reconstruction/source/engine/portal.c',
             'reconstruction/source/engine/world.c',
             'reconstruction/source/engine/stream.c',
             'reconstruction/source/game/player.c',
             'reconstruction/source/game/actors.c',
             'reconstruction/source/game/graveblood.c',
+            'reconstruction/source/game/wardrobe.c',
             'reconstruction/include/graveblood/assets.h',
+            'reconstruction/include/graveblood/wardrobe.h',
+            'reconstruction/include/graveblood/audio.h',
             'reconstruction/include/graveblood/actors.h',
             'reconstruction/data/actor_data.c',
             'reconstruction/data/actor_routes.c',
             'reconstruction/data/actor_sprite_data.c',
+            'reconstruction/data/audio_data.c',
+            'reconstruction/data/audio_samples.s',
+            'reconstruction/data/wardrobe_assets.c',
+            'reconstruction/data/audio/sample_00.pcm',
+            'reconstruction/data/audio/sample_13.pcm',
             'reconstruction/include/graveblood/world.h',
             'reconstruction/include/graveblood/stream.h',
             'reconstruction/README.md',
@@ -586,8 +595,14 @@ typedef int32_t s32;
     def test_story_game_loop_integration_and_level10_rusty_key_gate(self):
         graveblood = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
         self.assertIn('#include <graveblood/story.h>', graveblood)
+        self.assertIn('#include <graveblood/audio.h>', graveblood)
         self.assertIn('GbStoryRuntime story;', graveblood)
+        self.assertIn('gb_audio_init();', graveblood)
         self.assertIn('gb_story_init(&story);', graveblood)
+        self.assertIn('gb_audio_play_music(level_id == 10 ? 1 : 0);', graveblood)
+        self.assertNotIn('gb_audio_play_music(2)', graveblood)
+        self.assertIn('gb_story_take_pending_sfx(&story)', graveblood)
+        self.assertIn('gb_audio_play_sfx((u8)pending_sfx)', graveblood)
         self.assertIn('gb_story_on_level_load(story, actors);', graveblood)
         self.assertIn('gb_story_handle_interaction(&story, &actors, &interaction);', graveblood)
         self.assertIn('gb_story_update(&story, &actors, &input);', graveblood)
@@ -691,6 +706,70 @@ typedef int32_t s32;
             run = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(0, run.returncode, run.stderr)
 
+    def test_generic_portal_activation_plays_canonical_sfx5_once(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/portal.h>
+
+static int played_id = -1;
+static int played_count = 0;
+int gb_audio_play_sfx(u8 sound_id)
+{
+    played_id = sound_id;
+    ++played_count;
+    return 0;
+}
+
+int main(void)
+{
+    const GbPortal portals[] = {
+        { .x = 10, .y = 20, .width = 16, .height = 16, .target_level = 8, .num = 1 }
+    };
+    GbLevelAssets level = { 0 };
+    level.portals = portals;
+    level.portal_count = 1;
+    GbPlayer player = { 0 };
+    player.x = 12;
+    player.y = 22;
+    GbInput fresh_a = { KEY_A, KEY_A };
+    GbInput none = { 0, 0 };
+
+    assert(gb_portal_try_activate(&level, &player, &none) == -1);
+    assert(played_count == 0);
+    assert(gb_portal_try_activate(&level, &player, &fresh_a) == 8);
+    assert(played_id == 5);
+    assert(played_count == 1);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'portal_audio_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'portal_audio_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/portal.c'),
+                str(td / 'portal_audio_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
+
     def test_story_runtime_dialogue_collection_messages_social_and_actor_cursor(self):
         harness = r"""
 #include <assert.h>
@@ -743,6 +822,7 @@ int main(void)
     GbInput fresh_a = { KEY_A, KEY_A };
     GbInput fresh_up = { KEY_UP, KEY_UP };
     GbInput fresh_right = { KEY_RIGHT, KEY_RIGHT };
+    GbInput fresh_down = { KEY_DOWN, KEY_DOWN };
     GbInput none = { 0, 0 };
 
     gb_story_init(&story);
@@ -753,6 +833,7 @@ int main(void)
     assert(story.state.auxiliary_message_streams[2] == -1);
     assert(story.state.monster_render_enabled == 0);
     assert(story.state.final_effect_pending == 0);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     assert(story.state.social_profiles[0].topic_class[1] == 4);
     assert(story.state.social_profiles[1].topic_class[6] == 4);
 
@@ -771,6 +852,8 @@ int main(void)
     one_actor(&actors, &dialogue_desc, GB_ACTOR_STORY_NONE);
     GbInteractionEvent dialogue = event_for(GB_INTERACTION_DIALOGUE, 0);
     gb_story_handle_interaction(&story, &actors, &dialogue);
+    assert(gb_story_take_pending_sfx(&story) == 3);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     assert(gb_story_ui_active(&story));
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[0]);
     assert(strcmp(gb_story_dialogue_record(&story)->speaker, "Vika") == 0);
@@ -785,6 +868,7 @@ int main(void)
 
     /* Re-entering the same NPC begins at raw cursor 4 + 1 = step 5. */
     gb_story_handle_interaction(&story, &actors, &dialogue);
+    assert(gb_story_take_pending_sfx(&story) == 3);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[5]);
     gb_story_update(&story, &actors, &fresh_a);
     gb_story_update(&story, &actors, &fresh_a);
@@ -807,6 +891,7 @@ int main(void)
     one_actor(&actors, &collection_desc, 11);
     story.state.collection_progress = 1;
     gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(gb_story_take_pending_sfx(&story) == 3);
     assert(story.state.collection_progress == 2);
     assert(actors.actors[0].consumed && ! actors.actors[0].active);
     assert(story.state.consumed_story_overlays & (1u << 11));
@@ -814,6 +899,7 @@ int main(void)
     one_actor(&actors, &collection_desc, 12);
     story.state.collection_progress = 3;
     gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(gb_story_take_pending_sfx(&story) == 3);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[5].records[0]);
     gb_story_update(&story, &actors, &fresh_a);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[5].records[1]);
@@ -821,6 +907,23 @@ int main(void)
     assert(! gb_story_ui_active(&story));
     assert(story.state.collection_progress == 4);
     assert(actors.actors[0].consumed);
+    /* Canonical state4 opcode -1 branch plays SFX7 at 0x08003748. */
+    assert(gb_story_take_pending_sfx(&story) == 7);
+    assert(gb_story_take_pending_sfx(&story) == -1);
+
+    /* Sixth selector uses script 0; its state4 -2 branch plays the same SFX7. */
+    one_actor(&actors, &collection_desc, 14);
+    story.state.collection_progress = 5;
+    gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(gb_story_take_pending_sfx(&story) == 3);
+    gb_story_update(&story, &actors, &fresh_a); /* step 1 */
+    gb_story_update(&story, &actors, &fresh_a); /* step 2 */
+    gb_story_update(&story, &actors, &fresh_a); /* state4 -2 terminal */
+    assert(! gb_story_ui_active(&story));
+    assert(story.state.collection_progress == 6);
+    assert(actors.actors[0].consumed);
+    assert(gb_story_take_pending_sfx(&story) == 7);
+    assert(gb_story_take_pending_sfx(&story) == -1);
 
     /* Fifth pickup: -4 enables monster, -5 terminates safely without raw VRAM effect. */
     one_actor(&actors, &collection_desc, 15);
@@ -836,6 +939,8 @@ int main(void)
     assert(story.state.collection_progress == 5);
     assert(actors.actors[0].consumed && ! actors.actors[0].active);
     assert(! gb_story_ui_active(&story));
+    assert(gb_story_take_pending_sfx(&story) == 13);
+    assert(gb_story_take_pending_sfx(&story) == -1);
 
     /* Consumed overlay persistence survives an actor-system reload. */
     one_actor(&actors, &collection_desc, 15);
@@ -861,6 +966,13 @@ int main(void)
     assert(story.social.topic_count == 9);
     gb_story_update(&story, &actors, &fresh_right); /* ignored in vertical topic list */
     assert(story.social.topic_index == 0);
+    assert(gb_story_take_pending_sfx(&story) == -1);
+    gb_story_update(&story, &actors, &fresh_down);
+    assert(story.social.topic_index == 1);
+    assert(gb_story_take_pending_sfx(&story) == 4);
+    gb_story_update(&story, &actors, &fresh_up);
+    assert(story.social.topic_index == 0);
+    assert(gb_story_take_pending_sfx(&story) == 4);
     gb_story_update(&story, &actors, &fresh_a); /* sports, class 3 */
     assert(story.social.state == GB_SOCIAL_RESPONSE);
     assert(story.state.social_score_mirror == 0);
@@ -1329,11 +1441,515 @@ typedef int32_t s32;
             ], check=True, cwd=ROOT)
             subprocess.run([str(exe)], check=True, cwd=ROOT)
 
+    def test_audio_backend_matches_canonical_fifo_dma_timer_contract(self):
+        audio = (ROOT / 'reconstruction/source/engine/audio.c').read_text(encoding='utf-8')
+        makefile = (ROOT / 'reconstruction/Makefile').read_text(encoding='utf-8')
+        self.assertIn('0x04000082u', audio)
+        self.assertIn('0x04000084u', audio)
+        self.assertIn('0x040000A0u', audio)
+        self.assertIn('0x040000BCu', audio)
+        self.assertIn('0x040000C0u', audio)
+        self.assertIn('0x040000C6u', audio)
+        self.assertIn('0x04000100u', audio)
+        self.assertIn('0x04000102u', audio)
+        self.assertIn('0x04000104u', audio)
+        self.assertIn('0x04000106u', audio)
+        self.assertIn('0x0B04', audio)
+        self.assertIn('0xB200', audio)
+        self.assertIn('0xFC00', audio)
+        self.assertIn('0xFF00', audio)
+        self.assertIn('GB_AUDIO_BUFFER_SAMPLES', audio)
+        self.assertIn('gb_audio_buffers[2][GB_AUDIO_BUFFER_SAMPLES]', audio)
+        self.assertIn('irqSet(IRQ_TIMER1, gb_audio_timer1_irq)', audio)
+        self.assertIn('irqEnable(IRQ_TIMER1)', audio)
+        self.assertIn('irqDisable(IRQ_TIMER1)', audio)
+        self.assertIn('SFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))', makefile)
+        self.assertTrue((ROOT / 'reconstruction/data/audio_samples.s').is_file())
+
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define IRQ_TIMER1 5
+void irqInit(void);
+void irqSet(int irq, void (*handler)(void));
+void irqEnable(int irq);
+void irqDisable(int irq);
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            obj = td / 'audio.o'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                '-c', str(ROOT / 'reconstruction/source/engine/audio.c'), '-o', str(obj),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            self.assertTrue(obj.is_file())
+
+    def test_audio_pcm_incbin_unit_assembles_for_arm_from_build_like_directory(self):
+        source = ROOT / 'reconstruction/data/audio_samples.s'
+        self.assertTrue(source.is_file())
+        clang = subprocess.run(['bash', '-lc', 'command -v clang'], capture_output=True, text=True, check=True).stdout.strip()
+        with tempfile.TemporaryDirectory(dir=ROOT / 'reconstruction') as td:
+            td = Path(td)
+            obj = td / 'audio_samples.o'
+            proc = subprocess.run([
+                clang, '--target=arm-none-eabi', '-mcpu=arm7tdmi', '-mthumb',
+                '-c', '../data/audio_samples.s', '-o', str(obj),
+            ], cwd=td, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            self.assertTrue(obj.is_file())
+            self.assertGreater(obj.stat().st_size, 4_000_000)
+            nm = subprocess.run(['nm', '-g', str(obj)], capture_output=True, text=True, check=True).stdout
+            for sample_id in range(14):
+                self.assertIn(f'gb_audio_sample_{sample_id:02d}_start', nm)
+                self.assertIn(f'gb_audio_sample_{sample_id:02d}_end', nm)
+
+    def test_audio_runtime_channel_allocation_looping_and_mix_vector(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/audio.h>
+
+static const s8 music0[] = { 32, -32, 64, -64 };
+static const s8 music1[] = { 16, -16, 8, -8 };
+static const s8 music2[] = { 1, 2, 3, 4 };
+static const s8 sfx3[] = { 127, -128, 64, -64 };
+static const s8 sfx4[] = { 4, 4, 4, 4 };
+static const s8 sfx5[] = { 5, 5, 5, 5 };
+static const s8 sfx6[] = { 6, 6, 6, 6 };
+static const s8 sfx7[] = { 7, 7, 7, 7 };
+static const s8 sfx8[] = { 8, 8, 8, 8 };
+static const s8 sfx9[] = { 9, 9, 9, 9 };
+static const s8 sfx10[] = { 10, 10, 10, 10 };
+static const s8 sfx11[] = { 11, 11, 11, 11 };
+static const s8 sfx12[] = { 12, 12, 12, 12 };
+static const s8 sfx13[] = { 13, 13, 13, 13 };
+
+const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT] = {
+    { music0, 4, GB_AUDIO_ROLE_MUSIC },
+    { music1, 4, GB_AUDIO_ROLE_MUSIC },
+    { music2, 4, GB_AUDIO_ROLE_MUSIC },
+    { sfx3, 4, GB_AUDIO_ROLE_SFX },
+    { sfx4, 4, GB_AUDIO_ROLE_SFX },
+    { sfx5, 4, GB_AUDIO_ROLE_SFX },
+    { sfx6, 4, GB_AUDIO_ROLE_SFX },
+    { sfx7, 4, GB_AUDIO_ROLE_SFX },
+    { sfx8, 4, GB_AUDIO_ROLE_SFX },
+    { sfx9, 4, GB_AUDIO_ROLE_SFX },
+    { sfx10, 4, GB_AUDIO_ROLE_SFX },
+    { sfx11, 4, GB_AUDIO_ROLE_SFX },
+    { sfx12, 4, GB_AUDIO_ROLE_SFX },
+    { sfx13, 4, GB_AUDIO_ROLE_SFX },
+};
+
+int main(void)
+{
+    s8 mixed[8] = { 0 };
+
+    gb_audio_init();
+    assert(gb_audio_play_sfx(0) == -1);
+    assert(gb_audio_play_music(3) == -1);
+
+    assert(gb_audio_play_music(0) == 0);
+    assert(gb_audio_play_sfx(3) == 1);
+    gb_audio_mix_block(mixed, 8);
+    assert(mixed[0] == 85);
+    assert(mixed[1] == -87);
+    assert(mixed[2] == 84);
+    assert(mixed[3] == -84);
+    assert(mixed[4] == 27);
+    assert(mixed[5] == -27);
+    assert(mixed[6] == 54);
+    assert(mixed[7] == -54);
+
+    /* The one-shot retired after its aligned four-byte payload. */
+    assert(gb_audio_play_sfx(4) == 1);
+    gb_audio_stop_channel(1);
+
+    /* Music replacement reuses the reserved music channel. */
+    assert(gb_audio_play_music(1) == 0);
+    gb_audio_set_channel_volume(0, 0);
+    gb_audio_mix_block(mixed, 4);
+    assert(mixed[0] == 0 && mixed[1] == 0 && mixed[2] == 0 && mixed[3] == 0);
+
+    gb_audio_init();
+    assert(gb_audio_play_music(0) == 0);
+    assert(gb_audio_play_sfx(3) == 1);
+    assert(gb_audio_play_sfx(4) == 2);
+    assert(gb_audio_play_sfx(5) == 3);
+    assert(gb_audio_play_sfx(6) == 4);
+    assert(gb_audio_play_sfx(7) == 5);
+    assert(gb_audio_play_sfx(8) == 6);
+    assert(gb_audio_play_sfx(9) == 7);
+    assert(gb_audio_play_sfx(10) == -1);
+
+    gb_audio_stop_music();
+    assert(gb_audio_play_sfx(10) == 0);
+    gb_audio_shutdown();
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'audio_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'audio_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-DGB_AUDIO_TESTING=1',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/audio.c'),
+                str(td / 'audio_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
     def test_public_repo_identity_and_no_credits_file(self):
         readme = (ROOT / 'README.md').read_text(encoding='utf-8')
         self.assertIn('Graveblood_RE', readme)
         self.assertFalse((ROOT / 'CREDITS.md').exists())
 
+
+    def test_game_boots_title_then_hands_off_to_level7_with_sfx6(self):
+        game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        self.assertIn('#include <graveblood/scene.h>', game)
+        self.assertIn('GbSceneRuntime scene;', game)
+        self.assertIn('gb_scene_init(&scene);', game)
+        self.assertIn('gb_video_load_title();', game)
+        self.assertIn('scene.active == GB_SCENE_TITLE', game)
+        self.assertIn('gb_scene_update_title(&scene, &input)', game)
+        self.assertIn('tick.play_start_sfx', game)
+        self.assertIn('gb_audio_play_sfx(6)', game)
+        self.assertIn('tick.enter_gameplay', game)
+        self.assertIn('tick.gameplay_level', game)
+        self.assertNotIn('gb_enter_level(&world, &player, &actors, &story, GB_START_LEVEL);', game)
+
+    def test_title_video_loads_exact_layers_obj_assets_patches_prompt_and_restores_gameplay_display(self):
+        header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
+        for name in (
+            'gb_video_load_title',
+            'gb_video_title_set_animation',
+            'gb_video_title_set_prompt_visible',
+        ):
+            self.assertIn(name, header)
+
+        harness = r'''
+#include <assert.h>
+#include <string.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount;
+volatile u16 gb_test_dispcnt;
+volatile u16 gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256];
+volatile u16 gb_test_obj_colors[256];
+volatile u16 gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const u16 gb_actor_obj_palette[256] = {0};
+const u16 gb_player_obj_palette[16] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+
+static const u16 gameplay_palette[256] = {0x1234};
+static const u16 gameplay_tiles[1] = {0x5678};
+static const GbLevelAssets gameplay_level = {
+    .level_id = 7,
+    .graphics_variant = 0,
+    .world_width_tiles = 32,
+    .world_height_tiles = 32,
+    .fixed_width_tiles = 0,
+    .fixed_height_tiles = 0,
+    .bg_tile_halfwords = 1,
+    .translation_count = 0,
+    .bg_palette = gameplay_palette,
+    .bg_tiles = gameplay_tiles,
+};
+
+int main(void)
+{
+    for(unsigned i = 0; i < sizeof(gb_test_vram) / sizeof(gb_test_vram[0]); ++i)
+        gb_test_vram[i] = 0xBEEF;
+    for(unsigned i = 0; i < sizeof(gb_test_oam) / sizeof(gb_test_oam[0]); ++i)
+        gb_test_oam[i] = 0;
+    for(unsigned i = 0; i < 256; ++i)
+    {
+        gb_test_bg_colors[i] = 0xA55A;
+        gb_test_obj_colors[i] = 0x5AA5;
+    }
+
+    gb_video_load_title();
+
+    assert(gb_test_dispcnt == (MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON));
+    assert((gb_test_dispcnt & OBJ_1D_MAP) == 0);
+    assert(gb_test_bgctrl[0] ==
+           (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(27) | BG_PRIORITY(0)));
+    assert(gb_test_bgctrl[1] ==
+           (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(28) | BG_PRIORITY(1)));
+    assert(gb_test_bgctrl[2] ==
+           (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(29) | BG_PRIORITY(2)));
+    assert(gb_test_bgctrl[3] ==
+           (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(30) | BG_PRIORITY(3)));
+    for(int i = 0; i < 4; ++i)
+        assert(gb_test_bg_offset[i].x == 0 && gb_test_bg_offset[i].y == 0);
+
+    assert(gb_test_bg_colors[0] == gb_title_bg_palette[0]);
+    assert(gb_test_bg_colors[GB_TITLE_BG_PALETTE_COUNT - 1] ==
+           gb_title_bg_palette[GB_TITLE_BG_PALETTE_COUNT - 1]);
+    assert(gb_test_bg_colors[GB_TITLE_BG_PALETTE_COUNT] == 0xA55A);
+    assert(gb_test_obj_colors[0] == gb_title_obj_palette[0]);
+    assert(gb_test_obj_colors[GB_TITLE_OBJ_PALETTE_COUNT - 1] ==
+           gb_title_obj_palette[GB_TITLE_OBJ_PALETTE_COUNT - 1]);
+    assert(gb_test_obj_colors[GB_TITLE_OBJ_PALETTE_COUNT] == 0x5AA5);
+    assert(gb_test_obj_colors[223] == 0x5AA5);
+    assert(gb_test_obj_colors[224] == gb_title_obj_high_palette[0]);
+    assert(gb_test_obj_colors[255] ==
+           gb_title_obj_high_palette[GB_TITLE_OBJ_HIGH_PALETTE_COUNT - 1]);
+
+    assert(gb_test_vram[0] == gb_title_bg_tiles[0]);
+    volatile u16 *obj_vram = (volatile u16*)SPR_VRAM(0);
+    assert(obj_vram[0] == gb_title_obj_tiles[0]);
+    assert(obj_vram[GB_TITLE_OBJ_TILE_HALFWORDS - 1] ==
+           gb_title_obj_tiles[GB_TITLE_OBJ_TILE_HALFWORDS - 1]);
+
+    volatile u16 *prompt_map = (volatile u16*)MAP_BASE_ADR(27);
+    volatile u16 *title_map = (volatile u16*)MAP_BASE_ADR(28);
+    volatile u16 *backing_left = (volatile u16*)MAP_BASE_ADR(29);
+    volatile u16 *backing_right = (volatile u16*)MAP_BASE_ADR(30);
+    assert(title_map[0] == gb_title_map[0]);
+    assert(title_map[19 * 32 + 29] == gb_title_map[19 * 30 + 29]);
+    assert(title_map[30] == 0);
+    assert(title_map[20 * 32] == 0);
+    assert(prompt_map[0] == 0);
+    for(int y = 0; y < 32; ++y)
+    {
+        for(int x = 0; x < 32; ++x)
+        {
+            assert(backing_left[y * 32 + x] == gb_title_underlay_tile);
+            assert(backing_right[y * 32 + x] == gb_title_underlay_tile);
+        }
+    }
+
+    volatile u16 *char_mem = (volatile u16*)CHAR_BASE_ADR(0);
+    assert(char_mem[0x2F00 / 2] == gb_title_anim_a[0][0]);
+    assert(char_mem[0x2F00 / 2 + GB_TITLE_ANIM_A_HALFWORDS - 1] ==
+           gb_title_anim_a[0][GB_TITLE_ANIM_A_HALFWORDS - 1]);
+    assert(char_mem[0x3B00 / 2] == gb_title_anim_b[0][0]);
+    assert(char_mem[0x3B00 / 2 + GB_TITLE_ANIM_B_HALFWORDS - 1] ==
+           gb_title_anim_b[0][GB_TITLE_ANIM_B_HALFWORDS - 1]);
+
+    for(int i = 0; i < GB_TITLE_PROMPT_LENGTH; ++i)
+        assert(prompt_map[9 * 32 + 9 + i] == gb_title_prompt_tiles[i]);
+    for(int i = 0; i < 128; ++i)
+    {
+        assert(gb_test_oam[i * 4] == 0x02F0);
+        assert(gb_test_oam[i * 4 + 1] == 0x01F0);
+        assert(gb_test_oam[i * 4 + 2] == 0x0C00);
+        assert(gb_test_oam[i * 4 + 3] == 0);
+    }
+
+    gb_video_title_set_animation(2);
+    assert(char_mem[0x2F00 / 2] == gb_title_anim_a[2][0]);
+    assert(char_mem[0x3B00 / 2] == gb_title_anim_b[2][0]);
+
+    gb_video_title_set_prompt_visible(0);
+    for(int i = 0; i < GB_TITLE_PROMPT_LENGTH; ++i)
+        assert(prompt_map[9 * 32 + 9 + i] == gb_title_blank_tiles[i]);
+
+    gb_video_load_level(&gameplay_level);
+    assert(gb_test_dispcnt ==
+           (MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON | OBJ_1D_MAP));
+    assert(gb_test_bgctrl[0] ==
+           (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(27) | BG_PRIORITY(0)));
+    assert(gb_test_bgctrl[3] ==
+           (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(30) | BG_PRIORITY(3)));
+    assert(gb_test_bg_colors[0] == 0x1234);
+    assert(gb_test_vram[0] == 0x5678);
+    return 0;
+}
+'''
+        gba_h = r'''
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount;
+extern volatile u16 gb_test_dispcnt;
+extern volatile u16 gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256];
+extern volatile u16 gb_test_obj_colors[256];
+extern volatile u16 gb_test_oam[512];
+extern volatile u16 gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+'''
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'title_video_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'title_video_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/title_assets.c'),
+                str(td / 'title_video_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_title_scene_runtime_matches_recovered_cadence_blink_and_transition(self):
+        scene_h = ROOT / 'reconstruction/include/graveblood/scene.h'
+        scene_c = ROOT / 'reconstruction/source/game/scene.c'
+        self.assertTrue(scene_h.is_file(), scene_h)
+        self.assertTrue(scene_c.is_file(), scene_c)
+        harness = r'''
+#include <assert.h>
+#include <graveblood/scene.h>
+
+static GbInput input_with_pressed(u16 pressed)
+{
+    GbInput input = {0, pressed};
+    return input;
+}
+
+int main(void)
+{
+    GbSceneRuntime scene;
+    gb_scene_init(&scene);
+    assert(scene.active == GB_SCENE_TITLE);
+    assert(scene.title_animation_state == 0);
+    assert(scene.title_animation_counter == 0);
+    assert(scene.transition_delay == 0);
+
+    GbInput none = input_with_pressed(0);
+    for(int i = 0; i < 6; ++i)
+    {
+        GbSceneTick tick = gb_scene_update_title(&scene, &none);
+        assert(tick.enter_gameplay == 0);
+        assert(scene.title_animation_state == 0);
+    }
+    gb_scene_update_title(&scene, &none);
+    assert(scene.title_animation_state == 1);
+    assert(scene.title_animation_counter == 0);
+
+    GbSceneRuntime blink;
+    gb_scene_init(&blink);
+    for(int i = 0; i < 15; ++i)
+        assert(gb_scene_update_title(&blink, &none).prompt_visible == 1);
+    assert(gb_scene_update_title(&blink, &none).prompt_visible == 0);
+    for(int i = 0; i < 15; ++i)
+        assert(gb_scene_update_title(&blink, &none).prompt_visible == 0);
+    assert(gb_scene_update_title(&blink, &none).prompt_visible == 1);
+
+    GbSceneRuntime start;
+    gb_scene_init(&start);
+    GbInput pressed = input_with_pressed(0x0008);
+    GbSceneTick first = gb_scene_update_title(&start, &pressed);
+    assert(first.play_start_sfx == 1);
+    assert(first.enter_gameplay == 0);
+    assert(start.pending_gameplay == 1);
+    assert(start.pending_level == 7);
+    assert(start.transition_delay == 120);
+
+    GbSceneTick repeated = gb_scene_update_title(&start, &pressed);
+    assert(repeated.play_start_sfx == 1);
+    assert(start.transition_delay == 119);
+
+    for(int i = 0; i < 119; ++i)
+    {
+        GbSceneTick tick = gb_scene_update_title(&start, &none);
+        assert(tick.enter_gameplay == 0);
+    }
+    assert(start.transition_delay == 0);
+    GbSceneTick enter = gb_scene_update_title(&start, &none);
+    assert(enter.enter_gameplay == 1);
+    assert(enter.gameplay_level == 7);
+    assert(start.active == GB_SCENE_GAMEPLAY);
+    return 0;
+}
+'''
+        gba_h = r'''
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#endif
+'''
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'scene_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'scene_test'
+            subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(scene_c), str(td / 'scene_test.c'), '-o', str(exe),
+            ], check=True, cwd=ROOT)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
 
 if __name__ == '__main__':
     unittest.main()

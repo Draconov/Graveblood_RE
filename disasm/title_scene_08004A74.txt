@@ -1,5 +1,5 @@
 
-/tmp/tmpucyv898_/wrap.o:	file format elf32-littlearm
+chunk.o:	file format elf32-littlearm
 
 Disassembly of section .text:
 
@@ -104,33 +104,3 @@ Disassembly of section .text:
  8004b3e: 60a3         	str	r3, [r4, #0x8]
  8004b40: e7f0         	b	0x8004b24 <_start+0xb0> @ imm = #-0x20
  8004b42: 46c0         	mov	r8, r8
- 8004b44: 05bc         	lsls	r4, r7, #0x16
- 8004b46: 0300         	lsls	r0, r0, #0xc
- 8004b48: c480         	stm	r4!, {r7}
- 8004b4a: 0000         	movs	r0, r0
- 8004b4c: 9cc4         	ldr	r4, [sp, #0x310]
- 8004b4e: 0801         	lsrs	r1, r0, #0x20
- 8004b50: 2f00         	cmp	r7, #0x0
- 8004b52: 0600         	lsls	r0, r0, #0x18
- 8004b54: f480 0000    	<unknown>
- 8004b58: 3b00         	subs	r3, #0x0
- 8004b5a: 0600         	lsls	r0, r0, #0x18
- 8004b5c: c324         	stm	r3!, {r2, r5}
- 8004b5e: 08a8         	lsrs	r0, r5, #0x2
- 8004b60: 0554         	lsls	r4, r2, #0x15
- 8004b62: 0300         	lsls	r0, r0, #0xc
- 8004b64: 06bc         	lsls	r4, r7, #0x1a
- 8004b66: 0300         	lsls	r0, r0, #0xc
- 8004b68: 06c0         	lsls	r0, r0, #0x1b
- 8004b6a: 0300         	lsls	r0, r0, #0xc
- 8004b6c: 0808         	lsrs	r0, r1, #0x20
- 8004b6e: 0300         	lsls	r0, r0, #0xc
- 8004b70: c334         	stm	r3!, {r2, r4, r5}
- 8004b72: 08a8         	lsrs	r0, r5, #0x2
- 8004b74: b510         	push	{r4, lr}
- 8004b76: f005 fbad    	bl	0x800a2d4 <_start+0x5860> @ imm = #0x575a
- 8004b7a: 2200         	movs	r2, #0x0
- 8004b7c: 4917         	ldr	r1, [pc, #0x5c]         @ 0x168 <_start+0x168>
- 8004b7e: 4818         	ldr	r0, [pc, #0x60]         @ 0x16c <_start+0x16c>
- 8004b80: f005 fc3e    	bl	0x800a400 <_start+0x598c> @ imm = #0x587c
-

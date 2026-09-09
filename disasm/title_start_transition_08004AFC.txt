@@ -1,5 +1,5 @@
 
-/tmp/tmpzl3cvk7q/wrap.o:	file format elf32-littlearm
+chunk.o:	file format elf32-littlearm
 
 Disassembly of section .text:
 
@@ -39,4 +39,3 @@ Disassembly of section .text:
  8004b3e: 60a3         	str	r3, [r4, #0x8]
  8004b40: e7f0         	b	0x8004b24 <_start+0x28> @ imm = #-0x20
  8004b42: 46c0         	mov	r8, r8
-

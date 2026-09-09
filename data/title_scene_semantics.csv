@@ -1,0 +1,32 @@
+fact,value,evidence
+descriptor_iwram,0x03000EA4,startup-initialized title graphics descriptor
+descriptor_rom,0x08A8DE54,startup template for title graphics descriptor
+bg_tiles,0x08019CC4,0xD800 bytes copied to BG char memory on TitleScene enter
+translation,0x0802B148,title tile translation table
+bg_palette,0x0802BB0C,canonical title BG palette source
+bg_palette_count,223,startup initializer writes 0xDF from ROM 0x0802BCCC to descriptor +0x10
+obj_tiles,0x08310654 bytes=0x8000,graphics loader 0x0800575C copies descriptor +0x14 to OBJ VRAM
+obj_palette,0x08366E58,canonical title OBJ palette source
+obj_palette_count,91,startup initializer writes 0x5B from ROM 0x08366F10 to descriptor +0x20
+obj_high_palette,0x08652DB4,graphics loader copies fixed 32 colors to OBJ palette indices 224..255
+obj_high_palette_count,32,fixed 0x40-byte copy at 0x080057B4-0x080057C2
+display_control,0x1F00,Mode 0 + BG0/BG1/BG2/BG3/OBJ; 2D OBJ mapping; 0x0800A208
+display_setup_blanking,forced blank set during setup and cleared before return,"0x0800A208 temporarily sets DISPCNT bit7 while clearing/configuring video state, then returns with final 0x1F00"
+scroll_offsets,BG0HOFS/BG0VOFS..BG3HOFS/BG3VOFS=0,0x0800A208 clears all eight text-BG scroll registers during Title display setup
+obj_mapping,2D,DISPCNT bit6 is clear in exact 0x1F00 Title display control
+bg_controls,BG0=0x1B80 BG1=0x1C81 BG2=0x1D82 BG3=0x1E83,0x0800A208 exact BGCNT writes
+map_source,0x08655814,30x20 raw map used by fixed-map mode 5
+artwork_destination,BG1 screenblock28,0x0800A700 mode5 stores translated entries at base 0x0600D800 + 0x800
+prompt_destination,BG0 screenblock27,text writer 0x0800A830 uses 0x0600D800
+backing_destination,"BG2 screenblock29 + BG3 screenblock30, 64x32",0x08005894 splits fixed level-0 width 64 at x=32
+backing_tile,translation[2],0x0800589C loads halfword [translation + 4]
+hidden_oam,attr0=0x02F0 attr1=0x01F0 attr2=0x0C00,0x0800A208 canonical 128-entry hidden OAM initialization
+anim_a,dest=0x2F00 base=0xC480 stride=0xC00 bytes=0xC00 states=4,TitleScene_update first tile patch
+anim_b,dest=0x3B00 base=0xF480 stride=0x800 bytes=0x600 states=4,TitleScene_update second tile patch
+animation_cadence,"counter<=5 same state; counter>5 advance 0,1,2,3,0",TitleScene_update 0x08004A78
+prompt,"PRESS START... at tile (9,9)",string 0x08A8C324 and text call 0x08004ACE
+prompt_blink,frame_counter bit4: 0=visible 1=blank,global 0x03000554 test at 0x08004AFC
+start_input,fresh START bit 0x0008,current/previous key globals 0x030006BC/0x030006C0
+start_transition,Gameplay level 7 arg0 delay120,TitleScene_update 0x08004B18-0x08004B40
+start_sfx,SFX6 volume80,"one-shot 0x08004B2A; callee 0x08001B74 consumes only r0/r1, incoming r2 is non-semantic"
+title_music,none code-proven,no TitleScene loop-player call; exhaustive public-demo loop-player scan has only three gameplay calls

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
+import hashlib
+import struct
 import os
 import tempfile
 import sys
@@ -306,6 +308,97 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('const u16 {name}_collision', generator)
         self.assertIn('const u16 gb_level07_collision[696]', level7)
 
+    def test_canonical_audio_table_payloads_and_final_sketch_call(self):
+        rom_path = Path(os.environ['GRAVEBLOOD_ROM'])
+        rom = rom_path.read_bytes()
+        self.assertEqual(
+            'e0d7878d2f41dcdeedcc306585bdaf18f39abc2ae42a4bc338514d49feb9449b',
+            hashlib.sha256(rom).hexdigest(),
+        )
+        expected = [
+            (0x088F68C8, 0x18435C),
+            (0x087FBE00, 0x0FAAC5),
+            (0x08663E00, 0x198000),
+            (0x08A82954, 0x0D6D),
+            (0x08A83EF4, 0x0248),
+            (0x08A8413C, 0x4482),
+            (0x08A885C0, 0x3A67),
+            (0x08A8222C, 0x0728),
+            (0x08A82140, 0x00EC),
+            (0x08A7E110, 0x3476),
+            (0x08A7AC24, 0x34EC),
+            (0x08A81588, 0x0BB6),
+            (0x08A836C4, 0x082D),
+            (0x0865669C, 0xD762),
+        ]
+        actual = [struct.unpack_from('<II', rom, 0x65662C + i * 8) for i in range(14)]
+        self.assertEqual(expected, actual)
+
+        extractor = ROOT / 'tools' / 'extract_audio.py'
+        self.assertTrue(extractor.is_file(), extractor)
+        audio_dir = ROOT / 'reconstruction' / 'data' / 'audio'
+        for sound_id, (pointer, length) in enumerate(expected):
+            pcm = audio_dir / f'sample_{sound_id:02d}.pcm'
+            self.assertTrue(pcm.is_file(), pcm)
+            start = pointer - 0x08000000
+            self.assertGreaterEqual(start, 0)
+            self.assertLessEqual(start + length, len(rom))
+            self.assertEqual(rom[start:start + length], pcm.read_bytes(), pcm.name)
+
+        self.assertTrue(all(length > 1_000_000 for _, length in expected[:3]))
+        self.assertTrue(all(length < 100_000 for _, length in expected[3:]))
+        call_sites = (ROOT / 'data' / 'audio_call_sites.csv').read_text(encoding='utf-8')
+        self.assertIn('0x08003802', call_sites)
+        self.assertIn(',13,', call_sites)
+        self.assertIn('final-sketch', call_sites.lower())
+        self.assertTrue(call_sites.startswith('call_address,target,caller,sound_id,play_mode,volume,'))
+        self.assertIn('0x08002E22,0x08001B74,npc_state2_fresh_a_activation,3,one-shot,80', call_sites)
+        self.assertIn('state-2 dialogue interaction activation,high', call_sites)
+        self.assertIn('0x08003078,0x08001B74,npc_state4_fresh_a_activation,3,one-shot,80', call_sites)
+        self.assertIn('state-4 collection interaction activation,high', call_sites)
+        self.assertIn('0x0800426C,0x08001B74,Fgtile_update,5,one-shot,80,generic scene portal activation,high', call_sites)
+        self.assertIn('0x08004B2A,0x08001B74,TitleScene_update,6,one-shot,80,fresh START title transition,high', call_sites)
+        self.assertIn('0x080089F8,0x08001B74,Player_update,4,one-shot,80,social secondary topic cursor up,high', call_sites)
+        self.assertIn('0x0800909C,0x08001B74,Player_update,4,one-shot,80,social secondary topic cursor down,high', call_sites)
+        self.assertIn('0x0800368E,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -2 terminal,high', call_sites)
+        self.assertIn('0x08003748,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -1 terminal,high', call_sites)
+        self.assertIn('0x0800389A,0x08001B74,state4_final_collection_handler,7,one-shot,80,state4 dialogue opcode -3 terminal,high', call_sites)
+
+        loop_rows = [line for line in call_sites.splitlines() if ',0x08001BDC,' in line]
+        self.assertEqual(3, len(loop_rows), loop_rows)
+        self.assertEqual(
+            ['0x08005A8A', '0x08008AA0', '0x08009428'],
+            [row.split(',', 1)[0] for row in loop_rows],
+        )
+        self.assertTrue(all(',dynamic,2,144,' in row for row in loop_rows), loop_rows)
+        self.assertFalse(any(',2,one-shot,' in row for row in call_sites.splitlines()))
+
+        music_routes = (ROOT / 'data' / 'audio_music_routes.csv').read_text(encoding='utf-8')
+        self.assertIn('sample 2 unreachable/orphaned in public demo', music_routes)
+        self.assertIn(',2,high,', music_routes)
+        self.assertIn('exhaustive full-ROM loop-player scan finds exactly three calls', music_routes)
+
+        music_runtime = (ROOT / 'data' / 'audio_music_runtime.csv').read_text(encoding='utf-8')
+        self.assertIn('loop_player_signature,"(sound_id, mode, volume)"', music_runtime)
+        self.assertIn('one_shot_signature,"(sound_id, volume)"', music_runtime)
+        self.assertIn('fade_table_runtime,0x030013C0', music_runtime)
+        self.assertIn('fade_table_rom,0x08A8E370', music_runtime)
+        self.assertIn('fade_table_words,75', music_runtime)
+        self.assertIn('fade_terminal_quirk', music_runtime)
+        self.assertIn('channel_record_bytes,28', music_runtime)
+        self.assertIn('mode_1_end_behavior,deactivate at aligned sample end', music_runtime)
+        self.assertIn('mode_2_end_behavior,loop by resetting sample cursor', music_runtime)
+        self.assertIn('loop_reserved_flag,channel+0x18=1', music_runtime)
+        self.assertIn('allocator_policy,first channel with mode=0 and reserved=0 among eight records', music_runtime)
+
+        fade = (ROOT / 'data' / 'audio_music_fade.csv').read_text(encoding='utf-8').splitlines()
+        self.assertEqual('index,value', fade[0])
+        self.assertEqual('0,142', fade[1])
+        self.assertEqual('70,2', fade[71])
+        self.assertEqual('71,0', fade[72])
+        self.assertEqual('74,0', fade[75])
+        self.assertEqual(76, len(fade))
+
     def test_generator_is_deterministic_against_checked_in_outputs(self):
         g = self._module()
         with tempfile.TemporaryDirectory() as td:
@@ -319,6 +412,97 @@ class CfaAssetTests(unittest.TestCase):
                 self.assertTrue(expected.is_file(), rel)
                 self.assertEqual(expected.read_bytes(), (out / rel).read_bytes(), rel)
 
+
+    def test_title_scene_canonical_asset_contract(self):
+        extractor = ROOT / 'tools' / 'extract_title_scene.py'
+        self.assertTrue(extractor.is_file(), 'tools/extract_title_scene.py')
+        spec = importlib.util.spec_from_file_location('extract_title_scene', extractor)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        assets = module.extract_title_assets(rom)
+        self.assertEqual(0x08019CC4, module.TITLE_BG_TILES_ADDR)
+        self.assertEqual(0x0802B148, module.TITLE_TRANSLATION_ADDR)
+        self.assertEqual(0x0802BB0C, module.TITLE_PALETTE_ADDR)
+        self.assertEqual(0x08655814, module.TITLE_MAP_ADDR)
+        self.assertEqual(0x0802BCCC, module.TITLE_BG_PALETTE_COUNT_ADDR)
+        self.assertEqual(0x08310654, module.TITLE_OBJ_TILES_ADDR)
+        self.assertEqual(0x8000, module.TITLE_OBJ_TILES_BYTES)
+        self.assertEqual(0x08366E58, module.TITLE_OBJ_PALETTE_ADDR)
+        self.assertEqual(0x08366F10, module.TITLE_OBJ_PALETTE_COUNT_ADDR)
+        self.assertEqual(0x08652DB4, module.TITLE_OBJ_HIGH_PALETTE_ADDR)
+        self.assertEqual(0xD800, len(assets.bg_tiles))
+        self.assertEqual(223, len(assets.palette))
+        self.assertEqual(0x8000, len(assets.obj_tiles))
+        self.assertEqual(91, len(assets.obj_palette))
+        self.assertEqual(32, len(assets.obj_high_palette))
+        self.assertEqual(600, len(assets.map_entries))
+        self.assertEqual(4, len(assets.anim_a))
+        self.assertEqual(4, len(assets.anim_b))
+        self.assertTrue(all(len(frame) == 0xC00 for frame in assets.anim_a))
+        self.assertTrue(all(len(frame) == 0x600 for frame in assets.anim_b))
+        self.assertEqual(b'PRESS START...', assets.prompt_text)
+        self.assertEqual(14, len(assets.prompt_tiles))
+        self.assertEqual(14, len(assets.blank_tiles))
+        self.assertTrue(all(tile == assets.blank_tiles[0] for tile in assets.blank_tiles))
+
+        raw0 = struct.unpack_from('<H', rom, module.TITLE_MAP_ADDR - module.ROM_BASE)[0]
+        translated0 = struct.unpack_from('<H', rom, module.TITLE_TRANSLATION_ADDR - module.ROM_BASE + raw0 * 2)[0]
+        self.assertEqual(translated0, assets.map_entries[0])
+        first_prompt = struct.unpack_from(
+            '<H', rom, module.TITLE_TRANSLATION_ADDR - module.ROM_BASE + (ord('P') + 32) * 2
+        )[0]
+        self.assertEqual(first_prompt, assets.prompt_tiles[0])
+        self.assertEqual(
+            struct.unpack_from('<H', rom, module.TITLE_TRANSLATION_ADDR - module.ROM_BASE + 4)[0],
+            assets.underlay_tile,
+        )
+
+    def test_title_scene_extractor_emits_runtime_evidence(self):
+        extractor = ROOT / 'tools' / 'extract_title_scene.py'
+        self.assertTrue(extractor.is_file(), 'tools/extract_title_scene.py')
+        spec = importlib.util.spec_from_file_location('extract_title_scene_emit', extractor)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            module.generate(ROOT, out, Path(os.environ['GRAVEBLOOD_ROM']))
+            runtime = out / 'reconstruction/data/title_assets.c'
+            semantics = out / 'data/title_scene_semantics.csv'
+            self.assertTrue(runtime.is_file())
+            self.assertTrue(semantics.is_file())
+            ctext = runtime.read_text(encoding='utf-8')
+            self.assertIn('gb_title_bg_tiles[0xD800 / 2]', ctext)
+            self.assertIn('gb_title_bg_palette[GB_TITLE_BG_PALETTE_COUNT]', ctext)
+            self.assertIn('gb_title_obj_tiles[GB_TITLE_OBJ_TILE_HALFWORDS]', ctext)
+            self.assertIn('gb_title_obj_palette[GB_TITLE_OBJ_PALETTE_COUNT]', ctext)
+            self.assertIn('gb_title_obj_high_palette[GB_TITLE_OBJ_HIGH_PALETTE_COUNT]', ctext)
+            self.assertIn('const u16 gb_title_underlay_tile', ctext)
+            self.assertIn('gb_title_map[GB_TITLE_MAP_CELLS]', ctext)
+            self.assertIn('gb_title_anim_a[GB_TITLE_ANIMATION_STATES]', ctext)
+            self.assertIn('gb_title_anim_b[GB_TITLE_ANIMATION_STATES]', ctext)
+            self.assertIn('gb_title_prompt_tiles[GB_TITLE_PROMPT_LENGTH]', ctext)
+            stext = semantics.read_text(encoding='utf-8')
+            self.assertIn('display_control,0x1F00', stext)
+            import csv
+            rows = {row['fact']: row for row in csv.DictReader(stext.splitlines())}
+            self.assertEqual('BG0=0x1B80 BG1=0x1C81 BG2=0x1D82 BG3=0x1E83', rows['bg_controls']['value'])
+            self.assertIn('artwork_destination,BG1 screenblock28', stext)
+            self.assertIn('prompt_destination,BG0 screenblock27', stext)
+            self.assertIn('backing_destination,"BG2 screenblock29 + BG3 screenblock30, 64x32"', stext)
+            self.assertIn('bg_palette_count,223', stext)
+            self.assertIn('obj_palette_count,91', stext)
+            self.assertIn('obj_high_palette_count,32', stext)
+            self.assertIn('obj_mapping,2D', stext)
+            self.assertIn('display_setup_blanking,forced blank set during setup and cleared before return', stext)
+            self.assertIn('scroll_offsets,BG0HOFS/BG0VOFS..BG3HOFS/BG3VOFS=0', stext)
+            self.assertEqual('attr0=0x02F0 attr1=0x01F0 attr2=0x0C00', rows['hidden_oam']['value'])
+            self.assertIn('start_sfx,SFX6 volume80', stext)
 
 if __name__ == '__main__':
     unittest.main()

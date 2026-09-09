@@ -22,10 +22,25 @@
 #define GB_STORY_UI_HEIGHT (GB_STORY_UI_ROWS * 8)
 #define GB_TEXT_BACKGROUND_INDEX 1
 #define GB_TEXT_FOREGROUND_INDEX 2
+#define GB_TITLE_ANIM_A_VRAM_OFFSET 0x2F00
+#define GB_TITLE_ANIM_B_VRAM_OFFSET 0x3B00
+#define GB_TITLE_PROMPT_X 9
+#define GB_TITLE_PROMPT_Y 9
+#define GB_WARDROBE_BG_VRAM_OFFSET 0x3000
+#define GB_WARDROBE_BG_TILE_BASE (GB_WARDROBE_BG_VRAM_OFFSET / 64)
+#define GB_WARDROBE_BG_MAP_X 7
+#define GB_WARDROBE_BG_MAP_Y 4
+#define GB_WARDROBE_BG_MAP_WIDTH 16
+#define GB_WARDROBE_BG_MAP_HEIGHT 8
+#define GB_WARDROBE_PREVIEW_Y 48
 
 static const GbLevelAssets* gb_video_level;
 static u8 gb_story_ui_pixels[GB_STORY_UI_WIDTH * GB_STORY_UI_HEIGHT];
 static u8 gb_monster_animation_counter;
+
+static void gb_story_ui_begin(void);
+static void gb_story_ui_text(const char* text, int* x, int* y);
+static void gb_story_ui_newline(int* x, int* y);
 
 static void gb_copy_u16(volatile u16* dst, const u16* src, int count)
 {
@@ -79,6 +94,58 @@ static void gb_load_fixed_maps(const GbLevelAssets* level)
     }
 }
 
+static void gb_video_configure_gameplay_display(void)
+{
+    BGCTRL[0] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG0_SCREENBLOCK) | BG_PRIORITY(0);
+    BGCTRL[1] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG1_SCREENBLOCK) | BG_PRIORITY(1);
+    BGCTRL[2] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG2_SCREENBLOCK) | BG_PRIORITY(2);
+    BGCTRL[3] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG3_SCREENBLOCK) | BG_PRIORITY(3);
+    REG_DISPCNT = MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON | OBJ_1D_MAP;
+}
+
+static void gb_video_configure_title_display(void)
+{
+    BGCTRL[0] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG0_SCREENBLOCK) | BG_PRIORITY(0);
+    BGCTRL[1] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG1_SCREENBLOCK) | BG_PRIORITY(1);
+    BGCTRL[2] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG2_SCREENBLOCK) | BG_PRIORITY(2);
+    BGCTRL[3] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG3_SCREENBLOCK) | BG_PRIORITY(3);
+    REG_DISPCNT = MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON;
+}
+
+static void gb_video_hide_all_oam(void)
+{
+    volatile u16* oam = (volatile u16*)OAM;
+    for(int i = 0; i < 128; ++i)
+    {
+        oam[i * 4] = 160;
+        oam[i * 4 + 1] = 0;
+        oam[i * 4 + 2] = 0;
+        oam[i * 4 + 3] = 0;
+    }
+}
+
+static void gb_video_hide_title_oam(void)
+{
+    volatile u16* oam = (volatile u16*)OAM;
+    for(int i = 0; i < 128; ++i)
+    {
+        oam[i * 4] = 0x02F0;
+        oam[i * 4 + 1] = 0x01F0;
+        oam[i * 4 + 2] = 0x0C00;
+        oam[i * 4 + 3] = 0;
+    }
+}
+
+static void gb_video_restore_gameplay_obj_assets(void)
+{
+    gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256);
+    gb_copy_u16(OBJ_COLORS + GB_PLAYER_PALETTE_BANK * 16, gb_player_obj_palette, 16);
+    gb_copy_u16((volatile u16*)SPR_VRAM(0), gb_player_obj_tiles, GB_PLAYER_FRAME_COUNT * 128);
+    gb_copy_u16((volatile u16*)SPR_VRAM(0) + GB_PLAYER_FRAME_COUNT * 128,
+                gb_monster_obj_frames,
+                GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS);
+}
+
 void gb_video_wait_vblank(void)
 {
     while(REG_VCOUNT >= 160)
@@ -91,39 +158,176 @@ void gb_video_wait_vblank(void)
 
 void gb_video_init(void)
 {
-    BGCTRL[0] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG0_SCREENBLOCK) | BG_PRIORITY(0);
-    BGCTRL[1] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG1_SCREENBLOCK) | BG_PRIORITY(1);
-    BGCTRL[2] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG2_SCREENBLOCK) | BG_PRIORITY(2);
-    BGCTRL[3] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(GB_BG3_SCREENBLOCK) | BG_PRIORITY(3);
+    gb_video_configure_gameplay_display();
     gb_video_set_camera(0, 0);
-    REG_DISPCNT = MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON | OBJ_1D_MAP;
 
     gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK), GB_STREAM_MAP_CELLS);
     gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK), GB_STREAM_MAP_CELLS);
     gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK), GB_STREAM_MAP_CELLS);
     gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG3_SCREENBLOCK), GB_STREAM_MAP_CELLS);
 
-    volatile u16* oam = (volatile u16*)OAM;
-    for(int i = 0; i < 128; ++i)
-    {
-        oam[i * 4] = 160;
-        oam[i * 4 + 1] = 0;
-        oam[i * 4 + 2] = 0;
-        oam[i * 4 + 3] = 0;
-    }
+    gb_video_hide_all_oam();
 
-    gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256);
-    gb_copy_u16(OBJ_COLORS + GB_PLAYER_PALETTE_BANK * 16, gb_player_obj_palette, 16);
-    gb_copy_u16((volatile u16*)SPR_VRAM(0), gb_player_obj_tiles, GB_PLAYER_FRAME_COUNT * 128);
-    gb_copy_u16((volatile u16*)SPR_VRAM(0) + GB_PLAYER_FRAME_COUNT * 128,
-                gb_monster_obj_frames,
-                GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS);
+    gb_video_restore_gameplay_obj_assets();
     gb_video_level = 0;
     gb_monster_animation_counter = 0;
 }
 
+void gb_video_title_set_animation(u8 state)
+{
+    if(state >= GB_TITLE_ANIMATION_STATES)
+    {
+        state = 0;
+    }
+    volatile u16* char_mem = (volatile u16*)CHAR_BASE_ADR(0);
+    gb_copy_u16(char_mem + GB_TITLE_ANIM_A_VRAM_OFFSET / 2,
+                gb_title_anim_a[state], GB_TITLE_ANIM_A_HALFWORDS);
+    gb_copy_u16(char_mem + GB_TITLE_ANIM_B_VRAM_OFFSET / 2,
+                gb_title_anim_b[state], GB_TITLE_ANIM_B_HALFWORDS);
+}
+
+void gb_video_title_set_prompt_visible(int visible)
+{
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+    const u16* tiles = visible ? gb_title_prompt_tiles : gb_title_blank_tiles;
+    for(int i = 0; i < GB_TITLE_PROMPT_LENGTH; ++i)
+    {
+        map[GB_TITLE_PROMPT_Y * 32 + GB_TITLE_PROMPT_X + i] = tiles[i];
+    }
+}
+
+void gb_video_load_title(void)
+{
+    gb_video_level = 0;
+    gb_video_set_camera(0, 0);
+    gb_video_configure_title_display();
+    gb_video_hide_title_oam();
+
+    gb_copy_u16(BG_COLORS, gb_title_bg_palette, GB_TITLE_BG_PALETTE_COUNT);
+    gb_copy_u16((volatile u16*)CHAR_BASE_ADR(0), gb_title_bg_tiles, 0xD800 / 2);
+    gb_copy_u16((volatile u16*)SPR_VRAM(0), gb_title_obj_tiles, GB_TITLE_OBJ_TILE_HALFWORDS);
+    gb_copy_u16(OBJ_COLORS, gb_title_obj_palette, GB_TITLE_OBJ_PALETTE_COUNT);
+    gb_copy_u16(OBJ_COLORS + 224, gb_title_obj_high_palette, GB_TITLE_OBJ_HIGH_PALETTE_COUNT);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG3_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK);
+    for(int y = 0; y < GB_TITLE_MAP_HEIGHT; ++y)
+    {
+        for(int x = 0; x < GB_TITLE_MAP_WIDTH; ++x)
+        {
+            map[y * 32 + x] = gb_title_map[y * GB_TITLE_MAP_WIDTH + x];
+        }
+    }
+
+    volatile u16* backing_left = (volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK);
+    volatile u16* backing_right = (volatile u16*)MAP_BASE_ADR(GB_BG3_SCREENBLOCK);
+    for(int i = 0; i < GB_STREAM_MAP_CELLS; ++i)
+    {
+        backing_left[i] = gb_title_underlay_tile;
+        backing_right[i] = gb_title_underlay_tile;
+    }
+
+    gb_video_title_set_animation(0);
+    gb_video_title_set_prompt_visible(1);
+}
+
+static void gb_wardrobe_ui_upload(void)
+{
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+    for(int row = 0; row < GB_STORY_UI_ROWS; ++row)
+    {
+        for(int col = 0; col < GB_STORY_UI_COLUMNS; ++col)
+        {
+            const int slot = row * GB_STORY_UI_COLUMNS + col;
+            const u16 tile_id = (u16)(1 + slot);
+            volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
+            map[row * 32 + col] = tile_id;
+            for(int py = 0; py < 8; ++py)
+            {
+                for(int pair = 0; pair < 4; ++pair)
+                {
+                    const int px = col * 8 + pair * 2;
+                    const int source_y = row * 8 + py;
+                    const u8 lo = gb_story_ui_pixels[source_y * GB_STORY_UI_WIDTH + px];
+                    const u8 hi = gb_story_ui_pixels[source_y * GB_STORY_UI_WIDTH + px + 1];
+                    tile[py * 4 + pair] = (u16)(lo | ((u16)hi << 8));
+                }
+            }
+        }
+    }
+}
+
+void gb_video_draw_wardrobe(u8 selector)
+{
+    if(selector >= GB_WARDROBE_CHOICE_COUNT)
+    {
+        selector = 0;
+    }
+
+    volatile u16* char_mem = (volatile u16*)CHAR_BASE_ADR(0);
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+    volatile u16* oam = (volatile u16*)OAM;
+
+    gb_copy_u16(char_mem + GB_WARDROBE_BG_VRAM_OFFSET / 2,
+                gb_wardrobe_bg_pages[selector], GB_WARDROBE_BG_PAGE_HALFWORDS);
+
+    for(int y = 0; y < GB_WARDROBE_BG_MAP_HEIGHT; ++y)
+    {
+        for(int x = 0; x < GB_WARDROBE_BG_MAP_WIDTH; ++x)
+        {
+            map[(GB_WARDROBE_BG_MAP_Y + y) * 32 + GB_WARDROBE_BG_MAP_X + x] =
+                (u16)(GB_WARDROBE_BG_TILE_BASE + y * GB_WARDROBE_BG_MAP_WIDTH + x);
+        }
+    }
+
+    gb_story_ui_begin();
+    int tx = 0;
+    int ty = 0;
+    gb_story_ui_text("Wardrobe", &tx, &ty);
+    gb_story_ui_newline(&tx, &ty);
+    gb_story_ui_text(gb_wardrobe_labels[selector], &tx, &ty);
+    gb_story_ui_newline(&tx, &ty);
+    gb_story_ui_text("(B) to exit", &tx, &ty);
+    gb_wardrobe_ui_upload();
+
+    gb_video_hide_all_oam();
+    for(int i = 0; i < GB_WARDROBE_CHOICE_COUNT; ++i)
+    {
+        gb_copy_u16((volatile u16*)SPR_VRAM(0) + i * GB_WARDROBE_PREVIEW_HALFWORDS,
+                    gb_wardrobe_preview_tiles[i], GB_WARDROBE_PREVIEW_HALFWORDS);
+        const int x = 16 + i * 16;
+        oam[i * 4] = (u16)GB_WARDROBE_PREVIEW_Y | GB_OBJ_TALL | GB_OBJ_256_COLOR;
+        oam[i * 4 + 1] = (u16)x | GB_OBJ_SIZE_2;
+        oam[i * 4 + 2] = (u16)(i * 16);
+        oam[i * 4 + 3] = 0;
+    }
+}
+
+void gb_video_load_wardrobe(void)
+{
+    gb_video_level = &gb_level07_assets;
+    gb_video_set_camera(0, 0);
+    BGCTRL[0] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) |
+                SCREEN_BASE(GB_BG0_SCREENBLOCK) | BG_PRIORITY(0);
+    REG_DISPCNT = MODE_0 | BG0_ON | OBJ_ON | OBJ_1D_MAP;
+    gb_copy_u16(BG_COLORS, gb_level07_assets.bg_palette, 256);
+    gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG3_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    gb_video_hide_all_oam();
+    gb_video_draw_wardrobe(0);
+}
+
 void gb_video_load_level(const GbLevelAssets* level)
 {
+    gb_video_configure_gameplay_display();
+    gb_video_set_camera(0, 0);
+    gb_video_restore_gameplay_obj_assets();
     gb_video_level = level;
     gb_copy_u16(BG_COLORS, level->bg_palette, 256);
     gb_copy_u16((volatile u16*)CHAR_BASE_ADR(0), level->bg_tiles, level->bg_tile_halfwords);

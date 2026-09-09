@@ -1,0 +1,25 @@
+fact,value,evidence
+sample_format,signed 8-bit PCM @ 16384 Hz,custom mixer consumes one signed byte per output sample; all payload lengths/durations use 16384 Hz
+mixer_channels,8,0x08001BDC scans eight 0x1C-byte channel records
+channel_record_bytes,28,channel allocator advances by 0x1C bytes for each of eight records
+mode_1_end_behavior,deactivate at aligned sample end,0x08001940 mixer clears the channel mode when mode==1 reaches its aligned payload end
+mode_2_end_behavior,loop by resetting sample cursor,0x08001940 mixer resets the cursor to the sample start when a non-one-shot active mode reaches its aligned payload end
+loop_reserved_flag,channel+0x18=1,0x08001BDC marks the selected loop channel reserved so ordinary one-shots cannot steal it
+allocator_policy,first channel with mode=0 and reserved=0 among eight records,0x08001B74/0x08001BDC scan records in canonical order and reject active or reserved slots
+one_shot_signature,"(sound_id, volume)",0x08001B74 consumes incoming r0/r1; incoming r2 is overwritten and has no audio semantics
+loop_player_signature,"(sound_id, mode, volume)","0x08001BDC consumes r0 sound ID, stores r1 mode byte, stores r2 volume word"
+music_mode,2,all three exhaustive loop-player calls set r1=2
+music_start_volume,144,all three exhaustive loop-player calls set r2=0x90
+loop_player_calls,0x08005A8A 0x08008AA0 0x08009428,exhaustive full-ROM Thumb BL scan
+title_music,none,no TitleScene loop-player call; title is absent from the exhaustive loop-player call set
+selector_desired,Player+0x1CC,0x08005A6E/0x08008328/0x08008A92/0x08009414
+selector_applied,Player+0x1D0,0x08008330 comparison and 0x08008AA8 copy after replacement
+selector_id_table,Player+0x1D4: [0]=0 [1]=1,Player constructor initializes the two reachable selector slots; level 10 only forces selector 1
+sample_2_reachability,unreachable/orphaned in public demo,selector initialization/writes expose 0/1 only; no direct loop or one-shot call to sound ID 2
+fade_counter,global+0x68 (base used by Player_update),0x08008332 tests it; 0x08008A74 increments/stores it
+fade_table_runtime,0x030013C0,literal used by Player_update music volume update
+fade_table_rom,0x08A8E370,"startup copies ROM 0x08A8D738 to IWRAM 0x03000788, giving exact relocation to runtime 0x030013C0"
+fade_table_words,75,"values 142,140,...,2,0,0,0,0"
+fade_replace_threshold,75,"desired!=applied path increments through counter 75, stops channel 0, starts selected loop, copies desired->applied, resets counter"
+fade_terminal_quirk,counter75 indexes one word past the 75-word fade table (0x03001704) before immediate channel0 stop/restart,0x08008A70 indexes before cmp #0x4B; word following ROM table is 0x03001704
+interaction_restore_seed,byte loaded from 0x0300062C is stored to fade counter before 0x08009428,0x080084A0 loads r6 from global base byte; 0x08009426 stores r6 to [global+0x68]

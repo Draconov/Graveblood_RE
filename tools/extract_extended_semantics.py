@@ -2195,6 +2195,11 @@ def extract_player_wardrobe_state_semantics(data: bytes) -> list[dict]:
     if _unpack_halfwords(data, 0x08009588, 4) != (0x2690, 0x1E43, 0x00B6, 0x51A3):
         raise ValueError("Wardrobe selector decrement path drifted")
 
+    if _unpack_halfwords(data, 0x08008318, 3) != (0x681B, 0x2B06, 0xD101):
+        raise ValueError("Wardrobe hidden B+SELECT entry path drifted")
+    if _unpack_halfwords(data, 0x08009672, 2) != (0x2200, 0x2107):
+        raise ValueError("Wardrobe Level-7 exit request drifted")
+
     live_bank_init_off = init_ram_to_rom_off(PLAYER_LIVE_GRAPHICS_BANK_RAM)
     live_bank_start = struct.unpack_from("<I", data, live_bank_init_off)[0]
     if live_bank_start != 15:
@@ -2218,6 +2223,15 @@ def extract_player_wardrobe_state_semantics(data: bytes) -> list[dict]:
          "confidence":"high"},
         {"fact":"normal_navigation_inputs", "value":"Left;Right;B",
          "evidence":"fresh-key checks at 0x08008FBE/0x08008FD2/0x08008FE8 use GBA masks 0x20/0x10/0x02",
+         "confidence":"high"},
+        {"fact":"hidden_entry_input", "value":"keys_current == 0x0006 (B+SELECT)",
+         "evidence":"0x08008318 loads current keys; 0x0800831A compares exact value 6 and 0x0800831C skips the scene request when unequal",
+         "confidence":"high"},
+        {"fact":"exit_behavior", "value":"fresh B -> Gameplay Level 7",
+         "evidence":"Wardrobe B path uses fresh-key logic; 0x08009672 sets variant 0 and 0x08009674 sets level 7 before scene request",
+         "confidence":"high"},
+        {"fact":"wardrobe_navigation_sfx", "value":"none proven",
+         "evidence":"SFX11 call sites 0x0800898E and 0x0800904E are outside the selector Left/Right branches 0x0800951E..0x080095C0",
          "confidence":"high"},
         {"fact":"confirm_input", "value":"none recovered",
          "evidence":"Wardrobe browser input path exposes Left/Right navigation and '(B) to exit'; no A-confirm/equip branch is present in the recovered browser path",

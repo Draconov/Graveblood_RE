@@ -1,0 +1,42 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08005a60 <_start>:
+ 8005a60: fccf 4e58    	<unknown>
+ 8005a64: 6833         	ldr	r3, [r6]
+ 8005a66: 6a62         	ldr	r2, [r4, #0x24]
+ 8005a68: 2b0a         	cmp	r3, #0xa
+ 8005a6a: d100         	bne	0x8005a6e <_start+0xe>  @ imm = #0x0
+ 8005a6c: e098         	b	0x8005ba0 <_start+0x140> @ imm = #0x130
+ 8005a6e: 23e6         	movs	r3, #0xe6
+ 8005a70: 005b         	lsls	r3, r3, #0x1
+ 8005a72: 58d3         	ldr	r3, [r2, r3]
+ 8005a74: 6ba9         	ldr	r1, [r5, #0x38]
+ 8005a76: 2902         	cmp	r1, #0x2
+ 8005a78: d001         	beq	0x8005a7e <_start+0x1e> @ imm = #0x2
+ 8005a7a: 2100         	movs	r1, #0x0
+ 8005a7c: 63a9         	str	r1, [r5, #0x38]
+ 8005a7e: 3374         	adds	r3, #0x74
+ 8005a80: 009b         	lsls	r3, r3, #0x2
+ 8005a82: 18d3         	adds	r3, r2, r3
+ 8005a84: 6858         	ldr	r0, [r3, #0x4]
+ 8005a86: 2290         	movs	r2, #0x90
+ 8005a88: 2102         	movs	r1, #0x2
+ 8005a8a: f7fc f8a7    	bl	0x8001bdc <_start+0xffffffffffffc17c> @ imm = #-0x3eb2
+ 8005a8e: 22e6         	movs	r2, #0xe6
+ 8005a90: 4b4d         	ldr	r3, [pc, #0x134]        @ 0x168 <_start+0x168>
+ 8005a92: 6018         	str	r0, [r3]
+ 8005a94: 6a63         	ldr	r3, [r4, #0x24]
+ 8005a96: 0052         	lsls	r2, r2, #0x1
+ 8005a98: 5899         	ldr	r1, [r3, r2]
+ 8005a9a: 3204         	adds	r2, #0x4
+ 8005a9c: 5099         	str	r1, [r3, r2]
+ 8005a9e: 21e1         	movs	r1, #0xe1
+ 8005aa0: 6cf6         	ldr	r6, [r6, #0x4c]
+ 8005aa2: 0109         	lsls	r1, r1, #0x4
+ 8005aa4: 0030         	movs	r0, r6
+ 8005aa6: f00b fc87    	bl	0x80113b8 <_start+0xb958> @ imm = #0xb90e
+ 8005aaa: 2118         	movs	r1, #0x18
+ 8005aac: f00b fcbe    	bl	0x801142c <_start+0xb9cc> @ imm = #0xb97c

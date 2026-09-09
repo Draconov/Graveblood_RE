@@ -1,0 +1,37 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08008320 <_start>:
+ 8008320: fd67 4b92    	<unknown>
+ 8008324: 469a         	mov	r10, r3
+ 8008326: 4e92         	ldr	r6, [pc, #0x248]        @ 0x250 <_start+0x250>
+ 8008328: 22e6         	movs	r2, #0xe6
+ 800832a: 0052         	lsls	r2, r2, #0x1
+ 800832c: 58a1         	ldr	r1, [r4, r2]
+ 800832e: 3204         	adds	r2, #0x4
+ 8008330: 58a2         	ldr	r2, [r4, r2]
+ 8008332: 6eab         	ldr	r3, [r5, #0x68]
+ 8008334: 4291         	cmp	r1, r2
+ 8008336: d002         	beq	0x800833e <_start+0x1e> @ imm = #0x4
+ 8008338: 2b4a         	cmp	r3, #0x4a
+ 800833a: dc00         	bgt	0x800833e <_start+0x1e> @ imm = #0x0
+ 800833c: e398         	b	0x8008a70 <_start+0x750> @ imm = #0x730
+ 800833e: 2b4b         	cmp	r3, #0x4b
+ 8008340: d100         	bne	0x8008344 <_start+0x24> @ imm = #0x0
+ 8008342: e3a1         	b	0x8008a88 <_start+0x768> @ imm = #0x742
+ 8008344: 22f0         	movs	r2, #0xf0
+ 8008346: 58a3         	ldr	r3, [r4, r2]
+ 8008348: 2b1e         	cmp	r3, #0x1e
+ 800834a: dd00         	ble	0x800834e <_start+0x2e> @ imm = #0x0
+ 800834c: e221         	b	0x8008792 <_start+0x472> @ imm = #0x442
+ 800834e: 3301         	adds	r3, #0x1
+ 8008350: 50a3         	str	r3, [r4, r2]
+ 8008352: 6832         	ldr	r2, [r6]
+ 8008354: 0013         	movs	r3, r2
+ 8008356: 3b08         	subs	r3, #0x8
+ 8008358: 1e59         	subs	r1, r3, #0x1
+ 800835a: 418b         	sbcs	r3, r1
+ 800835c: 2101         	movs	r1, #0x1
+ 800835e: 425b         	rsbs	r3, r3, #0

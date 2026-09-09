@@ -1,0 +1,6 @@
+call_address,caller,route,selector_source,sound_id,confidence,evidence
+0x08005A8A,GameplayScene_enter,default gameplay entry,Player+0x1CC == 0 after Player constructor,0,high,0x080062F8 initializes Player+0x1CC=0; 0x08005A6E reads it and Player+0x1D4[0] is 0
+0x08005A8A,GameplayScene_enter,level 10 forced gameplay entry,level id == 10 forces Player+0x1CC=1 at 0x08005BA0,1,high,0x08005A68 compares level id to 10; 0x08005BA0 stores selector 1; Player+0x1D4[1] is 1
+0x08008AA0,Player_update,interaction music restore,current Player+0x1CC selector,dynamic 0/1,high,0x08008A88 stops reserved channel 0 then reloads Player+0x1D4[Player+0x1CC]
+0x08009428,Player_update,interaction music start/restore,current Player+0x1CC selector,dynamic 0/1,high,0x08009414 loads Player+0x1D4[Player+0x1CC] and calls loop player
+n/a,code-proven unreachable,sample 2 unreachable/orphaned in public demo,no reachable selector value 2 and no direct play call,2,high,exhaustive full-ROM loop-player scan finds exactly three calls; all route through Player+0x1D4 using selector 0/1; exhaustive one-shot scan has no sound ID 2

@@ -1,0 +1,24 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08005914 <_start>:
+ 8005914: b510         	push	{r4, lr}
+ 8005916: f004 fc77    	bl	0x800a208 <_start+0x48f4> @ imm = #0x48ee
+ 800591a: 4809         	ldr	r0, [pc, #0x24]         @ 0x2c <_start+0x2c>
+ 800591c: f7ff ff1e    	bl	0x800575c <_start+0xfffffffffffffe48> @ imm = #-0x1c4
+ 8005920: 4808         	ldr	r0, [pc, #0x20]         @ 0x30 <_start+0x30>
+ 8005922: 4b09         	ldr	r3, [pc, #0x24]         @ 0x34 <_start+0x34>
+ 8005924: 6a02         	ldr	r2, [r0, #0x20]
+ 8005926: 601a         	str	r2, [r3]
+ 8005928: 2200         	movs	r2, #0x0
+ 800592a: 4b08         	ldr	r3, [pc, #0x20]         @ 0x38 <_start+0x38>
+ 800592c: 61da         	str	r2, [r3, #0x1c]
+ 800592e: f7ff ffb1    	bl	0x8005894 <_start+0xffffffffffffff80> @ imm = #-0x9e
+ 8005932: 2005         	movs	r0, #0x5
+ 8005934: f004 fee4    	bl	0x800a700 <_start+0x4dec> @ imm = #0x4dc8
+ 8005938: bc10         	pop	{r4}
+ 800593a: bc01         	pop	{r0}
+ 800593c: 4700         	bx	r0
+ 800593e: 46c0         	mov	r8, r8

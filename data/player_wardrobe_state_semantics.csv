@@ -3,6 +3,9 @@ selector_field,player+0x240,Player constructor zeros +0x240; Wardrobe text/highl
 selector_initial_value,0,0x0800633C writes constructor zero register to Player+0x240,high
 normal_navigation_range,0..6,Left decrements only above 0; Right path 0x0800951E increments only when selector<=5; 0x080093F4 is defensive clamp-to-7 for an already-high value,high
 normal_navigation_inputs,Left;Right;B,fresh-key checks at 0x08008FBE/0x08008FD2/0x08008FE8 use GBA masks 0x20/0x10/0x02,high
+hidden_entry_input,keys_current == 0x0006 (B+SELECT),0x08008318 loads current keys; 0x0800831A compares exact value 6 and 0x0800831C skips the scene request when unequal,high
+exit_behavior,fresh B -> Gameplay Level 7,Wardrobe B path uses fresh-key logic; 0x08009672 sets variant 0 and 0x08009674 sets level 7 before scene request,high
+wardrobe_navigation_sfx,none proven,SFX11 call sites 0x0800898E and 0x0800904E are outside the selector Left/Right branches 0x0800951E..0x080095C0,high
 confirm_input,none recovered,Wardrobe browser input path exposes Left/Right navigation and '(B) to exit'; no A-confirm/equip branch is present in the recovered browser path,high
 wardrobe_title,Wardrobe,literal 0x08A8C47C drawn at Player_update internal path 0x08008E30,high
 wardrobe_exit_prompt,(B) to exit,literal 0x08A8C488 drawn at 0x08008E60,high

@@ -56,6 +56,7 @@ void gb_story_init(GbStoryRuntime* story)
     gb_story_clear_social(story);
     story->generic_record_action_pending = 0;
     story->generic_record_action_argument = 0;
+    story->pending_sfx = -1;
 }
 
 void gb_story_on_level_load(GbStoryRuntime* story, GbActorSystem* actors)
@@ -191,6 +192,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
             {
                 actors->actors[story->dialogue.actor_index].dialogue_step = record->argument;
             }
+            story->pending_sfx = 7;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
             gb_story_clear_dialogue(story);
@@ -199,6 +201,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         if(record->opcode == -2)
         {
             story->state.primary_message_stream = (s8)record->argument;
+            story->pending_sfx = 7;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
             gb_story_clear_dialogue(story);
@@ -207,6 +210,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         if(record->opcode == -3)
         {
             gb_story_insert_auxiliary(story, record->argument);
+            story->pending_sfx = 7;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
             gb_story_clear_dialogue(story);
@@ -220,6 +224,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         }
         if(record->opcode == -5)
         {
+            story->pending_sfx = 13;
             story->state.final_effect_pending = 1;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
@@ -231,18 +236,18 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
     }
 }
 
-static void gb_story_start_dialogue(GbStoryRuntime* story, GbActorSystem* actors,
-                                    u8 actor_index, s16 script_index,
-                                    GbDialogueContext context, s16 step)
+static int gb_story_start_dialogue(GbStoryRuntime* story, GbActorSystem* actors,
+                                   u8 actor_index, s16 script_index,
+                                   GbDialogueContext context, s16 step)
 {
     if(actor_index >= actors->count || script_index < 0 || script_index >= GB_DIALOGUE_SCRIPT_COUNT)
     {
-        return;
+        return 0;
     }
     const GbDialogueScript* script = &gb_dialogue_scripts[script_index];
     if(step < 0 || step >= (s16)script->count)
     {
-        return;
+        return 0;
     }
     story->dialogue.active = 1;
     story->dialogue.context = context;
@@ -251,6 +256,7 @@ static void gb_story_start_dialogue(GbStoryRuntime* story, GbActorSystem* actors
     story->dialogue.step = step;
     story->dialogue.awaiting_advance = 0;
     gb_story_process_dialogue(story, actors);
+    return 1;
 }
 
 static void gb_story_start_social(GbStoryRuntime* story, u8 selector)
@@ -276,8 +282,11 @@ void gb_story_handle_interaction(GbStoryRuntime* story, GbActorSystem* actors,
     {
         const GbActor* actor = &actors->actors[event->actor_index];
         const s16 step = (s16)(actor->dialogue_step + 1);
-        gb_story_start_dialogue(story, actors, event->actor_index, event->dial,
-                                GB_DIALOGUE_CONTEXT_NORMAL, step);
+        if(gb_story_start_dialogue(story, actors, event->actor_index, event->dial,
+                                   GB_DIALOGUE_CONTEXT_NORMAL, step))
+        {
+            story->pending_sfx = 3;
+        }
         return;
     }
     if(event->type == GB_INTERACTION_COLLECTION)
@@ -289,18 +298,29 @@ void gb_story_handle_interaction(GbStoryRuntime* story, GbActorSystem* actors,
         const s8 selector = gb_collection_script_selector[story->state.collection_progress];
         if(selector < 0)
         {
+            story->pending_sfx = 3;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, event->actor_index);
             return;
         }
-        gb_story_start_dialogue(story, actors, event->actor_index, selector,
-                                GB_DIALOGUE_CONTEXT_STATE4_PICKUP, 0);
+        if(gb_story_start_dialogue(story, actors, event->actor_index, selector,
+                                   GB_DIALOGUE_CONTEXT_STATE4_PICKUP, 0))
+        {
+            story->pending_sfx = 3;
+        }
         return;
     }
     if(event->type == GB_INTERACTION_SOCIAL)
     {
         gb_story_start_social(story, event->dial);
     }
+}
+
+int gb_story_take_pending_sfx(GbStoryRuntime* story)
+{
+    const int pending = story->pending_sfx;
+    story->pending_sfx = -1;
+    return pending;
 }
 
 static const GbMessageRecord* gb_story_message_for_stream(const GbStoryRuntime* story, s8 stream)
@@ -473,11 +493,13 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
         if((input->pressed & KEY_UP) && story->social.topic_index > 0)
         {
             --story->social.topic_index;
+            story->pending_sfx = 4;
             return;
         }
         if((input->pressed & KEY_DOWN) && story->social.topic_index + 1 < story->social.topic_count)
         {
             ++story->social.topic_index;
+            story->pending_sfx = 4;
             return;
         }
         if(input->pressed & KEY_A)

@@ -1,0 +1,63 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+0800575c <_start>:
+ 800575c: b570         	push	{r4, r5, r6, lr}
+ 800575e: 2580         	movs	r5, #0x80
+ 8005760: 2680         	movs	r6, #0x80
+ 8005762: 0004         	movs	r4, r0
+ 8005764: 6882         	ldr	r2, [r0, #0x8]
+ 8005766: 20a0         	movs	r0, #0xa0
+ 8005768: 4b17         	ldr	r3, [pc, #0x5c]         @ 0x6c <_start+0x6c>
+ 800576a: 04ed         	lsls	r5, r5, #0x13
+ 800576c: 601a         	str	r2, [r3]
+ 800576e: 682b         	ldr	r3, [r5]
+ 8005770: 4333         	orrs	r3, r6
+ 8005772: 602b         	str	r3, [r5]
+ 8005774: 6923         	ldr	r3, [r4, #0x10]
+ 8005776: 68e1         	ldr	r1, [r4, #0xc]
+ 8005778: 005a         	lsls	r2, r3, #0x1
+ 800577a: 04c0         	lsls	r0, r0, #0x13
+ 800577c: f00b fa6a    	bl	0x8010c54 <_start+0xb4f8> @ imm = #0xb4d4
+ 8005780: 6a23         	ldr	r3, [r4, #0x20]
+ 8005782: 69e1         	ldr	r1, [r4, #0x1c]
+ 8005784: 005a         	lsls	r2, r3, #0x1
+ 8005786: 4811         	ldr	r0, [pc, #0x44]         @ 0x70 <_start+0x70>
+ 8005788: f00b fa64    	bl	0x8010c54 <_start+0xb4f8> @ imm = #0xb4c8
+ 800578c: 20c0         	movs	r0, #0xc0
+ 800578e: 22d8         	movs	r2, #0xd8
+ 8005790: 6821         	ldr	r1, [r4]
+ 8005792: 0212         	lsls	r2, r2, #0x8
+ 8005794: 04c0         	lsls	r0, r0, #0x13
+ 8005796: f00b fa5d    	bl	0x8010c54 <_start+0xb4f8> @ imm = #0xb4ba
+ 800579a: 2280         	movs	r2, #0x80
+ 800579c: 6961         	ldr	r1, [r4, #0x14]
+ 800579e: 0212         	lsls	r2, r2, #0x8
+ 80057a0: 480b         	ldr	r0, [pc, #0x2c]         @ 0x74 <_start+0x74>
+ 80057a2: f00b fa57    	bl	0x8010c54 <_start+0xb4f8> @ imm = #0xb4ae
+ 80057a6: 2240         	movs	r2, #0x40
+ 80057a8: 490a         	ldr	r1, [pc, #0x28]         @ 0x78 <_start+0x78>
+ 80057aa: 480b         	ldr	r0, [pc, #0x2c]         @ 0x7c <_start+0x7c>
+ 80057ac: f00b fa52    	bl	0x8010c54 <_start+0xb4f8> @ imm = #0xb4a4
+ 80057b0: 2003         	movs	r0, #0x3
+ 80057b2: f7ff ffb5    	bl	0x8005720 <_start+0xffffffffffffffc4> @ imm = #-0x96
+ 80057b6: 2000         	movs	r0, #0x0
+ 80057b8: f7ff fc56    	bl	0x8005068 <_start+0xfffffffffffff90c> @ imm = #-0x754
+ 80057bc: 682b         	ldr	r3, [r5]
+ 80057be: 43b3         	bics	r3, r6
+ 80057c0: 602b         	str	r3, [r5]
+ 80057c2: bc70         	pop	{r4, r5, r6}
+ 80057c4: bc01         	pop	{r0}
+ 80057c6: 4700         	bx	r0
+ 80057c8: 0560         	lsls	r0, r4, #0x15
+ 80057ca: 0300         	lsls	r0, r0, #0xc
+ 80057cc: 0200         	lsls	r0, r0, #0x8
+ 80057ce: 0500         	lsls	r0, r0, #0x14
+ 80057d0: 0000         	movs	r0, r0
+ 80057d2: 0601         	lsls	r1, r0, #0x18
+ 80057d4: 2db4         	cmp	r5, #0xb4
+ 80057d6: 0865         	lsrs	r5, r4, #0x1
+ 80057d8: 0fc0         	lsrs	r0, r0, #0x1f
+ 80057da: 0500         	lsls	r0, r0, #0x14

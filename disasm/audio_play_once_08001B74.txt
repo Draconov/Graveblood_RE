@@ -1,0 +1,58 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08001b74 <_start>:
+ 8001b74: 2200         	movs	r2, #0x0
+ 8001b76: 4b16         	ldr	r3, [pc, #0x58]         @ 0x5c <_start+0x5c>
+ 8001b78: b530         	push	{r4, r5, lr}
+ 8001b7a: 801a         	strh	r2, [r3]
+ 8001b7c: 4d15         	ldr	r5, [pc, #0x54]         @ 0x60 <_start+0x60>
+ 8001b7e: 002b         	movs	r3, r5
+ 8001b80: 7e1c         	ldrb	r4, [r3, #0x18]
+ 8001b82: 2c00         	cmp	r4, #0x0
+ 8001b84: d102         	bne	0x8001b8c <_start+0x18> @ imm = #0x4
+ 8001b86: 781c         	ldrb	r4, [r3]
+ 8001b88: 2c00         	cmp	r4, #0x0
+ 8001b8a: d009         	beq	0x8001ba0 <_start+0x2c> @ imm = #0x12
+ 8001b8c: 3201         	adds	r2, #0x1
+ 8001b8e: 331c         	adds	r3, #0x1c
+ 8001b90: 2a08         	cmp	r2, #0x8
+ 8001b92: d1f5         	bne	0x8001b80 <_start+0xc>  @ imm = #-0x16
+ 8001b94: 2201         	movs	r2, #0x1
+ 8001b96: 4b0e         	ldr	r3, [pc, #0x38]         @ 0x5c <_start+0x5c>
+ 8001b98: 801a         	strh	r2, [r3]
+ 8001b9a: bc30         	pop	{r4, r5}
+ 8001b9c: bc01         	pop	{r0}
+ 8001b9e: 4700         	bx	r0
+ 8001ba0: 00d3         	lsls	r3, r2, #0x3
+ 8001ba2: 1a9a         	subs	r2, r3, r2
+ 8001ba4: 2301         	movs	r3, #0x1
+ 8001ba6: 0092         	lsls	r2, r2, #0x2
+ 8001ba8: 54ab         	strb	r3, [r5, r2]
+ 8001baa: 4b0b         	ldr	r3, [pc, #0x2c]         @ 0x64 <_start+0x64>
+ 8001bac: 18aa         	adds	r2, r5, r2
+ 8001bae: 00c0         	lsls	r0, r0, #0x3
+ 8001bb0: 6051         	str	r1, [r2, #0x4]
+ 8001bb2: 58c1         	ldr	r1, [r0, r3]
+ 8001bb4: 1818         	adds	r0, r3, r0
+ 8001bb6: 2303         	movs	r3, #0x3
+ 8001bb8: 6840         	ldr	r0, [r0, #0x4]
+ 8001bba: 7614         	strb	r4, [r2, #0x18]
+ 8001bbc: 17c4         	asrs	r4, r0, #0x1f
+ 8001bbe: 4023         	ands	r3, r4
+ 8001bc0: 181b         	adds	r3, r3, r0
+ 8001bc2: 109b         	asrs	r3, r3, #0x2
+ 8001bc4: 009b         	lsls	r3, r3, #0x2
+ 8001bc6: 18cb         	adds	r3, r1, r3
+ 8001bc8: 6091         	str	r1, [r2, #0x8]
+ 8001bca: 60d3         	str	r3, [r2, #0xc]
+ 8001bcc: 6111         	str	r1, [r2, #0x10]
+ 8001bce: e7e1         	b	0x8001b94 <_start+0x20> @ imm = #-0x3e
+ 8001bd0: 0208         	lsls	r0, r1, #0x8
+ 8001bd2: 0400         	lsls	r0, r0, #0x10
+ 8001bd4: 0468         	lsls	r0, r5, #0x11
+ 8001bd6: 0300         	lsls	r0, r0, #0xc
+ 8001bd8: 662c         	str	r4, [r5, #0x60]
+ 8001bda: 0865         	lsrs	r5, r4, #0x1

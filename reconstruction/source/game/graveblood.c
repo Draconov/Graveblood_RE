@@ -1,18 +1,17 @@
 #include <graveblood/actor.h>
 #include <graveblood/actors.h>
+#include <graveblood/audio.h>
 #include <graveblood/assets.h>
 #include <graveblood/game.h>
 #include <graveblood/input.h>
 #include <graveblood/portal.h>
+#include <graveblood/scene.h>
 #include <graveblood/story.h>
 #include <graveblood/video.h>
+#include <graveblood/wardrobe.h>
 #include <graveblood/world.h>
 
 void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInput* input);
-
-enum {
-    GB_START_LEVEL = 7,
-};
 
 static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* actors,
                            GbStoryRuntime* story, int level_id)
@@ -27,6 +26,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
     gb_player_spawn(player, assets->spawn_x, assets->spawn_y);
     gb_actor_system_load(actors, assets);
     gb_story_on_level_load(story, actors);
+    gb_audio_play_music(level_id == 10 ? 1 : 0);
     gb_world_update_camera(world, player->x, player->y);
     gb_video_draw_actors(actors, world->camera_x, world->camera_y);
     gb_video_draw_player_state(player, story, world->camera_x, world->camera_y);
@@ -39,17 +39,65 @@ void gb_game_run(void)
     GbPlayer player;
     GbActorSystem actors;
     GbStoryRuntime story;
+    GbSceneRuntime scene;
+    GbWardrobeRuntime wardrobe;
     GbInteractionEvent interaction;
 
     gb_video_init();
+    gb_audio_init();
     gb_input_reset();
     gb_story_init(&story);
-    gb_enter_level(&world, &player, &actors, &story, GB_START_LEVEL);
+    gb_scene_init(&scene);
+    gb_wardrobe_init(&wardrobe);
+    gb_video_load_title();
 
     for(;;)
     {
         gb_video_wait_vblank();
         const GbInput input = gb_input_poll();
+
+        if(scene.active == GB_SCENE_TITLE)
+        {
+            const GbSceneTick tick = gb_scene_update_title(&scene, &input);
+            if(tick.play_start_sfx)
+            {
+                gb_audio_play_sfx(6);
+            }
+            if(tick.enter_gameplay)
+            {
+                gb_enter_level(&world, &player, &actors, &story, tick.gameplay_level);
+                continue;
+            }
+            gb_video_title_set_animation(scene.title_animation_state);
+            gb_video_title_set_prompt_visible(tick.prompt_visible);
+            continue;
+        }
+
+        if(scene.active == GB_SCENE_WARDROBE)
+        {
+            const GbWardrobeTick wardrobe_tick = gb_wardrobe_update(&wardrobe, &input);
+            if(wardrobe_tick.exit_gameplay)
+            {
+                scene.active = GB_SCENE_GAMEPLAY;
+                gb_enter_level(&world, &player, &actors, &story, 7);
+                continue;
+            }
+            if(wardrobe_tick.selector_changed)
+            {
+                gb_video_draw_wardrobe(wardrobe.selector);
+            }
+            continue;
+        }
+
+        if(! story.state.final_effect_pending &&
+           ! gb_story_ui_active(&story) &&
+           input.held == (KEY_B | KEY_SELECT))
+        {
+            gb_wardrobe_init(&wardrobe);
+            scene.active = GB_SCENE_WARDROBE;
+            gb_video_load_wardrobe();
+            continue;
+        }
 
         if(story.state.final_effect_pending)
         {
@@ -85,6 +133,12 @@ void gb_game_run(void)
                     continue;
                 }
             }
+        }
+
+        const int pending_sfx = gb_story_take_pending_sfx(&story);
+        if(pending_sfx >= 0)
+        {
+            gb_audio_play_sfx((u8)pending_sfx);
         }
 
         gb_world_update_camera(&world, player.x, player.y);

@@ -1156,6 +1156,17 @@ typedef struct {{
     u16 rows[8];
 }} GbFontGlyph;
 
+typedef enum {{
+    GB_AUDIO_ROLE_MUSIC = 0,
+    GB_AUDIO_ROLE_SFX = 1,
+}} GbAudioRole;
+
+typedef struct {{
+    const s8* data;
+    u32 byte_length;
+    u8 role;
+}} GbAudioSample;
+
 typedef struct {{
     u8 level_id;
     u8 graphics_variant;
@@ -1205,6 +1216,22 @@ enum {{
     GB_MONSTER_SPRITE_COUNT = 5,
     GB_MONSTER_SPRITE_HALFWORDS = 128,
     GB_BG0_UI_TILE_COUNT = 87,
+    GB_TITLE_MAP_WIDTH = 30,
+    GB_TITLE_MAP_HEIGHT = 20,
+    GB_TITLE_MAP_CELLS = 600,
+    GB_TITLE_ANIMATION_STATES = 4,
+    GB_TITLE_ANIM_A_HALFWORDS = 1536,
+    GB_TITLE_ANIM_B_HALFWORDS = 768,
+    GB_TITLE_PROMPT_LENGTH = 14,
+    GB_TITLE_BG_PALETTE_COUNT = 223,
+    GB_TITLE_OBJ_TILE_HALFWORDS = 0x8000 / 2,
+    GB_TITLE_OBJ_PALETTE_COUNT = 91,
+    GB_TITLE_OBJ_HIGH_PALETTE_COUNT = 32,
+    GB_WARDROBE_CHOICE_COUNT = 7,
+    GB_WARDROBE_BG_PAGE_HALFWORDS = 4096,
+    GB_WARDROBE_PREVIEW_HALFWORDS = 256,
+    GB_AUDIO_SAMPLE_COUNT = 14,
+    GB_AUDIO_MUSIC_SAMPLE_COUNT = 3,
 }};
 
 extern const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT];
@@ -1225,6 +1252,23 @@ extern const char* const gb_social_criticize_topics[GB_SOCIAL_CRITICIZE_TOPIC_CO
 extern const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT];
 extern const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT];
 extern const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS];
+extern const u16 gb_title_bg_tiles[0xD800 / 2];
+extern const u16 gb_title_bg_palette[GB_TITLE_BG_PALETTE_COUNT];
+extern const u16 gb_title_obj_tiles[GB_TITLE_OBJ_TILE_HALFWORDS];
+extern const u16 gb_title_obj_palette[GB_TITLE_OBJ_PALETTE_COUNT];
+extern const u16 gb_title_obj_high_palette[GB_TITLE_OBJ_HIGH_PALETTE_COUNT];
+extern const u16 gb_title_underlay_tile;
+extern const u16 gb_title_map[GB_TITLE_MAP_CELLS];
+extern const u16 gb_title_anim_a[GB_TITLE_ANIMATION_STATES][GB_TITLE_ANIM_A_HALFWORDS];
+extern const u16 gb_title_anim_b[GB_TITLE_ANIMATION_STATES][GB_TITLE_ANIM_B_HALFWORDS];
+extern const u16 gb_title_prompt_tiles[GB_TITLE_PROMPT_LENGTH];
+extern const u16 gb_title_blank_tiles[GB_TITLE_PROMPT_LENGTH];
+extern const u8 gb_wardrobe_bg_page_indices[GB_WARDROBE_CHOICE_COUNT];
+extern const u8 gb_wardrobe_obj_banks[GB_WARDROBE_CHOICE_COUNT];
+extern const char* const gb_wardrobe_labels[GB_WARDROBE_CHOICE_COUNT];
+extern const u16 gb_wardrobe_bg_pages[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_BG_PAGE_HALFWORDS];
+extern const u16 gb_wardrobe_preview_tiles[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_PREVIEW_HALFWORDS];
+extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
 
 enum {{ GB_PLAYER_FRAME_COUNT = 16 }};
 

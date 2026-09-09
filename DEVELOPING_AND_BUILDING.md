@@ -53,7 +53,7 @@ Then rebuild normally.
 
 ## 3. Current ROM milestone
 
-The current build is no longer a framebuffer/color smoke test. It boots directly into recovered Level 7 and provides:
+The current build is no longer a framebuffer/color smoke test. It boots into the recovered canonical **Title scene**, where fresh START plays SFX 6 and enters Level 7 after the original 120-update pending delay. The title uses the exact recovered Mode-0 setup (`DISPCNT=0x1F00`): BG0 text on screenblock 27, BG1 30x20 artwork on screenblock 28, BG2/BG3 64x32 backing, 223-entry BG palette, 0x8000-byte OBJ bank, 91-entry OBJ palette plus the 32-color high OBJ patch, canonical hidden OAM, original animation/prompt timing, and intentionally no music because the exhaustive loop-player scan contains no Title call. Gameplay then provides:
 
 - recovered four-background Mode 0 layout (BG0 UI, streamed BG1/BG2 world, quarter-speed BG3 parallax);
 - exact original BG graphics/palettes plus raw streamed world layers and translation tables for all **11 levels / 13 graphics variants**;
@@ -64,6 +64,7 @@ The current build is no longer a framebuffer/color smoke test. It boots directly
 - 33 generic scene-portal records loadable on fresh A; the four Level-10 turn-4/5 records are handled separately by the rusty-key story gate, and the special Level-9 target `524` is preserved but intentionally not treated as a level;
 - generated canonical story content: 7 dialogue scripts / 58 records, six message records, Stas/Julia social tables, the original CFA proportional font, and five monster sprites;
 - a persistent clean-room story runtime that consumes state 1/2/4 interaction events, executes the six-step collection/key progression, persists consumed story pickups across level reloads, renders dialogue/social UI on BG0, and holds safely at `final_effect_pending` instead of reproducing the unsafe final VRAM-copy effect.
+- the original 14-entry signed 8-bit PCM bank, played by an eight-channel 16,384 Hz FIFO-A/DMA1 mixer; normal Levels 0–9 use code-proven music ID 0, Level 10 uses music ID 1, music ID 2 is code-proven unreachable/orphaned in the public demo, and the recovered loop lifecycle uses mode 2, volume `0x90`, a reserved channel, and the exact 75-word fade table. High-confidence SFX routing covers accepted state-2/state-4 interactions (3), actual secondary social-topic cursor movement (4), generic scene portals (5), the title START transition (6), state4 terminal dialogue branches (7), and the final-sketch boundary (13).
 
 Open `reconstruction/Graveblood_RE.gba` in **mGBA** or another accurate emulator. Real-hardware testing on a flash cartridge is recommended as the renderer grows.
 
@@ -108,6 +109,25 @@ The generated C assets contain the original `0xD800` BG graphics blobs, 256-entr
 Large worlds such as Level 9 (`782x128` tiles) are **not** flattened into editor tilesheets; the GBA runtime consumes their streamed source arrays directly.
 
 The generated results are deterministic and covered by `tools/test_cfa_assets.py`.
+
+Canonical Title assets/evidence are regenerated separately from the streamed world assets:
+
+```bash
+python3 tools/extract_title_scene.py \
+  "$GRAVEBLOOD_ROM"
+```
+
+This regenerates `reconstruction/data/title_assets.c`, `data/title_scene_semantics.csv`, and the focused Title disassembly evidence.
+
+Canonical audio extraction is a separate ROM-backed step because the PCM files are linked directly rather than emitted as C arrays:
+
+```sh
+python3 tools/extract_audio.py \
+  "/path/to/Graveblood 0.0.1.1.5.2 demo.gba" \
+  --repo-root .
+```
+
+This writes `reconstruction/data/audio/sample_00.pcm` through `sample_13.pcm`, `audio_samples.s`, `audio_data.c`, and the audio evidence CSV/disassembly exports. Once checked in, ordinary `make -C reconstruction` builds do not need the reference ROM.
 
 ## 6. Reverse-engineering tests
 
@@ -162,3 +182,14 @@ When CFA-era conventions, current libgba conventions, and our guesses disagree, 
 2. confirmed CFA/Contra Force Advance architecture where available;
 3. current devkitPro/libgba hardware behavior;
 4. new design choices only when the original behavior is genuinely absent or intentionally being extended.
+
+Canonical Wardrobe preview assets are also regenerated separately because the browser uses seven selector-specific Level-7 BG pages and dynamic OBJ source-bank slices:
+
+```sh
+python3 tools/extract_wardrobe_runtime.py \
+  "/path/to/Graveblood 0.0.1.1.5.2 demo.gba" \
+  --root .
+```
+
+This writes `reconstruction/data/wardrobe_assets.c` and `data/wardrobe_runtime_assets.csv`. Ordinary ROM builds use the checked-in C data and do not need the reference ROM. The reconstructed browser is browse/preview-only: exact B+SELECT entry, selectors 0..6, fresh-B Level-7 exit, no A-confirm/equip action, and no guessed SFX11 route.
+

@@ -8,6 +8,11 @@
 
 void gb_video_init(void);
 void gb_video_wait_vblank(void);
+void gb_video_load_title(void);
+void gb_video_title_set_animation(u8 state);
+void gb_video_title_set_prompt_visible(int visible);
+void gb_video_load_wardrobe(void);
+void gb_video_draw_wardrobe(u8 selector);
 void gb_video_load_level(const GbLevelAssets* level);
 void gb_video_stream_full(const GbLevelAssets* level, s16 left, s16 top);
 void gb_video_stream_column(const GbLevelAssets* level, s16 world_x, s16 top);

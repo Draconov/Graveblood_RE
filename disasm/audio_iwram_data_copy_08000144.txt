@@ -1,0 +1,97 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+08000144 <_start>:
+ 8000144: 4922         	ldr	r1, [pc, #0x88]         @ 0x8c <_start+0x8c>
+ 8000146: 4a23         	ldr	r2, [pc, #0x8c]         @ 0x90 <_start+0x90>
+ 8000148: 4c23         	ldr	r4, [pc, #0x8c]         @ 0x94 <_start+0x94>
+ 800014a: f000 f826    	bl	0x800019a <_start+0x56> @ imm = #0x4c
+ 800014e: 4923         	ldr	r1, [pc, #0x8c]         @ 0x98 <_start+0x98>
+ 8000150: 4a23         	ldr	r2, [pc, #0x8c]         @ 0x9c <_start+0x9c>
+ 8000152: 4c24         	ldr	r4, [pc, #0x90]         @ 0xa0 <_start+0xa0>
+ 8000154: f000 f821    	bl	0x800019a <_start+0x56> @ imm = #0x42
+ 8000158: 4a23         	ldr	r2, [pc, #0x8c]         @ 0xa4 <_start+0xa4>
+ 800015a: 4924         	ldr	r1, [pc, #0x90]         @ 0xa8 <_start+0xa8>
+ 800015c: 1a53         	subs	r3, r2, r1
+ 800015e: d002         	beq	0x8000166 <_start+0x22> @ imm = #0x4
+ 8000160: 4a23         	ldr	r2, [pc, #0x8c]         @ 0xac <_start+0xac>
+ 8000162: f000 f81b    	bl	0x800019c <_start+0x58> @ imm = #0x36
+ 8000166: 4923         	ldr	r1, [pc, #0x8c]         @ 0xb0 <_start+0xb0>
+ 8000168: 4a23         	ldr	r2, [pc, #0x8c]         @ 0xb4 <_start+0xb4>
+ 800016a: 4c24         	ldr	r4, [pc, #0x90]         @ 0xb8 <_start+0xb8>
+ 800016c: f000 f815    	bl	0x800019a <_start+0x56> @ imm = #0x2a
+ 8000170: 4923         	ldr	r1, [pc, #0x8c]         @ 0xbc <_start+0xbc>
+ 8000172: 4824         	ldr	r0, [pc, #0x90]         @ 0xc0 <_start+0xc0>
+ 8000174: 6008         	str	r0, [r1]
+ 8000176: 4b24         	ldr	r3, [pc, #0x90]         @ 0xc4 <_start+0xc4>
+ 8000178: f000 f80e    	bl	0x8000198 <_start+0x54> @ imm = #0x1c
+ 800017c: 2000         	movs	r0, #0x0
+ 800017e: 2100         	movs	r1, #0x0
+ 8000180: 4b22         	ldr	r3, [pc, #0x88]         @ 0xc8 <_start+0xc8>
+ 8000182: f000 f809    	bl	0x8000198 <_start+0x54> @ imm = #0x12
+ 8000186: 2203         	movs	r2, #0x3
+ 8000188: 1889         	adds	r1, r1, r2
+ 800018a: 4391         	bics	r1, r2
+ 800018c: d003         	beq	0x8000196 <_start+0x52> @ imm = #0x6
+ 800018e: 2200         	movs	r2, #0x0
+ 8000190: c004         	stm	r0!, {r2}
+ 8000192: 3904         	subs	r1, #0x4
+ 8000194: d1fc         	bne	0x8000190 <_start+0x4c> @ imm = #-0x8
+ 8000196: 4770         	bx	lr
+ 8000198: 4718         	bx	r3
+ 800019a: 1aa3         	subs	r3, r4, r2
+ 800019c: 2003         	movs	r0, #0x3
+ 800019e: 181b         	adds	r3, r3, r0
+ 80001a0: 4383         	bics	r3, r0
+ 80001a2: d003         	beq	0x80001ac <_start+0x68> @ imm = #0x6
+ 80001a4: c901         	ldm	r1!, {r0}
+ 80001a6: c201         	stm	r2!, {r0}
+ 80001a8: 3b04         	subs	r3, #0x4
+ 80001aa: d1fb         	bne	0x80001a4 <_start+0x60> @ imm = #-0xa
+ 80001ac: 4770         	bx	lr
+ 80001ae: 46c0         	mov	r8, r8
+ 80001b0: 7fa0         	ldrb	r0, [r4, #0x1e]
+ 80001b2: 0300         	lsls	r0, r0, #0xc
+ 80001b4: 7f00         	ldrb	r0, [r0, #0x1c]
+ 80001b6: 0300         	lsls	r0, r0, #0xc
+ 80001b8: 0000         	movs	r0, r0
+ 80001ba: 0800         	lsrs	r0, r0, #0x20
+ 80001bc: 0000         	movs	r0, r0
+ 80001be: 0200         	lsls	r0, r0, #0x8
+ 80001c0: 0000         	movs	r0, r0
+ 80001c2: 0300         	lsls	r0, r0, #0xc
+ 80001c4: 0788         	lsls	r0, r1, #0x1e
+ 80001c6: 0300         	lsls	r0, r0, #0xc
+ 80001c8: 0000         	movs	r0, r0
+ 80001ca: 0200         	lsls	r0, r0, #0x8
+ 80001cc: 0000         	movs	r0, r0
+ 80001ce: 0200         	lsls	r0, r0, #0x8
+ 80001d0: d738         	bvc	0x8000244 <_start+0x100> @ imm = #0x70
+ 80001d2: 08a8         	lsrs	r0, r5, #0x2
+ 80001d4: 0788         	lsls	r0, r1, #0x1e
+ 80001d6: 0300         	lsls	r0, r0, #0xc
+ 80001d8: 2424         	movs	r4, #0x24
+ 80001da: 0300         	lsls	r0, r0, #0xc
+ 80001dc: d738         	bvc	0x8000250 <_start+0x10c> @ imm = #0x70
+ 80001de: 08a8         	lsrs	r0, r5, #0x2
+ 80001e0: 0000         	movs	r0, r0
+ 80001e2: 0300         	lsls	r0, r0, #0xc
+ 80001e4: 0000         	movs	r0, r0
+ 80001e6: 0300         	lsls	r0, r0, #0xc
+ 80001e8: f3d4 08a8    	<unknown>
+ 80001ec: f3d4 08a8    	<unknown>
+ 80001f0: 2424         	movs	r4, #0x24
+ 80001f2: 0300         	lsls	r0, r0, #0xc
+ 80001f4: f3d4 08a8    	<unknown>
+ 80001f8: 0000         	movs	r0, r0
+ 80001fa: 0200         	lsls	r0, r0, #0x8
+ 80001fc: 0000         	movs	r0, r0
+ 80001fe: 0200         	lsls	r0, r0, #0x8
+ 8000200: 0748         	lsls	r0, r1, #0x1d
+ 8000202: 0300         	lsls	r0, r0, #0xc
+ 8000204: 0000         	movs	r0, r0
+ 8000206: 0204         	lsls	r4, r0, #0x8
+ 8000208: 061d         	lsls	r5, r3, #0x18
+ 800020a: 0801         	lsrs	r1, r0, #0x20

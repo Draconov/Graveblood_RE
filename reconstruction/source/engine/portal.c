@@ -1,4 +1,5 @@
 #include <graveblood/portal.h>
+#include <graveblood/audio.h>
 
 int gb_portal_try_activate(const GbLevelAssets* level, const GbPlayer* player, const GbInput* input)
 {
@@ -13,6 +14,7 @@ int gb_portal_try_activate(const GbLevelAssets* level, const GbPlayer* player, c
         if(player->x >= portal->x && player->x < portal->x + portal->width &&
            player->y >= portal->y && player->y < portal->y + portal->height)
         {
+            gb_audio_play_sfx(5);
             return portal->target_level;
         }
     }
