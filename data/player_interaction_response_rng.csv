@@ -1,0 +1,2 @@
+generator,subject_call,criticize_call,all_generator_calls,state_ptr_global,state_ptr_initial,state_offset,state_initial,multiplier,increment,output,subject_variant,criticize_variant,first_rand,first_subject_variant,confidence
+0x08010DAC,0x0800967E,0x08009916,0x0800967E|0x08009916,0x03001F90,0x03001F98,+0xA8,0x0000000000000001,0x5851F42D4C957F2D,1,(state >> 32) & 0x7FFFFFFF,rand % 4,rand % 2,0x5851F42D,1,high

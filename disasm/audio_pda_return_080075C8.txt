@@ -1,0 +1,56 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+080075c8 <_start>:
+ 80075c8: b510         	push	{r4, lr}
+ 80075ca: 0004         	movs	r4, r0
+ 80075cc: 2201         	movs	r2, #0x1
+ 80075ce: 2150         	movs	r1, #0x50
+ 80075d0: 2007         	movs	r0, #0x7
+ 80075d2: f7fa facf    	bl	0x8001b74 <_start+0xffffffffffffa5ac> @ imm = #-0x5a62
+ 80075d6: f003 f90d    	bl	0x800a7f4 <_start+0x322c> @ imm = #0x321a
+ 80075da: 2101         	movs	r1, #0x1
+ 80075dc: 0020         	movs	r0, r4
+ 80075de: f7ff ff7b    	bl	0x80074d8 <_start+0xffffffffffffff10> @ imm = #-0x10a
+ 80075e2: 2001         	movs	r0, #0x1
+ 80075e4: f7fd fb24    	bl	0x8004c30 <_start+0xffffffffffffd668> @ imm = #-0x29b8
+ 80075e8: 2200         	movs	r2, #0x0
+ 80075ea: 4b02         	ldr	r3, [pc, #0x8]          @ 0x2c <_start+0x2c>
+ 80075ec: 701a         	strb	r2, [r3]
+ 80075ee: bc10         	pop	{r4}
+ 80075f0: bc01         	pop	{r0}
+ 80075f2: 4700         	bx	r0
+ 80075f4: 0618         	lsls	r0, r3, #0x18
+ 80075f6: 0300         	lsls	r0, r0, #0xc
+ 80075f8: b5f0         	push	{r4, r5, r6, r7, lr}
+ 80075fa: 46d6         	mov	lr, r10
+ 80075fc: 464f         	mov	r7, r9
+ 80075fe: 4646         	mov	r6, r8
+ 8007600: 0004         	movs	r4, r0
+ 8007602: b5c0         	push	{r6, r7, lr}
+ 8007604: b082         	sub	sp, #0x8
+ 8007606: f7fd fc63    	bl	0x8004ed0 <_start+0xffffffffffffd908> @ imm = #-0x273a
+ 800760a: 2101         	movs	r1, #0x1
+ 800760c: 0020         	movs	r0, r4
+ 800760e: f7ff ff63    	bl	0x80074d8 <_start+0xffffffffffffff10> @ imm = #-0x13a
+ 8007612: 4be1         	ldr	r3, [pc, #0x384]        @ 0x3d0 <_start+0x3d0>
+ 8007614: 681d         	ldr	r5, [r3]
+ 8007616: 2d00         	cmp	r5, #0x0
+ 8007618: d013         	beq	0x8007642 <_start+0x7a> @ imm = #0x26
+ 800761a: 2d01         	cmp	r5, #0x1
+ 800761c: d100         	bne	0x8007620 <_start+0x58> @ imm = #0x0
+ 800761e: e19d         	b	0x800795c <_start+0x394> @ imm = #0x33a
+ 8007620: 2d02         	cmp	r5, #0x2
+ 8007622: d100         	bne	0x8007626 <_start+0x5e> @ imm = #0x0
+ 8007624: e0a9         	b	0x800777a <_start+0x1b2> @ imm = #0x152
+ 8007626: 2d03         	cmp	r5, #0x3
+ 8007628: d100         	bne	0x800762c <_start+0x64> @ imm = #0x0
+ 800762a: e1f1         	b	0x8007a10 <_start+0x448> @ imm = #0x3e2
+ 800762c: 2201         	movs	r2, #0x1
+ 800762e: 4bdb         	ldr	r3, [pc, #0x36c]        @ 0x3d4 <_start+0x3d4>
+ 8007630: 701a         	strb	r2, [r3]
+ 8007632: b002         	add	sp, #0x8
+ 8007634: bc1c         	pop	{r2, r3, r4}
+ 8007636: 4690         	mov	r8, r2

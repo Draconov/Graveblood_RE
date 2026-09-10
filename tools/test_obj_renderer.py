@@ -58,6 +58,18 @@ class ObjRendererTests(unittest.TestCase):
             self.assertIn('sprite_summary.json', names)
             self.assertTrue(all(p.exists() for p in outputs))
 
+    def test_reference_summary_classifies_grass_and_leaf_tiles_separately(self):
+        import json
+        with tempfile.TemporaryDirectory() as td:
+            outputs = mod.write_reference_sprite_artifacts(self.data, Path(td))
+            summary_path = next(path for path in outputs if path.name == 'sprite_summary.json')
+            summary = json.loads(summary_path.read_text(encoding='utf-8'))
+            self.assertIn('grass_tile_note', summary)
+            self.assertNotIn('leaves_tile_note', summary)
+            self.assertEqual(['0x4C', '0x4D', '0x5C', '0x5D'], summary['leaf_particle_frame_tiles'])
+            self.assertTrue((Path(td) / 'grass_logical_tile_0x48.png').is_file())
+            self.assertTrue((Path(td) / 'leaf_particle_frame_0x4C.png').is_file())
+
     def test_source_sheet_can_render_known_character_piece_beyond_initial_upload(self):
         image = mod.render_source_obj_sprite(self.data, 2198, 2)
         self.assertEqual(image.size, (16, 8))

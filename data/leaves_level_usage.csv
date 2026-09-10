@@ -1,0 +1,5 @@
+level,leaves_count,world_width_tiles,max_camera_x,can_cross_camera_x_2000
+0,1,256,1808,False
+6,1,30,0,False
+9,1,782,6016,True
+10,1,168,1104,False

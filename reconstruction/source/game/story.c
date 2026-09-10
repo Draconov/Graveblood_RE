@@ -1,6 +1,7 @@
 #include <graveblood/story.h>
 
 #define GB_STORY_COLLECTION_SELECTOR_COUNT 6
+#define GB_RESPONSE_RNG_MULTIPLIER 0x5851F42D4C957F2DULL
 
 static const s8 gb_collection_script_selector[GB_STORY_COLLECTION_SELECTOR_COUNT] = {
     4, -1, -1, 5, 6, 0
@@ -57,6 +58,7 @@ void gb_story_init(GbStoryRuntime* story)
     story->generic_record_action_pending = 0;
     story->generic_record_action_argument = 0;
     story->pending_sfx = -1;
+    story->response_rng_state = 1ULL;
 }
 
 void gb_story_on_level_load(GbStoryRuntime* story, GbActorSystem* actors)
@@ -400,35 +402,59 @@ static int gb_story_direction_quadrant(const GbInput* input)
     return -1;
 }
 
+static u32 gb_story_response_rand(GbStoryRuntime* story)
+{
+    story->response_rng_state =
+        story->response_rng_state * GB_RESPONSE_RNG_MULTIPLIER + 1ULL;
+    return (u32)((story->response_rng_state >> 32) & 0x7FFFFFFFULL);
+}
+
 static void gb_story_social_dispatch(GbStoryRuntime* story)
 {
     const u8 selector = story->social.profile_selector;
     const u8 quadrant = story->social.selected_quadrant;
     const u8 topic = story->social.topic_index;
-    if(selector >= GB_SOCIAL_PROFILE_COUNT || topic >= 9)
+
+    story->social.response_text = 0;
+    story->social.followup_armed = 0;
+
+    if(selector >= GB_SOCIAL_PROFILE_COUNT)
     {
         gb_story_clear_social(story);
         return;
     }
 
     GbSocialProfile* profile = &story->state.social_profiles[selector];
-    const s8 topic_class = profile->topic_class[topic];
+
+    /* Canonical 0x080090F8 mirrors the selected profile score before
+       0x08009200 branches on quadrant. Quadrants 1/2 then skip the
+       topic-class tables and response RNG and arm the shared follow-up. */
     story->state.social_score_mirror = (s16)(10 * profile->score);
-    story->social.response_text = 0;
-    story->social.followup_armed = 0;
+    if(quadrant == 1 || quadrant == 2)
+    {
+        story->social.followup_armed = 1;
+        story->social.state = GB_SOCIAL_RESPONSE;
+        return;
+    }
+
+    if((quadrant != 0 && quadrant != 3) || topic >= 9)
+    {
+        gb_story_clear_social(story);
+        return;
+    }
+
+    const s8 topic_class = profile->topic_class[topic];
+    const u32 random_value = gb_story_response_rand(story);
+    const u8 variant = (u8)(random_value & (quadrant == 0 ? 3u : 1u));
 
     if(quadrant == 0)
     {
-        story->social.response_text = gb_story_lookup_social_response(0, topic, topic_class, 0);
+        story->social.response_text = gb_story_lookup_social_response(0, topic, topic_class, variant);
         profile->score = (s16)(profile->score + 2 * (topic_class - 2));
-    }
-    else if(quadrant == 3)
-    {
-        story->social.response_text = gb_story_lookup_social_response(3, topic, topic_class, 0);
     }
     else
     {
-        story->social.followup_armed = 1;
+        story->social.response_text = gb_story_lookup_social_response(3, topic, topic_class, variant);
     }
     story->social.state = GB_SOCIAL_RESPONSE;
 }
@@ -442,19 +468,27 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
             gb_story_clear_social(story);
             return;
         }
+
         const int quadrant = gb_story_direction_quadrant(input);
-        if(quadrant < 0)
+        if(quadrant >= 0)
+        {
+            /* Canonical state 1 only stores the directional quadrant here.
+               The selected record is not committed until a fresh A edge. */
+            story->social.selected_quadrant = (u8)quadrant;
+            return;
+        }
+        if(! (input->pressed & KEY_A))
         {
             return;
         }
-        const u8 action_index = (u8)(story->social.page_base + quadrant);
+
+        const u8 action_index = (u8)(story->social.page_base + story->social.selected_quadrant);
         if(action_index >= GB_SOCIAL_ACTION_COUNT)
         {
             gb_story_clear_social(story);
             return;
         }
         const GbSocialActionData* action = &gb_social_actions[action_index];
-        story->social.selected_quadrant = (u8)quadrant;
         story->social.action_index = action_index;
         if(action->node_type == 0)
         {
@@ -464,20 +498,26 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
                 return;
             }
             story->social.page_base = action->child_base;
+            /* Original branch-confirm returns through state 0, whose selector
+               setup clears Player+0x1E4 before presenting the child page. */
+            story->social.selected_quadrant = 0;
             return;
         }
+        if(action->node_type != 1)
+        {
+            gb_story_clear_social(story);
+            return;
+        }
+
         story->social.topic_index = 0;
         story->social.topic_count = action->field_28;
-        if(story->social.topic_count > 0)
+        if(story->social.topic_count > 9)
         {
-            if(story->social.topic_count > 9)
-            {
-                story->social.topic_count = 9;
-            }
-            story->social.state = GB_SOCIAL_SECONDARY;
-            return;
+            story->social.topic_count = 9;
         }
-        gb_story_social_dispatch(story);
+        /* Every node_type==1 record enters state 2, including the thirteen
+           leaves whose recovered secondary-topic count is zero. */
+        story->social.state = GB_SOCIAL_SECONDARY;
         return;
     }
 
@@ -485,9 +525,17 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
     {
         if(input->pressed & KEY_B)
         {
+            /* Canonical state-2 B path resets page/state to zero, then the
+               state-0 selector bootstrap presents the root page again. */
             story->social.state = GB_SOCIAL_ROOT_SELECTOR;
+            story->social.page_base = 0;
+            story->social.selected_quadrant = 0;
+            story->social.action_index = 0;
             story->social.topic_index = 0;
             story->social.topic_count = 0;
+            story->social.followup_armed = 0;
+            story->social.response_text = 0;
+            story->pending_sfx = 7;
             return;
         }
         if((input->pressed & KEY_UP) && story->social.topic_index > 0)
@@ -605,6 +653,32 @@ GbStoryGateResult gb_story_try_level10_gate(const GbStoryRuntime* story,
             return GB_STORY_GATE_TRAVERSED;
         }
         return GB_STORY_GATE_BLOCKED;
+    }
+
+    return GB_STORY_GATE_NONE;
+}
+
+GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* level,
+                                                        GbPlayer* player,
+                                                        const GbInput* input)
+{
+    if(! level || ! player || ! input || level->level_id != 9 ||
+       ! (input->pressed & KEY_A))
+    {
+        return GB_STORY_GATE_NONE;
+    }
+
+    /* Canonical Level-9 Fgtile 0x08386FF0: treetype=20, x~=512.333,
+       y=456, 16x16.  Fgtile_update diverts this object at 0x0800417C
+       before the generic portTo handler; fresh A sends Player+0x394 to
+       0x00020000 (512 px) through 0x080080A4.  The compact clean-room
+       player currently stores pixel coordinates directly, so commit the
+       recovered target while preserving X. */
+    if(player->x >= 512 && player->x < 528 &&
+       player->y >= 456 && player->y < 472)
+    {
+        player->y = 512;
+        return GB_STORY_GATE_TRAVERSED;
     }
 
     return GB_STORY_GATE_NONE;

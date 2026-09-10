@@ -441,9 +441,15 @@ def write_reference_sprite_artifacts(data: bytes, out_dir: Path) -> list[Path]:
     reconstruct_player_frame_from_source_rows(data, 3468).save(candidate_path)
     outputs.append(candidate_path)
 
-    leaves_path = out_dir / "leaves_logical_tile_0x48.png"
-    render_obj_vram_sprite(data, initial_obj_vram(data), 0x48, 0).save(leaves_path)
-    outputs.append(leaves_path)
+    grass_path = out_dir / "grass_logical_tile_0x48.png"
+    obj_vram = initial_obj_vram(data)
+    render_obj_vram_sprite(data, obj_vram, 0x48, 3).save(grass_path)
+    outputs.append(grass_path)
+
+    for leaf_tile in (0x4C, 0x4D, 0x5C, 0x5D):
+        leaf_path = out_dir / f"leaf_particle_frame_0x{leaf_tile:02X}.png"
+        render_obj_vram_sprite(data, obj_vram, leaf_tile, 0).save(leaf_path)
+        outputs.append(leaf_path)
 
     monster_path = out_dir / "state4_monster_composite.png"
     render_state4_monster_composite(data, animation_counter=24).save(monster_path)
@@ -460,7 +466,9 @@ def write_reference_sprite_artifacts(data: bytes, out_dir: Path) -> list[Path]:
         "source_bytes_remainder_before_palette": source_bytes % OBJ_TILE_BYTES_8BPP,
         "character_source_2198_note": "Known-valid Vika-style 16x32 frame sample; not claimed as constructor/default outfit.",
         "player_branch_candidate_3468_note": "Derived from initialized globals and the 0x08006B3A branch assuming player+0x1E0 == 0; that default remains unproven.",
-        "leaves_tile_note": "Logical tile 0x48 from initial OBJ upload, confirming the previously misidentified vtable is leaves rather than Player.",
+        "grass_tile_note": "Grass_draw 0x08002684 submits logical tile 0x48 as a 16x16 sprite; 2D OBJ rows use 0x48/0x49 and 0x58/0x59.",
+        "leaf_particle_frame_tiles": ["0x4C", "0x4D", "0x5C", "0x5D"],
+        "leaf_particle_note": "Leaves actor draw is a no-op; Leaves_update 0x08005F80 emits transient 0x0800B2BC particles whose draw method 0x0800AC1C cycles these four 8x8 initial-OBJ tiles.",
         "npc_source_bias_iwram": f"0x{NPC_SOURCE_BIAS_RAM:08X}",
         "npc_source_bias_initialized_value": npc_source_bias_from_rom(data),
         "npc_source_formula": "sourceBias + legsColor*8 + subtype + 2*(frame-1)",

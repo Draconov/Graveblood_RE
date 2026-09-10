@@ -32,8 +32,3 @@ source_level,destination,destination_kind,actor_rom_offset,x,y,num,turn
 9,1,level,0x00386E10,472,312,150,
 9,6,level,0x00386E54,488,312,150,
 9,8,level,0x00386EF4,408,360,150,
-9,524,special_or_out_of_range,0x00386FF0,512.333,456,512,
-10,8,level,0x00367380,808,384,150,4
-10,8,level,0x003673CC,824,384,150,4
-10,8,level,0x00367418,808,352,150,5
-10,8,level,0x00367464,824,352,150,5

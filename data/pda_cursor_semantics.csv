@@ -1,0 +1,5 @@
+page,keys,bounds,sfx,evidence
+MESSAGES,dpad LEFT/RIGHT,0..3; skip selector -1,SFX4 volume 0x50,page==0 gates at 0x0800892E/0x0800894E; helpers 0x08009568/0x08009594
+STATUS,none proven,n/a,none,renderer branch is header-only
+FRIENDS,dpad UP/DOWN,cursor row 0..2 plus scroll over 6 entries,SFX4 volume 0x50 on success; SFX12 volume 0x50 at absolute top/bottom boundary,page==2 gates at 0x080089BE/0x0800905E; success calls 0x080089F8/0x0800909C; boundary calls 0x08009B58/0x08009AA2; table 0x03000814; scroll 0x030005DC
+BACKPACK,none proven,n/a,none,renderer branch is header-only

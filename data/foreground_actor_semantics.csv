@@ -1,0 +1,5 @@
+class,factory,vtable,update,update_behavior,draw,logical_tile,shape,hflip_source,hide_condition,priority,screen_x,screen_y,draw_behavior,visual_conclusion,role,initial_cooldown,reset_cooldown,cycle_index_global,cycle_values,camera_x_threshold,spawn_x_equation,spawn_y_equation,particle_constructor,constructor,velocity_x_fixed8,velocity_y_fixed8,velocity_y_clamp_fixed8,frame_tiles,initial_frame_countdown,cull_condition
+grass,0x08002914,0x08018AD8,0x08002480,no_op,0x08002684,72,16x16,turn_bit0,legsColor_eq_1,1_if_actor_below_player_else_2,actor_x-camera_x,actor_y-16-camera_y,,,,,,,,,,,,,,,,,,
+fgtile,0x08003AEC,0x08018E4C,0x08003B98,,0x08003AE8,,,,,,,,no_op,interaction_control_metadata_only,,,,,,,,,,,,,,,,
+leaves,0x08005EE0,0x08019660,0x08005F80,,0x08005EDC,,,,,,,,no_op,,global_leaf_particle_emitter,12,23,0x03000628,0..5,2000,(camera_x+260+x_offset)<<8,(camera_y-80+y_offset)<<8,0x0800B2BC,,,,,,,
+leaf_particle,,0x08A8C1C0,0x0800AB60,,0x0800AC1C,,8x8,,,0,(fixed_x>>8)-4-camera_x,(fixed_y>>8)-8-camera_y,,,,,,,,,,,,0x0800B2BC,-150,150,1024,"[76, 77, 92, 93]",10,x<camera_x-30_or_y>camera_y+180

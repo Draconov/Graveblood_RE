@@ -1,0 +1,61 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+0800b250 <_start>:
+ 800b250: b570         	push	{r4, r5, r6, lr}
+ 800b252: 0004         	movs	r4, r0
+ 800b254: 2530         	movs	r5, #0x30
+ 800b256: 2000         	movs	r0, #0x0
+ 800b258: 2631         	movs	r6, #0x31
+ 800b25a: 6060         	str	r0, [r4, #0x4]
+ 800b25c: 6220         	str	r0, [r4, #0x20]
+ 800b25e: 6260         	str	r0, [r4, #0x24]
+ 800b260: 62e0         	str	r0, [r4, #0x2c]
+ 800b262: 5560         	strb	r0, [r4, r5]
+ 800b264: 3d2f         	subs	r5, #0x2f
+ 800b266: 55a5         	strb	r5, [r4, r6]
+ 800b268: 61a3         	str	r3, [r4, #0x18]
+ 800b26a: 9b04         	ldr	r3, [sp, #0x10]
+ 800b26c: 61e3         	str	r3, [r4, #0x1c]
+ 800b26e: 9b05         	ldr	r3, [sp, #0x14]
+ 800b270: 62a3         	str	r3, [r4, #0x28]
+ 800b272: 9b07         	ldr	r3, [sp, #0x1c]
+ 800b274: 64e3         	str	r3, [r4, #0x4c]
+ 800b276: 9b06         	ldr	r3, [sp, #0x18]
+ 800b278: 64a3         	str	r3, [r4, #0x48]
+ 800b27a: 23a0         	movs	r3, #0xa0
+ 800b27c: 4e0d         	ldr	r6, [pc, #0x34]         @ 0x64 <_start+0x64>
+ 800b27e: 6360         	str	r0, [r4, #0x34]
+ 800b280: 63a0         	str	r0, [r4, #0x38]
+ 800b282: 63e0         	str	r0, [r4, #0x3c]
+ 800b284: 6420         	str	r0, [r4, #0x40]
+ 800b286: 6460         	str	r0, [r4, #0x44]
+ 800b288: 6830         	ldr	r0, [r6]
+ 800b28a: 3001         	adds	r0, #0x1
+ 800b28c: 6030         	str	r0, [r6]
+ 800b28e: 480a         	ldr	r0, [pc, #0x28]         @ 0x68 <_start+0x68>
+ 800b290: 01db         	lsls	r3, r3, #0x7
+ 800b292: 3008         	adds	r0, #0x8
+ 800b294: 6020         	str	r0, [r4]
+ 800b296: 6125         	str	r5, [r4, #0x10]
+ 800b298: 6165         	str	r5, [r4, #0x14]
+ 800b29a: 60a1         	str	r1, [r4, #0x8]
+ 800b29c: 60e2         	str	r2, [r4, #0xc]
+ 800b29e: 6523         	str	r3, [r4, #0x50]
+ 800b2a0: 2201         	movs	r2, #0x1
+ 800b2a2: 2150         	movs	r1, #0x50
+ 800b2a4: 2004         	movs	r0, #0x4
+ 800b2a6: f7f6 fc65    	bl	0x8001b74 <_start+0xffffffffffff6924> @ imm = #-0x9736
+ 800b2aa: 0020         	movs	r0, r4
+ 800b2ac: bc70         	pop	{r4, r5, r6}
+ 800b2ae: bc02         	pop	{r1}
+ 800b2b0: 4708         	bx	r1
+ 800b2b2: 46c0         	mov	r8, r8
+ 800b2b4: 001c         	movs	r4, r3
+ 800b2b6: 0300         	lsls	r0, r0, #0xc
+ 800b2b8: c190         	stm	r1!, {r4, r7}
+ 800b2ba: 08a8         	lsrs	r0, r5, #0x2
+ 800b2bc: b570         	push	{r4, r5, r6, lr}
+ 800b2be: 2300         	movs	r3, #0x0

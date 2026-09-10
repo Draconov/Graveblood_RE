@@ -1,0 +1,7 @@
+list_index,profile_table_index,name,initialized_name_ram,confidence
+0,2,Kate,0x030011C4,high
+1,0,Stas,0x03001224,high
+2,1,IQ 54,0x030011F4,high
+3,3,Kiata,0x03001194,high
+4,4,Alex,0x03001164,high
+5,5,Evelina,0x03001134,high

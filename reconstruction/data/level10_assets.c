@@ -5618,11 +5618,8 @@ const u16 gb_level10_bg0_ui_tiles[GB_BG0_UI_TILE_COUNT] = {
     85, 86, 87, 88, 89, 90, 91
 };
 
-const GbPortal gb_level10_portals[4] = {
-    { 808, 384, 16, 16, 8, 150 },
-    { 824, 384, 16, 16, 8, 150 },
-    { 808, 352, 16, 16, 8, 150 },
-    { 824, 352, 16, 16, 8, 150 }
+const GbPortal gb_level10_portals[1] = {
+    { 0, 0, 0, 0, 0, 0 }
 };
 
 const GbLevelAssets gb_level10_assets = {
@@ -5645,5 +5642,5 @@ const GbLevelAssets gb_level10_assets = {
     .collision = gb_level10_collision,
     .bg0_ui_tiles = gb_level10_bg0_ui_tiles,
     .portals = gb_level10_portals,
-    .portal_count = 4,
+    .portal_count = 0,
 };

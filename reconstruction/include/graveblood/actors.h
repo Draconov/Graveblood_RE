@@ -11,6 +11,8 @@ enum {
     GB_ACTOR_FIXED_ONE = 1 << GB_ACTOR_FIXED_SHIFT,
     GB_ACTOR_ROUTE_SPEED_FIXED = 0x100,
     GB_ACTOR_STORY_NONE = 0xFF,
+    GB_LEAF_PARTICLE_CAPACITY = 96,
+    GB_LEAF_FIXED_ONE = 256,
 };
 
 typedef enum {
@@ -30,6 +32,21 @@ typedef struct {
 } GbInteractionEvent;
 
 typedef struct {
+    s32 fixed_x;
+    s32 fixed_y;
+    s16 velocity_x;
+    s16 velocity_y;
+    u8 frame;
+    u8 frame_countdown;
+    u8 active;
+} GbLeafParticle;
+
+typedef struct {
+    u8 hflip;
+    u8 priority;
+} GbGrassDrawState;
+
+typedef struct {
     const GbActorDescriptor* descriptor;
     s32 fixed_x;
     s32 fixed_y;
@@ -45,12 +62,21 @@ typedef struct {
 
 typedef struct {
     GbActor actors[GB_ACTOR_CAPACITY];
+    GbLeafParticle leaf_particles[GB_LEAF_PARTICLE_CAPACITY];
     u8 count;
+    u8 leaf_emitter_cooldown;
+    u8 leaf_emitter_cycle;
 } GbActorSystem;
 
+void gb_actor_system_init(GbActorSystem* system);
 void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level);
 void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
                             const GbInput* input, GbInteractionEvent* event);
+void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y);
+int gb_actor_grass_draw_state(const GbActor* actor, s16 player_y, GbGrassDrawState* out);
+u8 gb_leaf_particle_frame_for_draw(GbLeafParticle* particle);
+s16 gb_leaf_particle_pixel_x(const GbLeafParticle* particle);
+s16 gb_leaf_particle_pixel_y(const GbLeafParticle* particle);
 s16 gb_actor_pixel_x(const GbActor* actor);
 s16 gb_actor_pixel_y(const GbActor* actor);
 

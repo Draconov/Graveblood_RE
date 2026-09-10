@@ -1,42 +1,42 @@
 call_address,target,caller,sound_id,play_mode,volume,recovered_action,confidence
 0x08002E22,0x08001B74,npc_state2_fresh_a_activation,3,one-shot,80,state-2 dialogue interaction activation,high
 0x08003078,0x08001B74,npc_state4_fresh_a_activation,3,one-shot,80,state-4 collection interaction activation,high
-0x08003298,0x08001B74,npc_state4_fresh_a_activation,9,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,dynamic,one-shot call; gameplay action unresolved,medium
-0x080032D2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,dynamic,one-shot call; gameplay action unresolved,medium
-0x080033A2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x08003462,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x08003516,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,dynamic,one-shot call; gameplay action unresolved,medium
+0x08003298,0x08001B74,npc_state4_fresh_a_activation,9,one-shot,80,legsColor 0x70 NPC special movement-state handoff,high
+0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-2 interaction activation when 0x0300062C mode byte is nonzero,high
+0x080032D2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -4 set story/progression stage,high
+0x080033A2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -3 add auxiliary message stream,high
+0x08003462,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -2 set primary message stream,high
+0x08003516,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -1 set dialogue step,high
+0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-4 interaction activation when 0x0300062C mode byte is nonzero,high
 0x0800368E,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -2 terminal,high
 0x08003748,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -1 terminal,high
 0x08003802,0x08001B74,state4_final_collection_handler,13,one-shot,80,final-sketch state4 -5 transition,high
 0x08003820,0x08001CB0,state4_final_collection_handler,n/a,n/a,dynamic,reserved channel stop/clear,high
 0x0800389A,0x08001B74,state4_final_collection_handler,7,one-shot,80,state4 dialogue opcode -3 terminal,high
-0x08003D5C,0x08001B74,Fgtile_update,5,one-shot,80,one-shot call; gameplay action unresolved,medium
+0x08003D5C,0x08001B74,Fgtile_update,5,one-shot,80,fresh-A generic Fgtile activation for turn != 4/5,high
 0x0800426C,0x08001B74,Fgtile_update,5,one-shot,80,generic scene portal activation,high
 0x08004B2A,0x08001B74,TitleScene_update,6,one-shot,80,fresh START title transition,high
 0x08004C1C,0x08001CB0,GameplayScene_exit,n/a,n/a,dynamic,reserved channel stop/clear,high
 0x08005A8A,0x08001BDC,GameplayScene_enter,dynamic,2,144,dynamic music start/restore via Player+0x1CC selector and Player+0x1D4 ID table,high
-0x080075D2,0x08001B74,message_selector_slot_copy_candidate,7,one-shot,80,one-shot call; gameplay action unresolved,medium
+0x080075D2,0x08001B74,pda_return_to_gameplay_transition_candidate,7,one-shot,80,PDA/menu return-to-gameplay transition; consumes 0x03000618 pending flag,high
 0x080084C6,0x08001CB0,Player_update,n/a,n/a,dynamic,reserved channel stop/clear,high
 0x080084CC,0x08001CB0,Player_update,n/a,n/a,dynamic,reserved channel stop/clear,high
 0x080084D2,0x08001CB0,Player_update,n/a,n/a,dynamic,reserved channel stop/clear,high
-0x080084DC,0x08001B74,Player_update,6,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x0800898E,0x08001B74,Player_update,11,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x080089F8,0x08001B74,Player_update,4,one-shot,80,social secondary topic cursor up,high
+0x080084DC,0x08001B74,Player_update,6,one-shot,80,fresh START PDA/menu open,high
+0x0800898E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab previous (fresh L; MESSAGES/STATUS/FRIENDS/BACKPACK),high
+0x080089F8,0x08001B74,Player_update,4,one-shot,80,FRIENDS successful UP navigation,high
 0x08008A7C,0x08001C68,Player_update,n/a,n/a,dynamic,channel volume/parameter update,high
 0x08008A8E,0x08001CB0,Player_update,n/a,n/a,dynamic,reserved channel stop/clear,high
 0x08008AA0,0x08001BDC,Player_update,dynamic,2,144,dynamic music start/restore via Player+0x1CC selector and Player+0x1D4 ID table,high
-0x0800904E,0x08001B74,Player_update,11,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x0800909C,0x08001B74,Player_update,4,one-shot,80,social secondary topic cursor down,high
+0x0800904E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab next (fresh R; MESSAGES/STATUS/FRIENDS/BACKPACK),high
+0x0800909C,0x08001B74,Player_update,4,one-shot,80,FRIENDS successful DOWN navigation,high
 0x08009428,0x08001BDC,Player_update,dynamic,2,144,dynamic music start/restore via Player+0x1CC selector and Player+0x1D4 ID table,high
 0x0800943A,0x08001C68,Player_update,n/a,n/a,dynamic,channel volume/parameter update,high
-0x08009904,0x08001B74,Player_update,4,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x0800999E,0x08001B74,Player_update,4,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x08009AA2,0x08001B74,Player_update,12,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x08009B58,0x08001B74,Player_update,12,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x08009C16,0x08001B74,Player_update,10,one-shot,30,one-shot call; gameplay action unresolved,medium
-0x08009CCA,0x08001B74,Player_update,7,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x0800B2A6,0x08001B74,submit_obj_oam,4,one-shot,80,one-shot call; gameplay action unresolved,medium
-0x0800B37E,0x08001B74,submit_obj_oam,3,one-shot,80,one-shot call; gameplay action unresolved,medium
+0x08009904,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor previous (fresh LEFT; cursor 0..3),high
+0x0800999E,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor next (fresh RIGHT; cursor 0..3),high
+0x08009AA2,0x08001B74,Player_update,12,one-shot,80,FRIENDS DOWN-at-bottom boundary feedback,high
+0x08009B58,0x08001B74,Player_update,12,one-shot,80,FRIENDS UP-at-top boundary feedback,high
+0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R Player action/state-reset path,high
+0x08009CCA,0x08001B74,Player_update,7,one-shot,80,interaction state-2 return/back (fresh B),high
+0x0800B2A6,0x08001B74,effect_object_sfx4_constructor_candidate,4,one-shot,80,effect-object constructor 0x0800B250 (vtable 0x08A8C198),high
+0x0800B37E,0x08001B74,effect_object_sfx3_constructor_candidate,3,one-shot,80,effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4),high

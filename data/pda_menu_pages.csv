@@ -1,0 +1,5 @@
+selector,page_name,renderer_branch,key_policy,evidence
+0,MESSAGES,0x08007642,L decrements only when selector > 0,0x080075F8 dispatches selector 0 to MESSAGES branch
+1,STATUS,0x0800795C,L/R move within selector bounds 0..3,0x080075F8 dispatches selector 1 to STATUS branch
+2,FRIENDS,0x0800777A,L/R move within selector bounds 0..3,0x080075F8 dispatches selector 2 to FRIENDS branch
+3,BACKPACK,0x08007A10,R increments only when selector <= 2,0x080075F8 dispatches selector 3 to BACKPACK branch

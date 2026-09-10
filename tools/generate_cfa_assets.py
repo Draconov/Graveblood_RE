@@ -49,6 +49,10 @@ FONT_TABLE_ADDR = 0x080199A0
 FONT_GLYPH_COUNT = 127
 MONSTER_TILE_ARGS = (0x159, 0x178, 0x17A, 0x198, 0x19A)
 BG0_UI_TILE_COUNT = 87
+ENDING_ARG0_COPY1_SOURCE = 0x08641361
+ENDING_ARG0_COPY1_BYTES = 96000
+ENDING_ARG0_COPY2_SOURCE = 0x0836EE54
+ENDING_ARG0_COPY2_BYTES = 16000
 
 
 @dataclass(frozen=True)
@@ -154,6 +158,12 @@ class PackedActorSpriteBank:
     frame_count: int
     palette: tuple[int, ...]
     data: bytes
+
+
+@dataclass(frozen=True)
+class PackedForegroundSpriteBank:
+    grass: bytes
+    leaf_frames: bytes
 
 
 @dataclass(frozen=True)
@@ -587,6 +597,29 @@ def pack_actor_sprite_bank(rom: bytes, visuals: tuple[tuple[int, int], ...]) -> 
     return PackedActorSpriteBank(frame_count=len(visuals), palette=palette, data=bytes(out))
 
 
+def pack_foreground_sprite_bank(rom: bytes) -> PackedForegroundSpriteBank:
+    """Pack exact initial-OBJ grass and leaf tiles for the 1D clean-room layout.
+
+    The original uses 2D OBJ mapping.  Grass logical tile 0x48 therefore uses
+    rows 0x48/0x49 and 0x58/0x59.  The leaf particle frame table points at
+    four independent 8x8 tiles: 0x4C, 0x4D, 0x5C, 0x5D.
+    """
+    source_base = OBJ_TILES_SOURCE - ROM_BASE
+    if source_base < 0 or source_base + 0x8000 > len(rom):
+        raise ValueError('initial OBJ source outside ROM')
+
+    def tile(logical: int) -> bytes:
+        off = source_base + logical * 64
+        blob = rom[off:off + 64]
+        if len(blob) != 64:
+            raise ValueError(f'foreground OBJ tile {logical} overruns ROM')
+        return blob
+
+    grass = b''.join(tile(index) for index in (0x48, 0x49, 0x58, 0x59))
+    leaf_frames = b''.join(tile(index) for index in (0x4C, 0x4D, 0x5C, 0x5D))
+    return PackedForegroundSpriteBank(grass=grass, leaf_frames=leaf_frames)
+
+
 def _read_u16_array(rom: bytes, addr: int, count: int) -> tuple[int, ...]:
     off = addr - ROM_BASE
     if off < 0 or off + count * 2 > len(rom):
@@ -933,9 +966,13 @@ const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS] 
 """
 
 
-def _actor_sprite_c(data: ActorRuntimeData, sprites: PackedActorSpriteBank) -> str:
+def _actor_sprite_c(
+    data: ActorRuntimeData, sprites: PackedActorSpriteBank, foreground: PackedForegroundSpriteBank
+) -> str:
     visuals = ',\n'.join(f'    {{ {legs}, {subtype} }}' for legs, subtype in data.visuals)
     words = _bytes_to_u16(sprites.data)
+    grass_words = _bytes_to_u16(foreground.grass)
+    leaf_words = _bytes_to_u16(foreground.leaf_frames)
     return f"""#include <graveblood/assets.h>
 
 const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{
@@ -948,6 +985,14 @@ const u16 gb_actor_obj_palette[256] = {{
 
 const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS] = {{
 {_c_values(words, 12, 4)}
+}};
+
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {{
+{_c_values(grass_words, 12, 4)}
+}};
+
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {{
+{_c_values(leaf_words, 12, 4)}
 }};
 """
 
@@ -1203,6 +1248,9 @@ enum {{
     GB_ACTOR_ROUTE_POINTS = 6,
     GB_ACTOR_VISUAL_COUNT = 32,
     GB_ACTOR_FRAME_HALFWORDS = 256,
+    GB_GRASS_OBJ_HALFWORDS = 128,
+    GB_LEAF_FRAME_COUNT = 4,
+    GB_LEAF_FRAME_HALFWORDS = 32,
     GB_DIALOGUE_SCRIPT_COUNT = 7,
     GB_DIALOGUE_RECORD_COUNT = 58,
     GB_MESSAGE_RECORD_COUNT = 6,
@@ -1227,11 +1275,23 @@ enum {{
     GB_TITLE_OBJ_TILE_HALFWORDS = 0x8000 / 2,
     GB_TITLE_OBJ_PALETTE_COUNT = 91,
     GB_TITLE_OBJ_HIGH_PALETTE_COUNT = 32,
+    GB_PDA_PAGE_COUNT = 4,
+    GB_PDA_MAP_WIDTH = 30,
+    GB_PDA_MAP_HEIGHT = 20,
+    GB_PDA_MAP_CELLS = 600,
+    GB_PDA_FRIEND_COUNT = 6,
+    GB_PDA_TEXT_COLUMNS = 29,
+    GB_PDA_TEXT_ROWS = 5,
+    GB_PDA_TEXT_TILE_COUNT = 145,
     GB_WARDROBE_CHOICE_COUNT = 7,
     GB_WARDROBE_BG_PAGE_HALFWORDS = 4096,
     GB_WARDROBE_PREVIEW_HALFWORDS = 256,
     GB_AUDIO_SAMPLE_COUNT = 14,
     GB_AUDIO_MUSIC_SAMPLE_COUNT = 3,
+    GB_ENDING_ARG0_COPY1_BYTES = 96000,
+    GB_ENDING_ARG0_COPY2_BYTES = 16000,
+    GB_ENDING_VRAM_BYTES = 0x18000,
+    GB_ENDING_OBJ_VRAM_OFFSET = 0x10000,
 }};
 
 extern const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT];
@@ -1242,6 +1302,8 @@ extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_P
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
 extern const u16 gb_actor_obj_palette[256];
 extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS];
+extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
+extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
 extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
 extern const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT];
 extern const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT];
@@ -1263,12 +1325,17 @@ extern const u16 gb_title_anim_a[GB_TITLE_ANIMATION_STATES][GB_TITLE_ANIM_A_HALF
 extern const u16 gb_title_anim_b[GB_TITLE_ANIMATION_STATES][GB_TITLE_ANIM_B_HALFWORDS];
 extern const u16 gb_title_prompt_tiles[GB_TITLE_PROMPT_LENGTH];
 extern const u16 gb_title_blank_tiles[GB_TITLE_PROMPT_LENGTH];
+extern const u16 gb_pda_page_maps[GB_PDA_PAGE_COUNT][GB_PDA_MAP_CELLS];
+extern const char* const gb_pda_friend_names[GB_PDA_FRIEND_COUNT];
+extern const u16 gb_pda_text_tile_ids[GB_PDA_TEXT_TILE_COUNT];
 extern const u8 gb_wardrobe_bg_page_indices[GB_WARDROBE_CHOICE_COUNT];
 extern const u8 gb_wardrobe_obj_banks[GB_WARDROBE_CHOICE_COUNT];
 extern const char* const gb_wardrobe_labels[GB_WARDROBE_CHOICE_COUNT];
 extern const u16 gb_wardrobe_bg_pages[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_BG_PAGE_HALFWORDS];
 extern const u16 gb_wardrobe_preview_tiles[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_PREVIEW_HALFWORDS];
 extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
+extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];
+extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
 enum {{ GB_PLAYER_FRAME_COUNT = 16 }};
 
@@ -1276,6 +1343,36 @@ extern const u16 gb_player_obj_palette[16];
 extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];
 
 #endif
+"""
+
+
+def extract_ending_argument0_payloads(rom: bytes) -> tuple[bytes, bytes]:
+    copy1_off = ENDING_ARG0_COPY1_SOURCE - ROM_BASE
+    copy2_off = ENDING_ARG0_COPY2_SOURCE - ROM_BASE
+    copy1 = rom[copy1_off:copy1_off + ENDING_ARG0_COPY1_BYTES]
+    copy2 = rom[copy2_off:copy2_off + ENDING_ARG0_COPY2_BYTES]
+    if len(copy1) != ENDING_ARG0_COPY1_BYTES or len(copy2) != ENDING_ARG0_COPY2_BYTES:
+        raise ValueError('ending argument-0 payload truncated')
+    if hashlib.sha256(copy1).hexdigest() != '841d321b25a5e9c304146f4e6501745ef35b9d27e69e98560262c76a27381514':
+        raise ValueError('ending argument-0 copy1 drifted')
+    if hashlib.sha256(copy2).hexdigest() != '17b8dc8ca34e26a634fb21d91d413dbda19bd58b9623e1848a4d1eb3157cb3d2':
+        raise ValueError('ending argument-0 copy2 drifted')
+    return copy1, copy2
+
+
+def _ending_effect_s() -> str:
+    return """.section .rodata
+.balign 4
+
+.global gb_ending_arg0_copy1
+gb_ending_arg0_copy1:
+    .incbin \"../data/ending/argument0_copy1.bin\"
+    .balign 4
+
+.global gb_ending_arg0_copy2
+gb_ending_arg0_copy2:
+    .incbin \"../data/ending/argument0_copy2.bin\"
+    .balign 4
 """
 
 
@@ -1346,6 +1443,7 @@ def _tmx(level: int, spec: LevelSpec, bg: PackedBackground) -> str:
 def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     out = Path(out)
     (out / 'data').mkdir(parents=True, exist_ok=True)
+    (out / 'data' / 'ending').mkdir(parents=True, exist_ok=True)
     (out / 'include' / 'graveblood').mkdir(parents=True, exist_ok=True)
     (out / 'maps' / 'generated').mkdir(parents=True, exist_ok=True)
     specs = build_level_specs(root)
@@ -1354,9 +1452,11 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     rom = rom_file.read_bytes()
     actor_data = build_actor_runtime_data(root)
     actor_sprites = pack_actor_sprite_bank(rom, actor_data.visuals)
+    foreground_sprites = pack_foreground_sprite_bank(rom)
     story_data = build_story_runtime_data(root)
     font = extract_canonical_font(rom)
     monster = pack_monster_sprite_bank(rom)
+    ending_copy1, ending_copy2 = extract_ending_argument0_payloads(rom)
 
     for level, variant in sorted(variants):
         spec = specs[level]
@@ -1379,10 +1479,13 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     (out / 'data' / 'player_sprite.c').write_text(_player_c(sprite), encoding='utf-8')
     (out / 'data' / 'actor_data.c').write_text(_actor_data_c(actor_data), encoding='utf-8')
     (out / 'data' / 'actor_routes.c').write_text(_actor_routes_c(actor_data), encoding='utf-8')
-    (out / 'data' / 'actor_sprite_data.c').write_text(_actor_sprite_c(actor_data, actor_sprites), encoding='utf-8')
+    (out / 'data' / 'actor_sprite_data.c').write_text(_actor_sprite_c(actor_data, actor_sprites, foreground_sprites), encoding='utf-8')
     (out / 'data' / 'story_data.c').write_text(_story_data_c(story_data), encoding='utf-8')
     (out / 'data' / 'font_data.c').write_text(_font_data_c(font), encoding='utf-8')
     (out / 'data' / 'monster_sprite.c').write_text(_monster_sprite_c(monster), encoding='utf-8')
+    (out / 'data' / 'ending' / 'argument0_copy1.bin').write_bytes(ending_copy1)
+    (out / 'data' / 'ending' / 'argument0_copy2.bin').write_bytes(ending_copy2)
+    (out / 'data' / 'ending_effect.s').write_text(_ending_effect_s(), encoding='utf-8')
     (out / 'data' / 'level_registry.c').write_text(_registry_c(variants), encoding='utf-8')
     (out / 'include' / 'graveblood' / 'assets.h').write_text(_assets_h(variants), encoding='utf-8')
 

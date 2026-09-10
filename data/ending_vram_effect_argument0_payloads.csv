@@ -1,0 +1,3 @@
+copy,reachable_argument,source,destination,byte_length,destination_end_exclusive,vram_limit_exclusive,within_vram,sha256,confidence
+1,0,0x08641361,0x06000000,96000,0x06017700,0x06018000,yes,841d321b25a5e9c304146f4e6501745ef35b9d27e69e98560262c76a27381514,high
+2,0,0x0836EE54,0x06010000,16000,0x06013E80,0x06018000,yes,17b8dc8ca34e26a634fb21d91d413dbda19bd58b9623e1848a4d1eb3157cb3d2,high

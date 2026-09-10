@@ -7,7 +7,8 @@
 typedef enum {
     GB_SCENE_TITLE = 0,
     GB_SCENE_GAMEPLAY = 1,
-    GB_SCENE_WARDROBE = 2
+    GB_SCENE_WARDROBE = 2,
+    GB_SCENE_PDA = 3
 } GbSceneKind;
 
 typedef struct {

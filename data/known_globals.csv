@@ -6,6 +6,8 @@ address,name,evidence
 0x03000560,tile_translation_table_ptr,graphics descriptor +0x08; translates source tile IDs before VRAM upload
 0x03000564,visual_world_layer_b_ptr,level+0x10; second streamed u16 world tile layer
 0x03000568,visual_world_layer_a_ptr,level+0x08; first streamed u16 world tile layer
+0x0300056C,camera_y,subtracted from actor/particle world Y by Grass_draw and LeafParticle_draw
+0x03000570,camera_x,subtracted from actor/particle world X and threshold-tested by Leaves_update
 0x03000554,frame_counter,incremented once per VBlank/main-loop iteration
 0x03000574,npc_spatial_query_scratch_candidate,used by NPC state 1/2/4 proximity/collision queries; not the route table
 0x030005BC,scene_manager,pending/active scene state
@@ -13,9 +15,15 @@ address,name,evidence
 0x030005C8,pending_scene,scene_manager +0x0C
 0x030005F8,active_scene,scene_manager +0x3C
 0x03000610,player_interaction_active_flag,NPC fresh-A handler sets to 1 at 0x08002FF2 after copying dial/X/Y into Player; Player_update gates +0x1EC interaction dispatch at 0x08008BC8 and clears it at 0x0800965C
+0x03000614,pda_menu_page_selector,0x080075F8 dispatches values 0..3 to MESSAGES/STATUS/FRIENDS/BACKPACK; fresh L at 0x0800897C decrements above 0 and fresh R at 0x0800903A increments below 3; both play SFX11
 0x0300061C,state4_monster_render_flag,state-4 opcode -4 sets to 1; Player_draw branches to 0x080068BC when value == 1
 0x03000620,state4_collection_progress_index,state-4 branch indexes six-entry selector with this value; completed pickups increment it; Fgtile_update gates behavior at >3
-0x03000674,ending_effect_progress_counter_candidate,incremented while opcode -5 event flag is active and fed to 0x08004FE0
+0x03000628,leaf_emitter_cycle_index,Leaves_update cycles this shared global through 0..5 before each cooldown reset
+0x03001040,leaf_emitter_cooldown,startup-initialized to 12; Leaves_update decrements to zero then resets to 23
+0x03001044,leaf_emitter_x_offset_table,"six startup-initialized offsets 350,250,170,0,340,290"
+0x0300106C,leaf_emitter_y_offset_table,"six startup-initialized offsets 40,60,80,30,20,50"
+0x03001B4C,leaf_particle_frame_tile_table,"four startup-initialized logical OBJ tiles 0x4C,0x4D,0x5C,0x5D"
+0x03000674,ending_effect_argument_state_candidate,Player_update compares this state to 1000: <=1000 resets to 0; >1000 increments by 20; when 0x03000678==1 the resulting value is fed to 0x08004FE0
 0x03000678,ending_event_active_flag,set to 1 by state-4 final-sketch opcode -5 handler 0x080037F6; monitored by gameplay update
 0x030006AC,story_progression_stage,written by normal-context dialogue opcode -4; consumed as stage index by Messages UI; state-4 pickup -4 does not write it
 0x030006BC,keys_current,inverted KEYINPUT mask

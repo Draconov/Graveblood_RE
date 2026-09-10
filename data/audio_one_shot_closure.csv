@@ -1,0 +1,2 @@
+one_shot_call_count,high_confidence_count,medium_confidence_count,reachable_sound_ids,static_one_shot_call_graph_closed,evidence
+30,30,0,3;4;5;6;7;8;9;10;11;12;13,yes,exhaustive full-ROM Thumb BL scan to 0x08001B74; every recovered call has code-bounded action semantics

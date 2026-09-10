@@ -165,6 +165,9 @@ enum {
     GB_ACTOR_ROUTE_POINTS = 6,
     GB_ACTOR_VISUAL_COUNT = 32,
     GB_ACTOR_FRAME_HALFWORDS = 256,
+    GB_GRASS_OBJ_HALFWORDS = 128,
+    GB_LEAF_FRAME_COUNT = 4,
+    GB_LEAF_FRAME_HALFWORDS = 32,
     GB_DIALOGUE_SCRIPT_COUNT = 7,
     GB_DIALOGUE_RECORD_COUNT = 58,
     GB_MESSAGE_RECORD_COUNT = 6,
@@ -189,11 +192,23 @@ enum {
     GB_TITLE_OBJ_TILE_HALFWORDS = 0x8000 / 2,
     GB_TITLE_OBJ_PALETTE_COUNT = 91,
     GB_TITLE_OBJ_HIGH_PALETTE_COUNT = 32,
+    GB_PDA_PAGE_COUNT = 4,
+    GB_PDA_MAP_WIDTH = 30,
+    GB_PDA_MAP_HEIGHT = 20,
+    GB_PDA_MAP_CELLS = 600,
+    GB_PDA_FRIEND_COUNT = 6,
+    GB_PDA_TEXT_COLUMNS = 29,
+    GB_PDA_TEXT_ROWS = 5,
+    GB_PDA_TEXT_TILE_COUNT = 145,
     GB_WARDROBE_CHOICE_COUNT = 7,
     GB_WARDROBE_BG_PAGE_HALFWORDS = 4096,
     GB_WARDROBE_PREVIEW_HALFWORDS = 256,
     GB_AUDIO_SAMPLE_COUNT = 14,
     GB_AUDIO_MUSIC_SAMPLE_COUNT = 3,
+    GB_ENDING_ARG0_COPY1_BYTES = 96000,
+    GB_ENDING_ARG0_COPY2_BYTES = 16000,
+    GB_ENDING_VRAM_BYTES = 0x18000,
+    GB_ENDING_OBJ_VRAM_OFFSET = 0x10000,
 };
 
 extern const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT];
@@ -204,6 +219,8 @@ extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_P
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
 extern const u16 gb_actor_obj_palette[256];
 extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS];
+extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
+extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
 extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
 extern const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT];
 extern const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT];
@@ -225,12 +242,17 @@ extern const u16 gb_title_anim_a[GB_TITLE_ANIMATION_STATES][GB_TITLE_ANIM_A_HALF
 extern const u16 gb_title_anim_b[GB_TITLE_ANIMATION_STATES][GB_TITLE_ANIM_B_HALFWORDS];
 extern const u16 gb_title_prompt_tiles[GB_TITLE_PROMPT_LENGTH];
 extern const u16 gb_title_blank_tiles[GB_TITLE_PROMPT_LENGTH];
+extern const u16 gb_pda_page_maps[GB_PDA_PAGE_COUNT][GB_PDA_MAP_CELLS];
+extern const char* const gb_pda_friend_names[GB_PDA_FRIEND_COUNT];
+extern const u16 gb_pda_text_tile_ids[GB_PDA_TEXT_TILE_COUNT];
 extern const u8 gb_wardrobe_bg_page_indices[GB_WARDROBE_CHOICE_COUNT];
 extern const u8 gb_wardrobe_obj_banks[GB_WARDROBE_CHOICE_COUNT];
 extern const char* const gb_wardrobe_labels[GB_WARDROBE_CHOICE_COUNT];
 extern const u16 gb_wardrobe_bg_pages[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_BG_PAGE_HALFWORDS];
 extern const u16 gb_wardrobe_preview_tiles[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_PREVIEW_HALFWORDS];
 extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
+extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];
+extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
 enum { GB_PLAYER_FRAME_COUNT = 16 };
 

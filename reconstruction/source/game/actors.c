@@ -1,5 +1,33 @@
 #include <graveblood/actors.h>
 
+static const s16 gb_leaf_x_offsets[6] = { 350, 250, 170, 0, 340, 290 };
+static const s16 gb_leaf_y_offsets[6] = { 40, 60, 80, 30, 20, 50 };
+
+static s32 gb_leaf_fixed_to_pixel(s32 value)
+{
+    if(value >= 0)
+    {
+        return value / GB_LEAF_FIXED_ONE;
+    }
+    return -((-value + GB_LEAF_FIXED_ONE - 1) / GB_LEAF_FIXED_ONE);
+}
+
+static void gb_actor_clear_leaf_particles(GbActorSystem* system)
+{
+    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY; ++i)
+    {
+        system->leaf_particles[i].active = 0;
+    }
+}
+
+void gb_actor_system_init(GbActorSystem* system)
+{
+    system->count = 0;
+    system->leaf_emitter_cooldown = 12;
+    system->leaf_emitter_cycle = 0;
+    gb_actor_clear_leaf_particles(system);
+}
+
 static s32 gb_actor_to_fixed(s16 value)
 {
     return (s32)value * GB_ACTOR_FIXED_ONE;
@@ -43,6 +71,7 @@ static void gb_actor_append(GbActorSystem* system, const GbActorDescriptor* desc
 void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level)
 {
     system->count = 0;
+    gb_actor_clear_leaf_particles(system);
     if(! level || level->level_id >= 11)
     {
         return;
@@ -166,6 +195,127 @@ static int gb_actor_player_in_interaction(const GbActor* actor, const GbPlayer* 
     const s16 top = (s16)(actor_y - 2);
     return player->x >= left && player->x < left + size &&
            player->y >= top && player->y < top + size;
+}
+
+static GbLeafParticle* gb_actor_allocate_leaf_particle(GbActorSystem* system)
+{
+    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY; ++i)
+    {
+        if(! system->leaf_particles[i].active)
+        {
+            return &system->leaf_particles[i];
+        }
+    }
+    return 0;
+}
+
+static int gb_actor_system_has_leaves(const GbActorSystem* system)
+{
+    for(u8 i = 0; i < system->count; ++i)
+    {
+        const GbActor* actor = &system->actors[i];
+        if(actor->active && actor->descriptor && actor->descriptor->actor_class == GB_ACTOR_LEAVES)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y)
+{
+    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY; ++i)
+    {
+        GbLeafParticle* particle = &system->leaf_particles[i];
+        if(! particle->active)
+        {
+            continue;
+        }
+        particle->fixed_x += particle->velocity_x;
+        particle->fixed_y += particle->velocity_y;
+        if(particle->velocity_y > 0x400)
+        {
+            particle->velocity_y = 0x400;
+        }
+        const s32 x = gb_leaf_fixed_to_pixel(particle->fixed_x);
+        const s32 y = gb_leaf_fixed_to_pixel(particle->fixed_y);
+        if(x < (s32)camera_x - 30 || y > (s32)camera_y + 180)
+        {
+            particle->active = 0;
+        }
+    }
+
+    if(! gb_actor_system_has_leaves(system))
+    {
+        return;
+    }
+    if(system->leaf_emitter_cooldown > 0)
+    {
+        --system->leaf_emitter_cooldown;
+        return;
+    }
+
+    if(system->leaf_emitter_cycle > 4)
+    {
+        system->leaf_emitter_cycle = 0;
+    }
+    else
+    {
+        ++system->leaf_emitter_cycle;
+    }
+
+    if(camera_x > 2000)
+    {
+        GbLeafParticle* particle = gb_actor_allocate_leaf_particle(system);
+        if(particle)
+        {
+            const int index = system->leaf_emitter_cycle;
+            particle->fixed_x = ((s32)camera_x + 260 + gb_leaf_x_offsets[index]) * GB_LEAF_FIXED_ONE;
+            particle->fixed_y = ((s32)camera_y - 80 + gb_leaf_y_offsets[index]) * GB_LEAF_FIXED_ONE;
+            particle->velocity_x = -150;
+            particle->velocity_y = 150;
+            particle->frame = 0;
+            particle->frame_countdown = 10;
+            particle->active = 1;
+        }
+    }
+    system->leaf_emitter_cooldown = 23;
+}
+
+int gb_actor_grass_draw_state(const GbActor* actor, s16 player_y, GbGrassDrawState* out)
+{
+    if(! actor || ! actor->active || ! actor->descriptor || ! out ||
+       actor->descriptor->actor_class != GB_ACTOR_GRASS || actor->descriptor->legs_color == 1)
+    {
+        return 0;
+    }
+    out->hflip = (u8)(actor->descriptor->turn & 1);
+    out->priority = (u8)(gb_actor_pixel_y(actor) > player_y ? 1 : 2);
+    return 1;
+}
+
+u8 gb_leaf_particle_frame_for_draw(GbLeafParticle* particle)
+{
+    if(particle->frame_countdown > 0)
+    {
+        --particle->frame_countdown;
+    }
+    else
+    {
+        particle->frame = (u8)(particle->frame > 2 ? 0 : particle->frame + 1);
+        particle->frame_countdown = 10;
+    }
+    return particle->frame;
+}
+
+s16 gb_leaf_particle_pixel_x(const GbLeafParticle* particle)
+{
+    return (s16)gb_leaf_fixed_to_pixel(particle->fixed_x);
+}
+
+s16 gb_leaf_particle_pixel_y(const GbLeafParticle* particle)
+{
+    return (s16)gb_leaf_fixed_to_pixel(particle->fixed_y);
 }
 
 void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,

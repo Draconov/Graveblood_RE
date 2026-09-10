@@ -1,0 +1,2 @@
+event_flag,setter,setter_value,exact_address_literal,exact_address_literal_occurrences,player_update_reads,player_update_direct_stores,same_scene_behavior,scope_caveat,confidence
+0x03000678,0x0800380A,1,0x08003984,1,0x080081D2;0x080088AC,none,latched while normal Player_update continues,direct access inventory does not rule out scene-reset or indirect/external writes,high for direct Player_update access inventory; conservative globally

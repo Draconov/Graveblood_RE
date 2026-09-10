@@ -1,0 +1,2 @@
+initial_cooldown,reset_cooldown,cycle_index_global,cycle_values,camera_x_threshold,x_offsets,y_offsets,spawn_x_equation,spawn_y_equation,particle_constructor,frame_tiles
+12,23,0x03000628,0..5,2000,350;250;170;0;340;290,40;60;80;30;20;50,(camera_x+260+x_offset)<<8,(camera_y-80+y_offset)<<8,0x0800B2BC,0x4C;0x4D;0x5C;0x5D

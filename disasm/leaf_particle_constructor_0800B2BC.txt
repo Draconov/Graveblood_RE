@@ -1,0 +1,54 @@
+
+chunk.o:	file format elf32-littlearm
+
+Disassembly of section .text:
+
+0800b2bc <_start>:
+ 800b2bc: b570         	push	{r4, r5, r6, lr}
+ 800b2be: 2300         	movs	r3, #0x0
+ 800b2c0: 2430         	movs	r4, #0x30
+ 800b2c2: 2531         	movs	r5, #0x31
+ 800b2c4: 6043         	str	r3, [r0, #0x4]
+ 800b2c6: 6203         	str	r3, [r0, #0x20]
+ 800b2c8: 6243         	str	r3, [r0, #0x24]
+ 800b2ca: 62c3         	str	r3, [r0, #0x2c]
+ 800b2cc: 5503         	strb	r3, [r0, r4]
+ 800b2ce: 3c2f         	subs	r4, #0x2f
+ 800b2d0: 5544         	strb	r4, [r0, r5]
+ 800b2d2: 6343         	str	r3, [r0, #0x34]
+ 800b2d4: 6383         	str	r3, [r0, #0x38]
+ 800b2d6: 63c3         	str	r3, [r0, #0x3c]
+ 800b2d8: 6403         	str	r3, [r0, #0x40]
+ 800b2da: 6443         	str	r3, [r0, #0x44]
+ 800b2dc: 6503         	str	r3, [r0, #0x50]
+ 800b2de: 330a         	adds	r3, #0xa
+ 800b2e0: 6543         	str	r3, [r0, #0x54]
+ 800b2e2: 3ba0         	subs	r3, #0xa0
+ 800b2e4: 4e0b         	ldr	r6, [pc, #0x2c]         @ 0x58 <_start+0x58>
+ 800b2e6: 6183         	str	r3, [r0, #0x18]
+ 800b2e8: 332d         	adds	r3, #0x2d
+ 800b2ea: 33ff         	adds	r3, #0xff
+ 800b2ec: 6835         	ldr	r5, [r6]
+ 800b2ee: 61c3         	str	r3, [r0, #0x1c]
+ 800b2f0: 9b05         	ldr	r3, [sp, #0x14]
+ 800b2f2: 3501         	adds	r5, #0x1
+ 800b2f4: 6283         	str	r3, [r0, #0x28]
+ 800b2f6: 9b07         	ldr	r3, [sp, #0x1c]
+ 800b2f8: 6035         	str	r5, [r6]
+ 800b2fa: 4d07         	ldr	r5, [pc, #0x1c]         @ 0x5c <_start+0x5c>
+ 800b2fc: 64c3         	str	r3, [r0, #0x4c]
+ 800b2fe: 9b06         	ldr	r3, [sp, #0x18]
+ 800b300: 3530         	adds	r5, #0x30
+ 800b302: 6005         	str	r5, [r0]
+ 800b304: 6104         	str	r4, [r0, #0x10]
+ 800b306: 6144         	str	r4, [r0, #0x14]
+ 800b308: 6081         	str	r1, [r0, #0x8]
+ 800b30a: 60c2         	str	r2, [r0, #0xc]
+ 800b30c: 6483         	str	r3, [r0, #0x48]
+ 800b30e: bc70         	pop	{r4, r5, r6}
+ 800b310: bc02         	pop	{r1}
+ 800b312: 4708         	bx	r1
+ 800b314: 001c         	movs	r4, r3
+ 800b316: 0300         	lsls	r0, r0, #0xc
+ 800b318: c190         	stm	r1!, {r4, r7}
+ 800b31a: 08a8         	lsrs	r0, r5, #0x2

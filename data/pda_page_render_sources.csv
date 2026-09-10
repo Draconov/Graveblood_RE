@@ -1,0 +1,5 @@
+selector,page,renderer_branch,map_mode,raw_map,translation,dynamic_policy,confidence
+0,MESSAGES,0x08007642,0,0x086540A4,0x0864825C,message title/sender/body from selected recovered stream,high
+1,STATUS,0x0800795C,1,0x08653BF4,0x0864825C,header only in public-demo branch,high
+2,FRIENDS,0x0800777A,2,0x08653744,0x0864825C,three-row window over six initialized NPC metadata names,high
+3,BACKPACK,0x08007A10,3,0x08653294,0x0864825C,header only in public-demo branch,high

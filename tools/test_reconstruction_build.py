@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -27,8 +28,10 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
             'reconstruction/source/game/player.c',
             'reconstruction/source/game/actors.c',
             'reconstruction/source/game/graveblood.c',
+            'reconstruction/source/game/ending.c',
             'reconstruction/source/game/wardrobe.c',
             'reconstruction/include/graveblood/assets.h',
+            'reconstruction/include/graveblood/ending.h',
             'reconstruction/include/graveblood/wardrobe.h',
             'reconstruction/include/graveblood/audio.h',
             'reconstruction/include/graveblood/actors.h',
@@ -37,6 +40,9 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
             'reconstruction/data/actor_sprite_data.c',
             'reconstruction/data/audio_data.c',
             'reconstruction/data/audio_samples.s',
+            'reconstruction/data/ending_effect.s',
+            'reconstruction/data/ending/argument0_copy1.bin',
+            'reconstruction/data/ending/argument0_copy2.bin',
             'reconstruction/data/wardrobe_assets.c',
             'reconstruction/data/audio/sample_00.pcm',
             'reconstruction/data/audio/sample_13.pcm',
@@ -48,6 +54,45 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         )
         for rel in required:
             self.assertTrue((ROOT / rel).is_file(), rel)
+
+    def test_reachable_final_effect_replays_exact_argument0_vram_copy_before_draw(self):
+        ending = ROOT / 'reconstruction/source/game/ending.c'
+        header = ROOT / 'reconstruction/include/graveblood/ending.h'
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        video_h = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
+        game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        self.assertTrue(ending.is_file(), ending)
+        self.assertTrue(header.is_file(), header)
+        etext = ending.read_text(encoding='utf-8')
+        self.assertIn('GB_ENDING_ARG0_COPY1_BYTES', etext)
+        self.assertIn('GB_ENDING_ARG0_COPY2_BYTES', etext)
+        self.assertIn('GB_ENDING_OBJ_VRAM_OFFSET', etext)
+        self.assertIn('gb_ending_arg0_copy1', etext)
+        self.assertIn('gb_ending_arg0_copy2', etext)
+        self.assertIn('void gb_video_apply_final_effect(void)', video)
+        self.assertIn('gb_ending_apply_argument0((volatile u8*)0x06000000)', video)
+        self.assertIn('void gb_video_apply_final_effect(void);', video_h)
+        self.assertIn('if(story.state.final_effect_pending)', game)
+        self.assertIn('gb_video_apply_final_effect();', game)
+        effect_index = game.index('gb_video_apply_final_effect();')
+        frame_camera_index = game.index('gb_world_update_camera(&world, player.x, player.y);', effect_index)
+        self.assertLess(effect_index, frame_camera_index)
+
+        gba_h = '''\n#ifndef GBA_H\n#define GBA_H\n#include <stdint.h>\ntypedef uint8_t u8;\ntypedef int8_t s8;\ntypedef uint16_t u16;\ntypedef int16_t s16;\ntypedef uint32_t u32;\ntypedef int32_t s32;\n#endif\n'''
+        harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [0x10000] = 0x22, [0x13E80] = 0x66,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x11);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0x66);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'ending_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'ending_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ending), str(td / 'ending_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
 
     def test_old_butano_runtime_and_notes_are_removed(self):
         self.assertFalse((ROOT / 'reconstruction/src/main.cpp').exists())
@@ -169,7 +214,7 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('GbInteractionEvent interaction;', game)
         self.assertIn('gb_actor_system_load(actors, assets)', game)
         self.assertIn('gb_actor_system_update(&actors, &player, &input, &interaction)', game)
-        self.assertIn('gb_video_draw_actors(&actors, world.camera_x, world.camera_y)', game)
+        self.assertIn('gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y)', game)
         self.assertGreaterEqual(game.count('gb_enter_level(&world, &player, &actors,'), 2)
 
     def test_development_guide_is_devkitpro_only(self):
@@ -299,7 +344,9 @@ typedef int32_t s32;
         self.assertIn('GB_PLAYER_FRAME_COUNT * 128', video)
         self.assertIn('GB_MONSTER_OBJ_TILE_BASE', video)
         self.assertIn('GB_ACTOR_FRAME_HALFWORDS', video)
-        self.assertIn('actor->descriptor->actor_class != GB_ACTOR_NPC', video)
+        self.assertIn('actor->descriptor->actor_class == GB_ACTOR_NPC', video)
+        self.assertIn('actor->descriptor->actor_class == GB_ACTOR_GRASS', video)
+        self.assertIn('GB_LEAF_PARTICLE_CAPACITY', video)
         self.assertIn('actor->descriptor->visual_index >= GB_ACTOR_VISUAL_COUNT', video)
 
     def test_actor_video_compiles_with_host_gba_contract(self):
@@ -441,6 +488,151 @@ extern volatile u16 gb_test_vram[0x18000 / 2];
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(0, proc.returncode, proc.stderr)
             self.assertTrue(obj.is_file())
+
+    def test_pda_video_uses_exact_chrome_and_safe_dynamic_text_layer(self):
+        header = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')
+        video_h = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
+        self.assertIn('GB_PDA_PAGE_COUNT = 4', header)
+        self.assertIn('GB_PDA_MAP_CELLS = 600', header)
+        self.assertIn('GB_PDA_FRIEND_COUNT = 6', header)
+        self.assertIn('GB_PDA_TEXT_COLUMNS = 29', header)
+        self.assertIn('GB_PDA_TEXT_ROWS = 5', header)
+        self.assertIn('GB_PDA_TEXT_TILE_COUNT = 145', header)
+        self.assertIn('gb_pda_page_maps[GB_PDA_PAGE_COUNT][GB_PDA_MAP_CELLS]', header)
+        self.assertIn('gb_pda_friend_names[GB_PDA_FRIEND_COUNT]', header)
+        self.assertIn('gb_pda_text_tile_ids[GB_PDA_TEXT_TILE_COUNT]', header)
+        self.assertIn('gb_video_load_pda', video_h)
+        self.assertIn('gb_video_draw_pda', video_h)
+
+        harness = r'''
+#include <assert.h>
+#include <string.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount;
+volatile u16 gb_test_dispcnt;
+volatile u16 gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256];
+volatile u16 gb_test_obj_colors[256];
+volatile u16 gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const u16 gb_actor_obj_palette[256] = {0};
+const u16 gb_player_obj_palette[16] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+
+static const u16 level_palette[256] = {0};
+static const u16 level_tiles[1] = {0};
+static const GbLevelAssets level = {
+    .level_id = 7, .bg_palette = level_palette, .bg_tiles = level_tiles,
+    .bg_tile_halfwords = 1
+};
+static const GbMessageRecord message = { .title = "HELLO", .sender = "IQ 54", .body = "BODY" };
+
+const GbMessageRecord* gb_story_message_primary(const GbStoryRuntime* story) { (void)story; return &message; }
+const GbMessageRecord* gb_story_message_auxiliary(const GbStoryRuntime* story, u8 slot) { (void)story; (void)slot; return &message; }
+
+int main(void)
+{
+    GbPdaRuntime pda;
+    gb_pda_reset(&pda);
+    gb_pda_open(&pda);
+    GbStoryRuntime story;
+    memset(&story, 0, sizeof(story));
+    for(unsigned i = 0; i < sizeof(gb_test_vram) / sizeof(gb_test_vram[0]); ++i)
+        gb_test_vram[i] = 0xBEEF;
+
+    gb_video_load_pda(&level, &pda, &story);
+    assert(gb_test_dispcnt == (MODE_0 | BG0_ON | BG1_ON));
+    assert(gb_test_bgctrl[0] == (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(27) | BG_PRIORITY(0)));
+    assert(gb_test_bgctrl[1] == (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(28) | BG_PRIORITY(1)));
+    for(int i = 0; i < 4; ++i)
+        assert(gb_test_bg_offset[i].x == 0 && gb_test_bg_offset[i].y == 0);
+
+    volatile u16* chrome = (volatile u16*)MAP_BASE_ADR(28);
+    assert(chrome[0] == gb_pda_page_maps[GB_PDA_MESSAGES][0]);
+    assert(chrome[19 * 32 + 29] == gb_pda_page_maps[GB_PDA_MESSAGES][19 * 30 + 29]);
+    volatile u16* text_map = (volatile u16*)MAP_BASE_ADR(27);
+    for(int row = 0; row < GB_PDA_TEXT_ROWS; ++row)
+        for(int col = 0; col < GB_PDA_TEXT_COLUMNS; ++col)
+            assert(text_map[(1 + row) * 32 + col] == gb_pda_text_tile_ids[row * GB_PDA_TEXT_COLUMNS + col]);
+
+    pda.page = GB_PDA_FRIENDS;
+    pda.friends_scroll = 2;
+    pda.friends_cursor = 1;
+    gb_video_draw_pda(&pda, &story);
+    assert(chrome[0] == gb_pda_page_maps[GB_PDA_FRIENDS][0]);
+
+    pda.page = GB_PDA_STATUS;
+    gb_video_draw_pda(&pda, &story);
+    assert(chrome[0] == gb_pda_page_maps[GB_PDA_STATUS][0]);
+    pda.page = GB_PDA_BACKPACK;
+    gb_video_draw_pda(&pda, &story);
+    assert(chrome[0] == gb_pda_page_maps[GB_PDA_BACKPACK][0]);
+    return 0;
+}
+'''
+        gba_h = r'''
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16; typedef uint32_t u32; typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512], gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_START (1u << 3)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#define KEY_R (1u << 8)
+#define KEY_L (1u << 9)
+#endif
+'''
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'pda_video_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'pda_video_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/source/game/pda.c'),
+                str(ROOT / 'reconstruction/data/pda_assets.c'),
+                str(ROOT / 'reconstruction/data/font_data.c'),
+                str(td / 'pda_video_test.c'), '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
 
     def test_actor_runtime_population_routes_and_interaction_events(self):
         harness = r"""
@@ -706,6 +898,84 @@ typedef int32_t s32;
             run = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(0, run.returncode, run.stderr)
 
+    def test_story_level9_treetype20_vertical_target_action(self):
+        graveblood = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        self.assertIn('gb_story_try_level9_treetype20_action(world.assets, &player, &input)', graveblood)
+
+        harness = r"""
+#include <assert.h>
+#include <graveblood/story.h>
+
+int main(void)
+{
+    GbLevelAssets level = {0};
+    GbPlayer player = {0};
+    GbInput input = {0};
+
+    level.level_id = 9;
+    input.pressed = KEY_A;
+    input.held = KEY_A;
+
+    /* Canonical Level-9 treetype=20 Fgtile occupies 512,456..528,472. */
+    player.x = 512;
+    player.y = 456;
+    assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_TRAVERSED);
+    assert(player.x == 512);
+    assert(player.y == 512);
+
+    /* It is a fresh-A action, not an automatic contact trigger. */
+    player.y = 456;
+    input.pressed = 0;
+    assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
+    assert(player.y == 456);
+
+    /* The special action exists only in Level 9 and never consumes portTo=524. */
+    input.pressed = KEY_A;
+    level.level_id = 8;
+    assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
+    assert(player.y == 456);
+
+    /* Outside the physical tile rectangle it does nothing. */
+    level.level_id = 9;
+    player.x = 511;
+    assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'level9_special_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'level9_special_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/story.c'),
+                str(ROOT / 'reconstruction/data/story_data.c'),
+                str(td / 'level9_special_test.c'), '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
+
     def test_generic_portal_activation_plays_canonical_sfx5_once(self):
         harness = r"""
 #include <assert.h>
@@ -823,6 +1093,7 @@ int main(void)
     GbInput fresh_up = { KEY_UP, KEY_UP };
     GbInput fresh_right = { KEY_RIGHT, KEY_RIGHT };
     GbInput fresh_down = { KEY_DOWN, KEY_DOWN };
+    GbInput fresh_left = { KEY_LEFT, KEY_LEFT };
     GbInput none = { 0, 0 };
 
     gb_story_init(&story);
@@ -959,9 +1230,18 @@ int main(void)
     gb_story_handle_interaction(&story, &actors, &social);
     assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
     assert(strcmp(gb_story_social_profile_name(&story), "Stas") == 0);
-    gb_story_update(&story, &actors, &fresh_up); /* TALK submenu */
+    /* State 1 D-pad updates Player+0x1E4 only; fresh A confirms the choice. */
+    gb_story_update(&story, &actors, &fresh_right);
+    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+    assert(story.social.page_base == 0);
+    assert(story.social.selected_quadrant == 1);
+    gb_story_update(&story, &actors, &fresh_up); /* select TALK */
+    assert(story.social.page_base == 0);
+    assert(story.social.selected_quadrant == 0);
+    gb_story_update(&story, &actors, &fresh_a);  /* confirm TALK submenu */
     assert(story.social.page_base == 4);
-    gb_story_update(&story, &actors, &fresh_up); /* SUBJECT */
+    assert(story.social.selected_quadrant == 0);
+    gb_story_update(&story, &actors, &fresh_a);  /* confirm SUBJECT */
     assert(story.social.state == GB_SOCIAL_SECONDARY);
     assert(story.social.topic_count == 9);
     gb_story_update(&story, &actors, &fresh_right); /* ignored in vertical topic list */
@@ -978,6 +1258,9 @@ int main(void)
     assert(story.state.social_score_mirror == 0);
     assert(story.state.social_profiles[0].score == 2);
     assert(gb_story_social_response(&story) != 0);
+    /* The canonical response RNG starts at state 1; first SUBJECT draw is variant 1. */
+    assert(strcmp(gb_story_social_response(&story),
+                  gb_story_lookup_social_response(0, 0, 3, 1)) == 0);
 
     /* Pure response lookup is bounded and class-2 is the recovered neutral line. */
     assert(strcmp(gb_story_lookup_social_response(0, 0, 2, 0), "I don't really care") == 0);
@@ -990,17 +1273,66 @@ int main(void)
     assert(! gb_story_ui_active(&story));
 
     gb_story_init(&story);
+    story.state.social_profiles[0].score = 3;
     one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
     gb_story_handle_interaction(&story, &actors, &social);
-    gb_story_update(&story, &actors, &fresh_up);    /* TALK */
-    gb_story_update(&story, &actors, &fresh_right); /* Ask about quadrant 1 */
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm TALK */
+    gb_story_update(&story, &actors, &fresh_right); /* select Ask about quadrant 1 */
+    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm Ask about */
     assert(story.social.state == GB_SOCIAL_SECONDARY);
     assert(story.social.topic_count == 5);
     gb_story_update(&story, &actors, &fresh_a);
     assert(story.social.state == GB_SOCIAL_RESPONSE);
     assert(story.social.followup_armed == 1);
+    /* 0x080090F8 mirrors 10 * profile score before 0x08009200 branches. */
+    assert(story.state.social_score_mirror == 30);
     gb_story_update(&story, &actors, &fresh_a);
     assert(! gb_story_ui_active(&story));
+
+    /* Quadrants 1/2 do not call the response RNG; the next SUBJECT is still draw #1. */
+    gb_story_handle_interaction(&story, &actors, &social);
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm TALK */
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm SUBJECT */
+    gb_story_update(&story, &actors, &fresh_a);     /* sports, class 3 */
+    assert(strcmp(gb_story_social_response(&story),
+                  gb_story_lookup_social_response(0, 0, 3, 1)) == 0);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
+
+    /* CRITICIZE uses the same first RNG draw but reduces it modulo 2. */
+    gb_story_init(&story);
+    one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
+    gb_story_handle_interaction(&story, &actors, &social);
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm TALK */
+    gb_story_update(&story, &actors, &fresh_left);  /* select CRITICIZE */
+    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm CRITICIZE */
+    assert(story.social.state == GB_SOCIAL_SECONDARY);
+    assert(story.social.topic_count == 9);
+    gb_story_update(&story, &actors, &fresh_a);     /* sports, class 3 */
+    assert(strcmp(gb_story_social_response(&story),
+                  gb_story_lookup_social_response(3, 0, 3, 1)) == 0);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
+
+    /* Zero-count leaves still enter state 2; B returns to root and plays SFX7. */
+    gb_story_init(&story);
+    one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
+    gb_story_handle_interaction(&story, &actors, &social);
+    gb_story_update(&story, &actors, &fresh_right); /* select FLIRT */
+    assert(story.social.page_base == 0);
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm FLIRT submenu */
+    assert(story.social.page_base == 8);
+    gb_story_update(&story, &actors, &fresh_down);  /* select DIRTY JOKE */
+    gb_story_update(&story, &actors, &fresh_a);     /* confirm zero-count leaf */
+    assert(story.social.state == GB_SOCIAL_SECONDARY);
+    assert(story.social.topic_count == 0);
+    gb_story_update(&story, &actors, &(GbInput){ KEY_B, KEY_B });
+    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+    assert(story.social.page_base == 0);
+    assert(story.social.selected_quadrant == 0);
+    assert(gb_story_take_pending_sfx(&story) == 7);
 
     /* Invalid dialogue/script and exhausted collection indices fail closed. */
     gb_story_init(&story);
@@ -1053,6 +1385,102 @@ typedef int32_t s32;
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(0, proc.returncode, proc.stderr)
             subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_pda_pure_runtime_matches_proven_navigation_and_boundaries(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            inc = root / 'include'
+            (inc / 'graveblood').mkdir(parents=True)
+            (inc / 'gba.h').write_text('''#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16; typedef uint32_t u32; typedef int32_t s32;
+#define KEY_A 0x0001
+#define KEY_B 0x0002
+#define KEY_SELECT 0x0004
+#define KEY_START 0x0008
+#define KEY_RIGHT 0x0010
+#define KEY_LEFT 0x0020
+#define KEY_UP 0x0040
+#define KEY_DOWN 0x0080
+#define KEY_R 0x0100
+#define KEY_L 0x0200
+#endif
+''')
+            for name in ('input.h', 'story.h', 'actors.h', 'assets.h', 'pda.h'):
+                src = ROOT / 'reconstruction/include/graveblood' / name
+                if src.is_file():
+                    shutil.copy2(src, inc / 'graveblood' / name)
+            harness = root / 'pda_harness.c'
+            harness.write_text('''#include <assert.h>
+#include <graveblood/pda.h>
+
+static GbPdaTick press(GbPdaRuntime* pda, GbStoryState* story, u16 key) {
+    GbInput in = { key, key };
+    return gb_pda_update(pda, story, &in);
+}
+
+int main(void) {
+    GbPdaRuntime pda; GbStoryState story = {0}; GbPdaTick tick;
+    story.primary_message_stream = 0;
+    story.auxiliary_message_streams[0] = 1;
+    story.auxiliary_message_streams[1] = 2;
+    story.auxiliary_message_streams[2] = -1;
+
+    gb_pda_reset(&pda);
+    pda.message_slot = 2;
+    gb_pda_open(&pda);
+    assert(pda.active == 1 && pda.page == GB_PDA_MESSAGES);
+    assert(pda.message_slot == 2);
+    assert(pda.friends_cursor == 0 && pda.friends_scroll == 0);
+
+    tick = press(&pda, &story, KEY_R); assert(pda.page == GB_PDA_STATUS && tick.rerender && tick.sfx_id == 11);
+    tick = press(&pda, &story, KEY_R); assert(pda.page == GB_PDA_FRIENDS && tick.rerender && tick.sfx_id == 11);
+    tick = press(&pda, &story, KEY_R); assert(pda.page == GB_PDA_BACKPACK && tick.rerender && tick.sfx_id == 11);
+    tick = press(&pda, &story, KEY_R); assert(pda.page == GB_PDA_BACKPACK && !tick.rerender && tick.sfx_id == -1);
+    tick = press(&pda, &story, KEY_L); assert(pda.page == GB_PDA_FRIENDS && tick.sfx_id == 11);
+
+    pda.page = GB_PDA_MESSAGES; pda.message_slot = 0;
+    tick = press(&pda, &story, KEY_RIGHT); assert(pda.message_slot == 1 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_RIGHT); assert(pda.message_slot == 2 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_RIGHT); assert(pda.message_slot == 2 && tick.sfx_id == -1 && !tick.rerender);
+    tick = press(&pda, &story, KEY_LEFT); assert(pda.message_slot == 1 && tick.sfx_id == 4);
+
+    pda.page = GB_PDA_FRIENDS; pda.friends_cursor = 0; pda.friends_scroll = 0;
+    tick = press(&pda, &story, KEY_UP); assert(pda.friends_cursor == 0 && pda.friends_scroll == 0 && tick.sfx_id == 12);
+    tick = press(&pda, &story, KEY_DOWN); assert(pda.friends_cursor == 1 && pda.friends_scroll == 0 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_DOWN); assert(pda.friends_cursor == 2 && pda.friends_scroll == 0 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_DOWN); assert(pda.friends_cursor == 2 && pda.friends_scroll == 1 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_DOWN); assert(pda.friends_scroll == 2 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_DOWN); assert(pda.friends_scroll == 3 && tick.sfx_id == 4);
+    tick = press(&pda, &story, KEY_DOWN); assert(pda.friends_scroll == 3 && tick.sfx_id == 12 && !tick.rerender);
+    pda.friends_cursor = 0; pda.friends_scroll = 1;
+    tick = press(&pda, &story, KEY_UP); assert(pda.friends_cursor == 0 && pda.friends_scroll == 0 && tick.sfx_id == 4);
+
+    pda.page = GB_PDA_BACKPACK;
+    tick = press(&pda, &story, KEY_B); assert(pda.active == 1 && !tick.return_requested && tick.sfx_id == -1);
+    pda.page = GB_PDA_FRIENDS; pda.friends_cursor = 2; pda.friends_scroll = 3;
+    tick = press(&pda, &story, KEY_START);
+    assert(pda.active == 1 && pda.page == GB_PDA_MESSAGES);
+    assert(pda.friends_cursor == 0 && pda.friends_scroll == 0);
+    assert(tick.rerender && tick.sfx_id == 6 && tick.stop_reserved_audio);
+
+    pda.return_pending = 1;
+    tick = press(&pda, &story, 0);
+    assert(tick.return_requested && tick.sfx_id == 7);
+    return 0;
+}
+''')
+            exe = root / 'pda_harness'
+            cmd = [
+                'gcc', '-std=c99', '-Wall', '-Wextra', '-Werror',
+                '-I', str(inc), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/pda.c'), str(harness), '-o', str(exe),
+            ]
+            result = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
 
     def test_input_poll_reports_held_and_rising_edge_dpad_bits(self):
         harness = r"""
@@ -1644,6 +2072,28 @@ typedef int32_t s32;
         self.assertIn('tick.enter_gameplay', game)
         self.assertIn('tick.gameplay_level', game)
         self.assertNotIn('gb_enter_level(&world, &player, &actors, &story, GB_START_LEVEL);', game)
+
+    def test_game_pda_scene_opens_on_start_reopens_and_preserves_latent_return_path(self):
+        scene_h = (ROOT / 'reconstruction/include/graveblood/scene.h').read_text(encoding='utf-8')
+        game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        self.assertIn('GB_SCENE_PDA', scene_h)
+        self.assertIn('#include <graveblood/pda.h>', game)
+        self.assertIn('GbPdaRuntime pda;', game)
+        self.assertIn('gb_pda_reset(&pda);', game)
+        self.assertIn('scene.active == GB_SCENE_PDA', game)
+        self.assertIn('gb_pda_update(&pda, &story.state, &input)', game)
+        self.assertIn('input.pressed & KEY_START', game)
+        self.assertIn('gb_audio_stop_channel(0);', game)
+        self.assertIn('gb_audio_stop_channel(1);', game)
+        self.assertIn('gb_audio_stop_channel(2);', game)
+        self.assertIn('gb_audio_play_sfx(6);', game)
+        self.assertIn('gb_pda_open(&pda);', game)
+        self.assertIn('scene.active = GB_SCENE_PDA;', game)
+        self.assertIn('gb_video_load_pda(world.assets, &pda, &story);', game)
+        self.assertIn('pda_tick.return_requested', game)
+        self.assertIn('scene.active = GB_SCENE_GAMEPLAY;', game)
+        self.assertIn('world.stream_valid = 0;', game)
+        self.assertIn('gb_audio_play_music(world.assets->level_id == 10 ? 1 : 0);', game)
 
     def test_title_video_loads_exact_layers_obj_assets_patches_prompt_and_restores_gameplay_display(self):
         header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')

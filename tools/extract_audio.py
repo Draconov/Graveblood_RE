@@ -47,6 +47,12 @@ DISASM_RANGES = (
     ('audio_music_replace_08008A70.txt', 0x8A70, 0x48),
     ('audio_music_restore_08009414.txt', 0x9414, 0x30),
     ('audio_iwram_data_copy_08000144.txt', 0x144, 0xC8),
+    ('audio_pda_return_080075C8.txt', 0x75C8, 0x70),
+    ('audio_pda_open_080084B0.txt', 0x84B0, 0x70),
+    ('audio_pda_messages_cursor_080098D0.txt', 0x98D0, 0x110),
+    ('audio_interaction_confirm_08009C80.txt', 0x9C80, 0x90),
+    ('audio_effect_sfx4_constructor_0800B250.txt', 0xB250, 0x70),
+    ('audio_effect_sfx3_constructor_0800B31C.txt', 0xB31C, 0x90),
 )
 
 IWRAM_DATA_ROM = 0x08A8D738
@@ -146,9 +152,29 @@ def build_call_sites(rom: bytes, repo_root: Path) -> list[CallSite]:
         0x0800389A: ('state4 dialogue opcode -3 terminal', 'high'),
         0x0800426C: ('generic scene portal activation', 'high'),
         0x08004B2A: ('fresh START title transition', 'high'),
-        0x080089F8: ('social secondary topic cursor up', 'high'),
-        0x0800909C: ('social secondary topic cursor down', 'high'),
+        0x080084DC: ('fresh START PDA/menu open', 'high'),
+        0x080075D2: ('PDA/menu return-to-gameplay transition; consumes 0x03000618 pending flag', 'high'),
+        0x0800898E: ('PDA menu tab previous (fresh L; MESSAGES/STATUS/FRIENDS/BACKPACK)', 'high'),
+        0x080089F8: ('FRIENDS successful UP navigation', 'high'),
+        0x0800904E: ('PDA menu tab next (fresh R; MESSAGES/STATUS/FRIENDS/BACKPACK)', 'high'),
+        0x0800909C: ('FRIENDS successful DOWN navigation', 'high'),
+        0x08009904: ('PDA MESSAGES cursor previous (fresh LEFT; cursor 0..3)', 'high'),
+        0x0800999E: ('PDA MESSAGES cursor next (fresh RIGHT; cursor 0..3)', 'high'),
+        0x08009CCA: ('interaction state-2 return/back (fresh B)', 'high'),
+        0x0800B2A6: ('effect-object constructor 0x0800B250 (vtable 0x08A8C198)', 'high'),
+        0x0800B37E: ('effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4)', 'high'),
         0x08003802: ('final-sketch state4 -5 transition', 'high'),
+        0x08003D5C: ('fresh-A generic Fgtile activation for turn != 4/5', 'high'),
+        0x08003298: ('legsColor 0x70 NPC special movement-state handoff', 'high'),
+        0x080032AC: ('alternate state-2 interaction activation when 0x0300062C mode byte is nonzero', 'high'),
+        0x080032D2: ('normal dialogue opcode -4 set story/progression stage', 'high'),
+        0x080033A2: ('normal dialogue opcode -3 add auxiliary message stream', 'high'),
+        0x08003462: ('normal dialogue opcode -2 set primary message stream', 'high'),
+        0x08003516: ('normal dialogue opcode -1 set dialogue step', 'high'),
+        0x08003668: ('alternate state-4 interaction activation when 0x0300062C mode byte is nonzero', 'high'),
+        0x08009AA2: ('FRIENDS DOWN-at-bottom boundary feedback', 'high'),
+        0x08009B58: ('FRIENDS UP-at-top boundary feedback', 'high'),
+        0x08009C16: ('fresh R Player action/state-reset path', 'high'),
     }
     sites: list[CallSite] = []
     for target, kind in ((0x08001B74, 'one-shot'), (0x08001BDC, 'loop')):
@@ -163,6 +189,22 @@ def build_call_sites(rom: bytes, repo_root: Path) -> list[CallSite]:
                 # an intervening unconditional B, so the simple linear backwards
                 # scanner cannot see the code-proven MOVS r1,#0x50 predecessor.
                 sound, r1 = 3, 0x50
+            if address in {0x080032AC, 0x08003668}:
+                # Both SFX8 branches retain r1=0x50 from the activation gate at
+                # 0x08002E18 / 0x0800306E across a long conditional branch.
+                sound, r1 = 8, 0x50
+            if address == 0x08003298:
+                sound, r1 = 9, 0x50
+            if address in {0x080032D2, 0x080033A2, 0x08003462, 0x08003516}:
+                # Normal-dialogue opcode terminal/effect branches all play
+                # SFX7 at 0x50.  The -4 branch carries r1=0x8C into the
+                # handler and subtracts 0x3C immediately before the call,
+                # which defeats the simple backwards MOV scanner.
+                sound, r1 = 7, 0x50
+            if address in {0x08009AA2, 0x08009B58}:
+                sound, r1 = 12, 0x50
+            if address == 0x08009C16:
+                sound, r1 = 10, 0x1E
             if address == 0x08003802:
                 sound, r1 = 13, 0x50
             if address in {0x0800368E, 0x08003748, 0x0800389A}:
@@ -286,11 +328,41 @@ def extract(rom_path: Path, repo_root: Path) -> None:
         [[f'0x{s.address:08X}', f'0x{s.target:08X}', s.caller, s.sound_id, s.play_mode, s.volume, s.action, s.confidence] for s in sites],
     )
 
+    one_shot_sites = [s for s in sites if s.target == 0x08001B74]
+    one_shot_high = [s for s in one_shot_sites if s.confidence == 'high' and 'unresolved' not in s.action.lower()]
+    one_shot_medium = [s for s in one_shot_sites if s not in one_shot_high]
+    if len(one_shot_sites) != 30 or len(one_shot_high) != 30 or one_shot_medium:
+        raise SystemExit(
+            'one-shot call graph closure drifted: '
+            f'total={len(one_shot_sites)} high={len(one_shot_high)} '
+            f'unresolved={[hex(s.address) for s in one_shot_medium]}'
+        )
+    reachable_one_shot_ids = sorted({int(s.sound_id) for s in one_shot_sites if s.sound_id.isdigit()})
+    write_csv(
+        repo_root / 'data' / 'audio_one_shot_closure.csv',
+        ['one_shot_call_count', 'high_confidence_count', 'medium_confidence_count',
+         'reachable_sound_ids', 'static_one_shot_call_graph_closed', 'evidence'],
+        [[len(one_shot_sites), len(one_shot_high), len(one_shot_medium),
+          ';'.join(str(v) for v in reachable_one_shot_ids), 'yes',
+          'exhaustive full-ROM Thumb BL scan to 0x08001B74; every recovered call has code-bounded action semantics']],
+    )
+
     loop_calls = [s.address for s in sites if s.target == 0x08001BDC]
     if loop_calls != [0x08005A8A, 0x08008AA0, 0x08009428]:
         raise SystemExit(f'unexpected exhaustive loop-player call set: {[hex(a) for a in loop_calls]}')
     if any(s.sound_id == '2' for s in sites if s.target == 0x08001B74):
         raise SystemExit('sample 2 unexpectedly gained a one-shot call')
+
+    write_csv(
+        repo_root / 'data' / 'pda_menu_pages.csv',
+        ['selector', 'page_name', 'renderer_branch', 'key_policy', 'evidence'],
+        [
+            [0, 'MESSAGES', '0x08007642', 'L decrements only when selector > 0', '0x080075F8 dispatches selector 0 to MESSAGES branch'],
+            [1, 'STATUS', '0x0800795C', 'L/R move within selector bounds 0..3', '0x080075F8 dispatches selector 1 to STATUS branch'],
+            [2, 'FRIENDS', '0x0800777A', 'L/R move within selector bounds 0..3', '0x080075F8 dispatches selector 2 to FRIENDS branch'],
+            [3, 'BACKPACK', '0x08007A10', 'R increments only when selector <= 2', '0x080075F8 dispatches selector 3 to BACKPACK branch'],
+        ],
+    )
 
     write_csv(
         repo_root / 'data' / 'audio_music_routes.csv',

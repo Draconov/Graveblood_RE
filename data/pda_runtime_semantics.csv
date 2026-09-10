@@ -1,0 +1,10 @@
+fact,value,evidence
+page_selector,0x03000614 values 0..3,0x080075F8 dispatch + bounded shoulder writers
+open_input,fresh START,0x0800849E-0x080084AC
+open_audio,"stop channels 0,1,2; SFX6 volume 0x50",0x080084C2-0x080084DC
+open_page,reset to MESSAGES selector 0,0x080084E4-0x080084E8
+page_navigation,fresh R shoulder page+1; fresh L shoulder page-1; bounds 0..3; no wrap,0x0800896C-0x08008994 and 0x0800903A-0x08009054
+page_navigation_sfx,SFX11 volume 0x50,0x08008988-0x0800898E and 0x08009048-0x0800904E
+ordinary_close,no ordinary direct close input proven,page selector writers are open->0 and bounded shoulder +/-1; return flag direct setter is invalid-page fallback only
+return_pending,0x03000618 set=1 only by invalid-page renderer fallback; helper 0x080075C8 clears it,literal/reference inventory + 0x0800762C-0x08007630 + 0x080075E8-0x080075EC
+return_helper_audio,SFX7 volume 0x50,0x080075CC-0x080075D2

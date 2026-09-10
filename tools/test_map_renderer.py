@@ -61,6 +61,20 @@ class MapRendererTests(unittest.TestCase):
         _image, unresolved = mod.render_world_layer(self.data, 2, 0, "A")
         self.assertEqual(unresolved, 4)
 
+    def test_actor_overlay_labels_only_code_proven_generic_portals_as_portals(self):
+        level9_special = {
+            'type': 'fgtile', 'portTo': '524', 'treetype': '20', 'turn': '',
+        }
+        level10_gate = {
+            'type': 'fgtile', 'portTo': '8', 'treetype': '', 'turn': '4',
+        }
+        normal = {
+            'type': 'fgtile', 'portTo': '8', 'treetype': '', 'turn': '',
+        }
+        self.assertEqual('treetype20->Y512', mod.actor_overlay_label(level9_special, 9))
+        self.assertEqual('forced-gate', mod.actor_overlay_label(level10_gate, 10))
+        self.assertEqual('portal->8', mod.actor_overlay_label(normal, 9))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -67,6 +67,7 @@ typedef struct {
     u8 generic_record_action_pending;
     s16 generic_record_action_argument;
     s8 pending_sfx;
+    unsigned long long response_rng_state;
 } GbStoryRuntime;
 
 void gb_story_init(GbStoryRuntime* story);
@@ -78,6 +79,9 @@ void gb_story_update(GbStoryRuntime* story, GbActorSystem* actors, const GbInput
 GbStoryGateResult gb_story_try_level10_gate(const GbStoryRuntime* story,
                                                const GbLevelAssets* level,
                                                GbPlayer* player, const GbInput* input);
+GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* level,
+                                                        GbPlayer* player,
+                                                        const GbInput* input);
 
 int gb_story_ui_active(const GbStoryRuntime* story);
 const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story);

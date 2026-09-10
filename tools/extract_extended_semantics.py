@@ -156,6 +156,53 @@ def extract_story_entity_overlay_slots(data: bytes) -> list[dict]:
     return rows
 
 
+def extract_story_overlay_activation_policy(data: bytes) -> dict:
+    """Prove the public-demo initial story-overlay list/level gate policy.
+
+    load_level_record_resources reads the scene selector from 0x030005BC+0x30,
+    indexes the current-level global block rooted at 0x03000808, and loads the
+    overlay-list pointer from +0x34 + selector*4. The two initialized slots
+    both point at the same 16-record list, so that selector does not swap
+    story populations in the public demo. Actor policy 0x080043AC then keeps
+    entities whose signed level field is -1 or equals the current level.
+    """
+    slots = extract_story_entity_overlay_slots(data)
+    if len(slots) != 2:
+        raise ValueError('story overlay slot count drifted')
+
+    if struct.unpack_from('<I', data, 0x08005A14 - ROM_BASE)[0] != 0x030005BC:
+        raise ValueError('story overlay scene-manager base literal drifted')
+    if struct.unpack_from('<I', data, 0x08005A18 - ROM_BASE)[0] != 0x03000808:
+        raise ValueError('story overlay current-level block literal drifted')
+    selector_seq = (0x6B2B, 0x009A, 0x4B22, 0x4E23, 0x189B, 0x6B59)
+    if _unpack_halfwords(data, 0x08005988, len(selector_seq)) != selector_seq:
+        raise ValueError('story overlay selector sequence drifted')
+
+    if struct.unpack_from('<I', data, 0x080043DC - ROM_BASE)[0] != 0x03000808:
+        raise ValueError('story overlay current-level gate literal drifted')
+    gate_seq = (0x2356, 0x5EC3, 0xB510, 0x0004, 0x1C5A, 0xD007,
+                0x4A08, 0x6812, 0x4293, 0xD003)
+    if _unpack_halfwords(data, 0x080043AC, len(gate_seq)) != gate_seq:
+        raise ValueError('story overlay level-gate sequence drifted')
+
+    slot0 = slots[0]['actor_list_ptr']
+    slot1 = slots[1]['actor_list_ptr']
+    return {
+        'current_level_global': '0x03000808',
+        'scene_selector_global': '0x030005EC',
+        'overlay_slot_base': '0x0300083C',
+        'slot0_list': slot0,
+        'slot1_list': slot1,
+        'slot_lists_identical': 'yes' if slot0 == slot1 else 'no',
+        'level_gate_function': '0x080043AC',
+        'entity_level_field': 'actor+0x56',
+        'level_rule': '-1 wildcard or entity level == current level',
+        'initial_population_conclusion': 'selector does not change story overlay list in public demo; initial visibility is level-gated',
+        'scope_caveat': 'initial population policy does not replace per-entity runtime/progression behavior or persistent consumption',
+        'confidence': 'high',
+    }
+
+
 def extract_npc_sprite_pipeline(data: bytes) -> list[dict]:
     """Export code-backed NPC dynamic-OBJ source selection facts.
 
@@ -367,6 +414,11 @@ PLAYER_INTERACTION_STATE2_CURSOR_OFFSET = 0x1F0
 PLAYER_INTERACTION_SECONDARY_FLAG_OFFSET = 0x382
 PLAYER_INTERACTION_DEPTH_OFFSET = 0x38C
 PLAYER_INTERACTION_RESPONSE_DISPATCH = 0x08009200
+PLAYER_INTERACTION_RESPONSE_RNG = 0x08010DAC
+PLAYER_INTERACTION_RESPONSE_RNG_STATE_PTR_GLOBAL = 0x03001F90
+PLAYER_INTERACTION_RESPONSE_RNG_STATE_OFFSET = 0xA8
+PLAYER_INTERACTION_RESPONSE_RNG_MULTIPLIER = 0x5851F42D4C957F2D
+PLAYER_INTERACTION_RESPONSE_RNG_INCREMENT = 1
 PLAYER_INTERACTION_STATE2_FRESH_A_GATE = 0x0800960E
 PLAYER_INTERACTION_SOCIAL_PROFILE_RECORD_SIZE = 0x3C
 PLAYER_INTERACTION_NPC_METADATA_RECORD_SIZE = 0x30
@@ -997,6 +1049,75 @@ def extract_player_interaction_topic_response_texts(data: bytes) -> list[dict]:
                     "confidence": "high",
                 })
     return rows
+
+
+def extract_player_interaction_response_rng(data: bytes) -> dict:
+    """Recover the exact RNG used by SUBJECT/CRITICIZE response variants.
+
+    The canonical demo calls the same libc-style generator at 0x08010DAC only
+    from the two response-bank entries. The generator advances a 64-bit LCG
+    state with the PCG multiplier, adds one, and returns the upper 31 bits.
+    SUBJECT reduces that value modulo 4; CRITICIZE reduces it modulo 2.
+    """
+    subject_call = 0x0800967E
+    criticize_call = 0x08009916
+    if _thumb1_bl_target(data, subject_call - ROM_BASE) != PLAYER_INTERACTION_RESPONSE_RNG:
+        raise ValueError("SUBJECT response RNG call drifted")
+    if _thumb1_bl_target(data, criticize_call - ROM_BASE) != PLAYER_INTERACTION_RESPONSE_RNG:
+        raise ValueError("CRITICIZE response RNG call drifted")
+
+    subject_mod = (0x2703, 0x17C3, 0x0F9B, 0x18C0, 0x4007, 0x1AFF)
+    if _unpack_halfwords(data, 0x08009682, len(subject_mod)) != subject_mod:
+        raise ValueError("SUBJECT response RNG modulo-4 path drifted")
+    criticize_mod = (0x2701, 0x0FC3, 0x18C0, 0x4007, 0x1AFF)
+    if _unpack_halfwords(data, 0x0800991A, len(criticize_mod)) != criticize_mod:
+        raise ValueError("CRITICIZE response RNG modulo-2 path drifted")
+
+    generator_prefix = (0xB510, 0xF000, 0xFA9F, 0x30A8, 0x0004, 0x4A08, 0x6841, 0x6800, 0x4B07)
+    if _unpack_halfwords(data, PLAYER_INTERACTION_RESPONSE_RNG, len(generator_prefix)) != generator_prefix:
+        raise ValueError("interaction response RNG generator drifted")
+    lo = struct.unpack_from("<I", data, 0x08010DD8 - ROM_BASE)[0]
+    hi = struct.unpack_from("<I", data, 0x08010DDC - ROM_BASE)[0]
+    multiplier = (hi << 32) | lo
+    if multiplier != PLAYER_INTERACTION_RESPONSE_RNG_MULTIPLIER:
+        raise ValueError("interaction response RNG multiplier drifted")
+
+    state_ptr_global_literal = struct.unpack_from("<I", data, 0x08011310 - ROM_BASE)[0]
+    if state_ptr_global_literal != PLAYER_INTERACTION_RESPONSE_RNG_STATE_PTR_GLOBAL:
+        raise ValueError("interaction response RNG state-pointer global drifted")
+    state_ptr = struct.unpack_from("<I", data, init_ram_to_rom_off(state_ptr_global_literal))[0]
+    state_addr = state_ptr + PLAYER_INTERACTION_RESPONSE_RNG_STATE_OFFSET
+    state_initial = struct.unpack_from("<Q", data, init_ram_to_rom_off(state_addr))[0]
+    if state_initial != 1:
+        raise ValueError("interaction response RNG initial state drifted")
+
+    all_calls = []
+    for off in range(0, min(len(data) - 3, 0x20000), 2):
+        if _thumb1_bl_target(data, off) == PLAYER_INTERACTION_RESPONSE_RNG:
+            all_calls.append(ROM_BASE + off)
+    if all_calls != [subject_call, criticize_call]:
+        raise ValueError(f"unexpected interaction response RNG call sites: {all_calls!r}")
+
+    state1 = (state_initial * multiplier + PLAYER_INTERACTION_RESPONSE_RNG_INCREMENT) & 0xFFFFFFFFFFFFFFFF
+    first_rand = (state1 >> 32) & 0x7FFFFFFF
+    return {
+        "generator": f"0x{PLAYER_INTERACTION_RESPONSE_RNG:08X}",
+        "subject_call": f"0x{subject_call:08X}",
+        "criticize_call": f"0x{criticize_call:08X}",
+        "all_generator_calls": "|".join(f"0x{addr:08X}" for addr in all_calls),
+        "state_ptr_global": f"0x{state_ptr_global_literal:08X}",
+        "state_ptr_initial": f"0x{state_ptr:08X}",
+        "state_offset": f"+0x{PLAYER_INTERACTION_RESPONSE_RNG_STATE_OFFSET:X}",
+        "state_initial": f"0x{state_initial:016X}",
+        "multiplier": f"0x{multiplier:016X}",
+        "increment": PLAYER_INTERACTION_RESPONSE_RNG_INCREMENT,
+        "output": "(state >> 32) & 0x7FFFFFFF",
+        "subject_variant": "rand % 4",
+        "criticize_variant": "rand % 2",
+        "first_rand": f"0x{first_rand:08X}",
+        "first_subject_variant": first_rand % 4,
+        "confidence": "high",
+    }
 
 
 def extract_player_interaction_state2_cursor(data: bytes) -> dict:
@@ -1834,6 +1955,12 @@ def extract_player_interaction_state_transitions(data: bytes) -> list[dict]:
         raise ValueError("interaction state-2 B return dispatch drifted")
     if _unpack_halfwords(data, 0x08009CBE, 5) != (0xF000, 0xFD99, 0x2150, 0x51A5, 0x2201):
         raise ValueError("interaction state-2 B return store drifted")
+    if _unpack_halfwords(data, 0x08009CC6, 2) != (0x2201, 0x2007):
+        raise ValueError("interaction state-2 B return SFX7 arguments drifted")
+    if _thumb1_bl_target(data, 0x08009CCA - ROM_BASE) != 0x08001B74:
+        raise ValueError("interaction state-2 B return SFX7 call drifted")
+    if _unpack_halfwords(data, 0x08008C94, 2) != (0x50E5, 0x51A5):
+        raise ValueError("interaction state-2 B caller page/state reset drifted")
 
     # State 3 teardown clears state/base/scratch and the active interaction byte.
     teardown = (0xF001, 0xF8D9, 0x23E1, 0x2296, 0x009B, 0x50E2, 0x2300)
@@ -1870,10 +1997,10 @@ def extract_player_interaction_state_transitions(data: bytes) -> list[dict]:
          "proven_behavior": "copies selected record +0x24 child base to Player+0x1E8, then returns to state 0 to render that four-action page"},
         {**common, "transition": "selector_leaf_confirm", "handler": "0x08009DDA", "from_state": 1, "to_state": 2,
          "input": "fresh A", "choice": "selected", "condition": "selected record +0x20 == 1",
-         "proven_behavior": "initializes the secondary leaf-action interaction state and stores state 2; exact leaf payload semantics remain unresolved"},
+         "proven_behavior": "initializes the secondary leaf-action interaction state and stores state 2 regardless of +0x28 topic count; exact leaf payload semantics remain unresolved"},
         {**common, "transition": "secondary_b_return", "handler": "0x08009CB6", "from_state": 2, "to_state": 0,
          "input": "fresh B", "choice": "", "condition": "state == 2",
-         "proven_behavior": "runs UI cleanup and returns the interaction state to 0; cancel-versus-commit meaning is not statically proved"},
+         "proven_behavior": "runs UI cleanup, plays SFX7 volume 0x50, clears Player+0x1E8 page base and Player+0x1EC state to 0; cancel-versus-commit meaning is not statically proved"},
         {**common, "transition": "teardown", "handler": "0x0800963E", "from_state": 3, "to_state": 0,
          "input": "state dispatch", "choice": "", "condition": "state == 3",
          "proven_behavior": "resets Player+0x1E8 and interaction scratch/state, writes 0x03000610=0, restores scene graphics, and marks Player+0x381=1"},
@@ -2045,6 +2172,301 @@ def extract_ending_vram_effect_copy_model(data: bytes) -> list[dict]:
          "size_formula": "250*(argument+64)",
          "size_at_argument_0": 250 * 64},
     ]
+
+
+def extract_ending_vram_effect_level10_sources(data: bytes) -> list[dict]:
+    """Resolve the opcode -5 argument-0 copy sources for canonical Level 10.
+
+    All five state-4 sketch overlays are level-gated to Level 10, whose active
+    graphics descriptor is the initialized-IWRAM record at 0x03000E80.
+    0x08004FE0 reads descriptor +0x00 and +0x14, then adds its recovered
+    source biases before issuing the two byte-counted copies.
+    """
+    desc_ram = 0x03000E80
+    desc_off = init_ram_to_rom_off(desc_ram)
+    bg_tiles_source = struct.unpack_from('<I', data, desc_off + 0x00)[0]
+    obj_tiles_source = struct.unpack_from('<I', data, desc_off + 0x14)[0]
+    if bg_tiles_source != 0x085E2B60 or obj_tiles_source != 0x08310654:
+        raise ValueError(
+            f"Level 10 ending descriptor drifted: bg=0x{bg_tiles_source:08X} obj=0x{obj_tiles_source:08X}"
+        )
+
+    first_source = bg_tiles_source + 0x0005E801
+    second_source = obj_tiles_source + 0x0005E800
+    first_bytes = 1500 * 64
+    second_bytes = 250 * 64
+
+    sound_table_off = 0x65662C
+    sfx13_source, _ = struct.unpack_from('<II', data, sound_table_off + 13 * 8)
+    first_end = first_source + first_bytes
+    sfx13_overlap = max(0, first_end - max(first_source, sfx13_source)) if sfx13_source < first_end else 0
+
+    common = {
+        "level": 10,
+        "descriptor_iwram": f"0x{desc_ram:08X}",
+        "confidence": "high",
+    }
+    return [
+        {**common, "copy": 1, "descriptor_field": "+0x00 bg_tiles_source",
+         "descriptor_value": f"0x{bg_tiles_source:08X}", "source_bias": "0x0005E801",
+         "effective_source_argument_0": f"0x{first_source:08X}",
+         "argument_0_bytes": first_bytes, "argument_0_end_exclusive": f"0x{first_end:08X}",
+         "sfx13_overlap_bytes": sfx13_overlap},
+        {**common, "copy": 2, "descriptor_field": "+0x14 obj_tiles_source",
+         "descriptor_value": f"0x{obj_tiles_source:08X}", "source_bias": "0x0005E800",
+         "effective_source_argument_0": f"0x{second_source:08X}",
+         "argument_0_bytes": second_bytes, "argument_0_end_exclusive": f"0x{second_source + second_bytes:08X}",
+         "sfx13_overlap_bytes": 0},
+    ]
+
+
+def extract_ending_vram_effect_argument0_payloads(data: bytes) -> list[dict]:
+    """Export the exact statically reachable argument-0 payloads and VRAM bounds."""
+    import hashlib
+
+    sources = extract_ending_vram_effect_level10_sources(data)
+    destinations = {1: 0x06000000, 2: 0x06010000}
+    vram_limit = 0x06018000
+    rows = []
+    for source_row in sources:
+        copy = source_row['copy']
+        source = int(source_row['effective_source_argument_0'], 16)
+        length = source_row['argument_0_bytes']
+        destination = destinations[copy]
+        start = source - ROM_BASE
+        payload = data[start:start + length]
+        if len(payload) != length:
+            raise ValueError(f'ending argument-0 copy {copy} payload truncated')
+        end = destination + length
+        rows.append({
+            'copy': copy,
+            'reachable_argument': 0,
+            'source': f'0x{source:08X}',
+            'destination': f'0x{destination:08X}',
+            'byte_length': length,
+            'destination_end_exclusive': f'0x{end:08X}',
+            'vram_limit_exclusive': f'0x{vram_limit:08X}',
+            'within_vram': 'yes' if end <= vram_limit else 'no',
+            'sha256': hashlib.sha256(payload).hexdigest(),
+            'confidence': 'high',
+        })
+    if any(row['within_vram'] != 'yes' for row in rows):
+        raise ValueError('statically reachable ending argument-0 payload exceeds VRAM')
+    return rows
+
+
+def extract_ending_effect_argument_writes(data: bytes) -> list[dict]:
+    """Inventory direct Player-update writes to the ending-effect argument state.
+
+    Player_update loads the shared global base 0x0300062C into r5.  The
+    argument field is +0x48 (0x03000674).  Within the recovered Player-update
+    code region the only direct STR [r5,#0x48] instructions are the guarded
+    +20 update and the <=1000 reset.  This deliberately does not claim that
+    indirect/external runtime writes are impossible.
+    """
+    if struct.unpack_from('<I', data, 0x0800854C - ROM_BASE)[0] != 0x0300062C:
+        raise ValueError('ending writer global-base literal drifted')
+    if _unpack_halfwords(data, 0x080081BE, 1) != (0x4DE3,):
+        raise ValueError('ending writer Player_update base-load drifted')
+
+    scan_start = 0x080081B0
+    scan_end = 0x0800A000
+    stores = []
+    for addr in range(scan_start, scan_end, 2):
+        hw = struct.unpack_from('<H', data, addr - ROM_BASE)[0]
+        # Thumb-1 STR Rd,[Rb,#imm5*4], specialized to Rb=r5 and +0x48.
+        if (hw & 0xF800) == 0x6000:
+            imm5 = (hw >> 6) & 0x1F
+            rb = (hw >> 3) & 7
+            if rb == 5 and imm5 * 4 == 0x48:
+                stores.append(addr)
+    if stores != [0x080081D0, 0x080088AA]:
+        raise ValueError(f'ending argument direct-writer inventory drifted: {[hex(v) for v in stores]}')
+
+    if _unpack_halfwords(data, 0x080081C8, 5) != (0x4293, 0xDC00, 0xE36C, 0x3314, 0x64AB):
+        raise ValueError('ending argument >1000 writer path drifted')
+    if _unpack_halfwords(data, 0x080088A8, 2) != (0x2300, 0x64AB):
+        raise ValueError('ending argument <=1000 reset writer drifted')
+
+    common = {
+        'global_base': '0x0300062C',
+        'field_offset': '+0x48',
+        'field_address': '0x03000674',
+        'confidence': 'high',
+    }
+    return [
+        {**common, 'store_address': '0x080081D0',
+         'write': 'argument_state += 20',
+         'guard': 'previous argument_state > 1000'},
+        {**common, 'store_address': '0x080088AA',
+         'write': 'argument_state = 0',
+         'guard': 'previous argument_state <= 1000'},
+    ]
+
+
+def extract_ending_effect_static_reachability(data: bytes) -> dict:
+    """Summarize what static direct-writer evidence does and does not prove."""
+    rows = extract_ending_effect_argument_writes(data)
+    return {
+        'argument_state': '0x03000674',
+        'direct_player_update_writers': ';'.join(row['store_address'] for row in rows),
+        'code_proven_seed_above_1000': 'none found',
+        'repeat_effect_reachable_with_normal_zero_seed': 'argument 0 only',
+        'scope_caveat': 'direct Player_update writer inventory does not prove absence of indirect/external runtime writes',
+        'confidence': 'high for direct-writer inventory; conservative for global reachability',
+    }
+
+
+def extract_ending_event_flag_runtime(data: bytes) -> dict:
+    """Inventory direct accesses that keep the final-effect event flag latched.
+
+    The final state-4 handler writes 1 through the only exact 0x03000678
+    literal in the ROM.  Player_update reaches the same field through the
+    shared 0x0300062C base at +0x4C and only reads it at the two argument
+    branches; there is no direct STR [r5,#0x4C] in the recovered Player-update
+    region.  This establishes same-scene latching while normal Player_update
+    continues, but deliberately does not rule out scene reset or indirect /
+    external writes elsewhere at runtime.
+    """
+    flag = 0x03000678
+    literal = 0x08003984
+    if struct.unpack_from('<I', data, literal - ROM_BASE)[0] != flag:
+        raise ValueError('ending event-flag exact literal drifted')
+
+    needle = struct.pack('<I', flag)
+    occurrences = []
+    start = 0
+    while True:
+        off = data.find(needle, start)
+        if off < 0:
+            break
+        occurrences.append(ROM_BASE + off)
+        start = off + 1
+    if occurrences != [literal]:
+        raise ValueError(f'ending event-flag literal inventory drifted: {[hex(v) for v in occurrences]}')
+
+    # Setter: movs r2,#1; ldr r3,[pc,...0x08003984]; str r2,[r3].
+    if _unpack_halfwords(data, 0x08003806, 3) != (0x2201, 0x4B5E, 0x601A):
+        raise ValueError('ending event-flag setter drifted')
+
+    if struct.unpack_from('<I', data, 0x0800854C - ROM_BASE)[0] != 0x0300062C:
+        raise ValueError('ending event-flag Player_update base literal drifted')
+
+    reads = []
+    stores = []
+    for addr in range(0x080081B0, 0x0800A000, 2):
+        hw = struct.unpack_from('<H', data, addr - ROM_BASE)[0]
+        imm5 = (hw >> 6) & 0x1F
+        rb = (hw >> 3) & 7
+        # Thumb-1 word LDR/STR with base r5 and offset +0x4C.
+        if rb == 5 and imm5 * 4 == 0x4C:
+            if (hw & 0xF800) == 0x6800:
+                reads.append(addr)
+            elif (hw & 0xF800) == 0x6000:
+                stores.append(addr)
+    if reads != [0x080081D2, 0x080088AC]:
+        raise ValueError(f'ending event-flag Player_update read inventory drifted: {[hex(v) for v in reads]}')
+    if stores:
+        raise ValueError(f'ending event-flag Player_update store inventory drifted: {[hex(v) for v in stores]}')
+
+    return {
+        'event_flag': '0x03000678',
+        'setter': '0x0800380A',
+        'setter_value': 1,
+        'exact_address_literal': '0x08003984',
+        'exact_address_literal_occurrences': len(occurrences),
+        'player_update_reads': ';'.join(f'0x{addr:08X}' for addr in reads),
+        'player_update_direct_stores': 'none',
+        'same_scene_behavior': 'latched while normal Player_update continues',
+        'scope_caveat': 'direct access inventory does not rule out scene-reset or indirect/external writes',
+        'confidence': 'high for direct Player_update access inventory; conservative globally',
+    }
+
+
+def extract_ending_vram_effect_runtime(data: bytes) -> list[dict]:
+    """Export the exact static gate feeding the ending VRAM effect.
+
+    This intentionally does not call 0x03000674 a progress counter: the public
+    binary resets values <=1000 to zero and only increments values already
+    above 1000.  Whether some external/runtime writer ever seeds such a value
+    is a separate emulator-trace question.
+    """
+    final_entry = (0x2000, 0xF001, 0xFBF2, 0x2201, 0x2150, 0x200D)
+    if _unpack_halfwords(data, 0x080037F6, len(final_entry)) != final_entry:
+        raise ValueError("ending final-opcode entry drifted")
+    if struct.unpack_from('<I', data, 0x08003984 - ROM_BASE)[0] != 0x03000678:
+        raise ValueError("ending event-flag literal drifted")
+
+    gate = (0x22FA, 0xB5E0, 0x4DE3, 0x6CAB, 0xB08F, 0x0004,
+            0x0092, 0x4293, 0xDC00, 0xE36C, 0x3314, 0x64AB,
+            0x6CEB, 0x2B01, 0xD100, 0xE36C)
+    if _unpack_halfwords(data, 0x080081BA, len(gate)) != gate:
+        raise ValueError("ending Player_update threshold gate drifted")
+    if struct.unpack_from('<I', data, 0x0800854C - ROM_BASE)[0] != 0x0300062C:
+        raise ValueError("ending Player_update global-base literal drifted")
+
+    low_path = (0x2300, 0x64AB, 0x6CEB, 0x2B01, 0xD000, 0xE492,
+                0x6CA8, 0xF7FC, 0xFB93)
+    if _unpack_halfwords(data, 0x080088A8, len(low_path)) != low_path:
+        raise ValueError("ending Player_update reset/repeat path drifted")
+
+    common = {
+        "effect_function": "0x08004FE0",
+        "argument_state": "0x03000674",
+        "event_flag": "0x03000678",
+        "event_flag_required": 1,
+        "confidence": "high",
+    }
+    return [
+        {**common, "phase": "final_opcode_entry", "handler": "0x080037F6",
+         "condition": "state-4 opcode -5", "argument_update": "none",
+         "effect_call": "0x080037F8", "argument_before_call": 0},
+        {**common, "phase": "player_update_le_1000", "handler": "0x080088A8",
+         "condition": "argument_state <= 1000", "argument_update": "argument_state = 0",
+         "effect_call": "0x080088B6 when event_flag == 1", "argument_before_call": "0"},
+        {**common, "phase": "player_update_gt_1000", "handler": "0x080081CE",
+         "condition": "argument_state > 1000", "argument_update": "argument_state += 20",
+         "effect_call": "0x080088B6 when event_flag == 1", "argument_before_call": "updated argument_state"},
+    ]
+
+
+def extract_level9_treetype20_action(data: bytes) -> dict:
+    """Return the code-proven special behavior of the Level-9 treetype-20 tile.
+
+    The physical actor at 0x08386FF0 stores ``portTo=524``, but Fgtile_update
+    checks actor+0x54 (treetype) before the generic portTo/request_scene block.
+    treetype 20 enters 0x0800417C; on a fresh A overlap it writes 0x00020000
+    (512 pixels in the recovered fixed-point convention) to Player+0x394 and
+    invokes the same vertical-target helper used by the Level-10 forced gate.
+    Therefore 524 is preserved actor metadata, not a scene destination.
+    """
+    treetype_dispatch = (0x2354, 0x5EE0, 0x2302, 0x275A, 0x4699, 0x2814, 0xD100, 0xE25D)
+    if _unpack_halfwords(data, 0x08003CB0, len(treetype_dispatch)) != treetype_dispatch:
+        raise ValueError("Fgtile treetype-20 dispatch drifted")
+
+    target_write = (0x23E5, 0x2280, 0x009B, 0x0292, 0x50CA, 0x4640, 0xF003, 0xFF6C)
+    if _unpack_halfwords(data, 0x080041BC, len(target_write)) != target_write:
+        raise ValueError("Level-9 treetype-20 vertical-target branch drifted")
+
+    generic_handoff = (0x2352, 0x2200, 0x5EE1, 0x4832, 0x230A)
+    if _unpack_halfwords(data, 0x08004258, len(generic_handoff)) != generic_handoff:
+        raise ValueError("generic Fgtile scene handoff drifted")
+
+    return {
+        "level": 9,
+        "actor_rom_addr": "0x08386FF0",
+        "treetype": 20,
+        "stored_portTo": 524,
+        "generic_scene_handoff_reached": "no",
+        "special_entry": "0x0800417C",
+        "trigger": "fresh A while overlapping treetype-20 Fgtile",
+        "player_target_y_fixed": "0x00020000",
+        "player_target_y_px": 512,
+        "player_target_y_offset": "+0x394",
+        "vertical_target_helper": "0x080080A4",
+        "portTo_semantics": "stored actor metadata; not used as a scene destination on the treetype-20 branch",
+        "confidence": "high",
+    }
 
 
 def extract_dialogue_context_semantics() -> list[dict]:
@@ -2361,6 +2783,10 @@ def main():
                "level_record_actor_field","level_gate_function","confidence"],
               story_overlay_rows)
 
+    story_activation_row = extract_story_overlay_activation_policy(data)
+    write_csv(args.out / "story_overlay_activation_policy.csv",
+              list(story_activation_row), [story_activation_row])
+
     obj_source_bytes = OBJ_PALETTE_SOURCE - OBJ_TILES_SOURCE
     obj_rows = [{
         "obj_tiles_source": f"0x{OBJ_TILES_SOURCE:08X}",
@@ -2511,6 +2937,10 @@ def main():
                "response_stride","text","confidence"],
               interaction_topic_response_text_rows)
 
+    interaction_response_rng_row = extract_player_interaction_response_rng(data)
+    write_csv(args.out / "player_interaction_response_rng.csv", list(interaction_response_rng_row),
+              [interaction_response_rng_row])
+
     interaction_state2_cursor_row = extract_player_interaction_state2_cursor(data)
     write_csv(args.out / "player_interaction_state2_cursor.csv", list(interaction_state2_cursor_row),
               [interaction_state2_cursor_row])
@@ -2595,6 +3025,41 @@ def main():
               ["copy","function","destination","source_bias","bytes_per_step","argument_bias",
                "size_formula","size_at_argument_0","copy_helper","scene_manager","confidence"],
               ending_copy_rows)
+
+    ending_flag_row = extract_ending_event_flag_runtime(data)
+    write_csv(args.out / "ending_event_flag_runtime.csv",
+              list(ending_flag_row), [ending_flag_row])
+
+    ending_runtime_rows = extract_ending_vram_effect_runtime(data)
+    write_csv(args.out / "ending_vram_effect_runtime.csv",
+              ["phase","handler","condition","argument_state","argument_update","event_flag",
+               "event_flag_required","effect_function","effect_call","argument_before_call","confidence"],
+              ending_runtime_rows)
+
+    ending_write_rows = extract_ending_effect_argument_writes(data)
+    write_csv(args.out / "ending_effect_argument_writes.csv",
+              ["store_address","global_base","field_offset","field_address","write","guard","confidence"],
+              ending_write_rows)
+
+    ending_reachability_row = extract_ending_effect_static_reachability(data)
+    write_csv(args.out / "ending_effect_static_reachability.csv",
+              list(ending_reachability_row), [ending_reachability_row])
+
+    ending_source_rows = extract_ending_vram_effect_level10_sources(data)
+    write_csv(args.out / "ending_vram_effect_level10_sources.csv",
+              ["level","copy","descriptor_iwram","descriptor_field","descriptor_value","source_bias",
+               "effective_source_argument_0","argument_0_bytes","argument_0_end_exclusive",
+               "sfx13_overlap_bytes","confidence"], ending_source_rows)
+
+    ending_payload_rows = extract_ending_vram_effect_argument0_payloads(data)
+    write_csv(args.out / "ending_vram_effect_argument0_payloads.csv",
+              ["copy","reachable_argument","source","destination","byte_length",
+               "destination_end_exclusive","vram_limit_exclusive","within_vram","sha256","confidence"],
+              ending_payload_rows)
+
+    level9_treetype20_row = extract_level9_treetype20_action(data)
+    write_csv(args.out / "level9_treetype20_action.csv",
+              list(level9_treetype20_row), [level9_treetype20_row])
 
     # Message selectors and the stream pointer table are initialized in the ROM->IWRAM block.
     ptr_off = init_ram_to_rom_off(MESSAGE_PTR_TABLE_RAM)

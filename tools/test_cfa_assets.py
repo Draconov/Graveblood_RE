@@ -3,6 +3,7 @@ import importlib.util
 import hashlib
 import struct
 import os
+import csv
 import tempfile
 import sys
 import unittest
@@ -47,11 +48,11 @@ class CfaAssetTests(unittest.TestCase):
         for level in range(1, 11):
             self.assertIn((level, 0), variants)
 
-    def test_generator_emits_all_variant_units_and_preserves_all_physical_portals(self):
+    def test_generator_emits_all_variant_units_and_only_code_proven_scene_portals(self):
         g = self._module()
         specs = g.build_level_specs(ROOT)
-        self.assertEqual(38, sum(len(spec.portals) for spec in specs.values()))
-        self.assertIn(524, [p.target_level for p in specs[9].portals])
+        self.assertEqual(33, sum(len(spec.portals) for spec in specs.values()))
+        self.assertNotIn(524, [p.target_level for p in specs[9].portals])
 
         with tempfile.TemporaryDirectory() as td:
             out = Path(td)
@@ -71,9 +72,9 @@ class CfaAssetTests(unittest.TestCase):
         targets = [p.target_level for spec in specs.values() for p in spec.portals]
         normal = [target for target in targets if 0 <= target <= 10]
         special = [target for target in targets if target < 0 or target > 10]
-        self.assertEqual(37, len(normal))
+        self.assertEqual(33, len(normal))
         self.assertTrue(all(target in specs for target in normal))
-        self.assertEqual([524], special)
+        self.assertEqual([], special)
 
     def test_actor_runtime_data_preserves_canonical_population_and_routes(self):
         g = self._module()
@@ -120,6 +121,35 @@ class CfaAssetTests(unittest.TestCase):
             self.assertIn('GB_ACTOR_STORY_DESCRIPTOR_COUNT = 16', header)
             self.assertIn('GB_ACTOR_VISUAL_COUNT = 32', header)
             self.assertIn('GB_ACTOR_ROUTE_COUNT = 5', header)
+
+    def test_generator_packs_exact_grass_and_leaf_particle_tiles(self):
+        g = self._module()
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        foreground = g.pack_foreground_sprite_bank(rom)
+        source_base = g.OBJ_TILES_SOURCE - g.ROM_BASE
+        expected_grass = b''.join(
+            rom[source_base + tile * 64:source_base + (tile + 1) * 64]
+            for tile in (0x48, 0x49, 0x58, 0x59)
+        )
+        expected_leaves = b''.join(
+            rom[source_base + tile * 64:source_base + (tile + 1) * 64]
+            for tile in (0x4C, 0x4D, 0x5C, 0x5D)
+        )
+        self.assertEqual(expected_grass, foreground.grass)
+        self.assertEqual(expected_leaves, foreground.leaf_frames)
+        self.assertEqual(256, len(foreground.grass))
+        self.assertEqual(256, len(foreground.leaf_frames))
+
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            g.generate_all(ROOT, out, Path(os.environ['GRAVEBLOOD_ROM']))
+            ctext = (out / 'data/actor_sprite_data.c').read_text(encoding='utf-8')
+            htext = (out / 'include/graveblood/assets.h').read_text(encoding='utf-8')
+            self.assertIn('gb_grass_obj_tiles', ctext)
+            self.assertIn('gb_leaf_obj_frames', ctext)
+            self.assertIn('GB_GRASS_OBJ_HALFWORDS = 128', htext)
+            self.assertIn('GB_LEAF_FRAME_COUNT = 4', htext)
+            self.assertIn('GB_LEAF_FRAME_HALFWORDS = 32', htext)
 
     def test_story_runtime_data_and_canonical_font_contract(self):
         g = self._module()
@@ -358,11 +388,41 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('state-4 collection interaction activation,high', call_sites)
         self.assertIn('0x0800426C,0x08001B74,Fgtile_update,5,one-shot,80,generic scene portal activation,high', call_sites)
         self.assertIn('0x08004B2A,0x08001B74,TitleScene_update,6,one-shot,80,fresh START title transition,high', call_sites)
-        self.assertIn('0x080089F8,0x08001B74,Player_update,4,one-shot,80,social secondary topic cursor up,high', call_sites)
-        self.assertIn('0x0800909C,0x08001B74,Player_update,4,one-shot,80,social secondary topic cursor down,high', call_sites)
+        self.assertIn('0x080089F8,0x08001B74,Player_update,4,one-shot,80,FRIENDS successful UP navigation,high', call_sites)
+        self.assertIn('0x0800909C,0x08001B74,Player_update,4,one-shot,80,FRIENDS successful DOWN navigation,high', call_sites)
         self.assertIn('0x0800368E,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -2 terminal,high', call_sites)
         self.assertIn('0x08003748,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -1 terminal,high', call_sites)
         self.assertIn('0x0800389A,0x08001B74,state4_final_collection_handler,7,one-shot,80,state4 dialogue opcode -3 terminal,high', call_sites)
+        self.assertIn('0x0800898E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab previous (fresh L; MESSAGES/STATUS/FRIENDS/BACKPACK),high', call_sites)
+        self.assertIn('0x0800904E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab next (fresh R; MESSAGES/STATUS/FRIENDS/BACKPACK),high', call_sites)
+        self.assertIn('0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-2 interaction activation when 0x0300062C mode byte is nonzero,high', call_sites)
+        self.assertIn('0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-4 interaction activation when 0x0300062C mode byte is nonzero,high', call_sites)
+        self.assertIn('0x08003298,0x08001B74,npc_state4_fresh_a_activation,9,one-shot,80,legsColor 0x70 NPC special movement-state handoff,high', call_sites)
+        self.assertIn('0x08009AA2,0x08001B74,Player_update,12,one-shot,80,FRIENDS DOWN-at-bottom boundary feedback,high', call_sites)
+        self.assertIn('0x08009B58,0x08001B74,Player_update,12,one-shot,80,FRIENDS UP-at-top boundary feedback,high', call_sites)
+        self.assertIn('0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R Player action/state-reset path,high', call_sites)
+        self.assertIn('0x080032D2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -4 set story/progression stage,high', call_sites)
+        self.assertIn('0x080033A2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -3 add auxiliary message stream,high', call_sites)
+        self.assertIn('0x08003462,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -2 set primary message stream,high', call_sites)
+        self.assertIn('0x08003516,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -1 set dialogue step,high', call_sites)
+        self.assertIn('0x08003D5C,0x08001B74,Fgtile_update,5,one-shot,80,fresh-A generic Fgtile activation for turn != 4/5,high', call_sites)
+        self.assertIn('0x080084DC,0x08001B74,Player_update,6,one-shot,80,fresh START PDA/menu open,high', call_sites)
+        self.assertIn('0x080075D2,0x08001B74,pda_return_to_gameplay_transition_candidate,7,one-shot,80,PDA/menu return-to-gameplay transition; consumes 0x03000618 pending flag,high', call_sites)
+        self.assertIn('0x08009904,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor previous (fresh LEFT; cursor 0..3),high', call_sites)
+        self.assertIn('0x0800999E,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor next (fresh RIGHT; cursor 0..3),high', call_sites)
+        self.assertIn('0x08009CCA,0x08001B74,Player_update,7,one-shot,80,interaction state-2 return/back (fresh B),high', call_sites)
+        self.assertIn('0x0800B2A6,0x08001B74,effect_object_sfx4_constructor_candidate,4,one-shot,80,effect-object constructor 0x0800B250 (vtable 0x08A8C198),high', call_sites)
+        self.assertIn('0x0800B37E,0x08001B74,effect_object_sfx3_constructor_candidate,3,one-shot,80,effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4),high', call_sites)
+
+        pda_pages = (ROOT / 'data' / 'pda_menu_pages.csv').read_text(encoding='utf-8').splitlines()
+        self.assertEqual('selector,page_name,renderer_branch,key_policy,evidence', pda_pages[0])
+        self.assertEqual(['0,MESSAGES,0x08007642,L decrements only when selector > 0,0x080075F8 dispatches selector 0 to MESSAGES branch'], [pda_pages[1]])
+        self.assertIn('1,STATUS,0x0800795C', pda_pages[2])
+        self.assertIn('2,FRIENDS,0x0800777A', pda_pages[3])
+        self.assertIn('3,BACKPACK,0x08007A10,R increments only when selector <= 2', pda_pages[4])
+
+        known_globals = (ROOT / 'data' / 'known_globals.csv').read_text(encoding='utf-8')
+        self.assertIn('0x03000614,pda_menu_page_selector', known_globals)
 
         loop_rows = [line for line in call_sites.splitlines() if ',0x08001BDC,' in line]
         self.assertEqual(3, len(loop_rows), loop_rows)
@@ -377,6 +437,37 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('sample 2 unreachable/orphaned in public demo', music_routes)
         self.assertIn(',2,high,', music_routes)
         self.assertIn('exhaustive full-ROM loop-player scan finds exactly three calls', music_routes)
+
+    def test_all_one_shot_audio_calls_have_high_confidence_semantics(self):
+        rows = list(csv.DictReader((ROOT / 'data' / 'audio_call_sites.csv').read_text(encoding='utf-8').splitlines()))
+        one_shot = [row for row in rows if row['target'] == '0x08001B74']
+        self.assertGreater(len(one_shot), 0)
+        unresolved = [
+            (row['call_address'], row['caller'], row['recovered_action'], row['confidence'])
+            for row in one_shot
+            if row['confidence'] != 'high' or 'unresolved' in row['recovered_action'].lower()
+        ]
+        self.assertEqual([], unresolved)
+
+        closure_path = ROOT / 'data' / 'audio_one_shot_closure.csv'
+        self.assertTrue(closure_path.is_file(), closure_path)
+        closure = list(csv.DictReader(closure_path.read_text(encoding='utf-8').splitlines()))
+        self.assertEqual(1, len(closure))
+        self.assertEqual('30', closure[0]['one_shot_call_count'])
+        self.assertEqual('30', closure[0]['high_confidence_count'])
+        self.assertEqual('0', closure[0]['medium_confidence_count'])
+        self.assertEqual('3;4;5;6;7;8;9;10;11;12;13', closure[0]['reachable_sound_ids'])
+        self.assertEqual('yes', closure[0]['static_one_shot_call_graph_closed'])
+
+        for name in (
+            'audio_pda_return_080075C8.txt',
+            'audio_pda_open_080084B0.txt',
+            'audio_pda_messages_cursor_080098D0.txt',
+            'audio_interaction_confirm_08009C80.txt',
+            'audio_effect_sfx4_constructor_0800B250.txt',
+            'audio_effect_sfx3_constructor_0800B31C.txt',
+        ):
+            self.assertTrue((ROOT / 'disasm' / name).is_file(), name)
 
         music_runtime = (ROOT / 'data' / 'audio_music_runtime.csv').read_text(encoding='utf-8')
         self.assertIn('loop_player_signature,"(sound_id, mode, volume)"', music_runtime)
@@ -398,6 +489,36 @@ class CfaAssetTests(unittest.TestCase):
         self.assertEqual('71,0', fade[72])
         self.assertEqual('74,0', fade[75])
         self.assertEqual(76, len(fade))
+
+    def test_generator_emits_exact_safe_argument0_ending_payloads(self):
+        g = self._module()
+        rom_path = Path(os.environ['GRAVEBLOOD_ROM'])
+        rom = rom_path.read_bytes()
+        copy1, copy2 = g.extract_ending_argument0_payloads(rom)
+        self.assertEqual(96000, len(copy1))
+        self.assertEqual(16000, len(copy2))
+        self.assertEqual('841d321b25a5e9c304146f4e6501745ef35b9d27e69e98560262c76a27381514', hashlib.sha256(copy1).hexdigest())
+        self.assertEqual('17b8dc8ca34e26a634fb21d91d413dbda19bd58b9623e1848a4d1eb3157cb3d2', hashlib.sha256(copy2).hexdigest())
+
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            g.generate_all(ROOT, out, rom_path)
+            first = out / 'data/ending/argument0_copy1.bin'
+            second = out / 'data/ending/argument0_copy2.bin'
+            asm = out / 'data/ending_effect.s'
+            header = out / 'include/graveblood/assets.h'
+            self.assertEqual(copy1, first.read_bytes())
+            self.assertEqual(copy2, second.read_bytes())
+            atext = asm.read_text(encoding='utf-8')
+            self.assertIn('.global gb_ending_arg0_copy1', atext)
+            self.assertIn('.incbin "../data/ending/argument0_copy1.bin"', atext)
+            self.assertIn('.global gb_ending_arg0_copy2', atext)
+            self.assertIn('.incbin "../data/ending/argument0_copy2.bin"', atext)
+            htext = header.read_text(encoding='utf-8')
+            self.assertIn('GB_ENDING_ARG0_COPY1_BYTES = 96000', htext)
+            self.assertIn('GB_ENDING_ARG0_COPY2_BYTES = 16000', htext)
+            self.assertIn('extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];', htext)
+            self.assertIn('extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];', htext)
 
     def test_generator_is_deterministic_against_checked_in_outputs(self):
         g = self._module()
@@ -503,6 +624,80 @@ class CfaAssetTests(unittest.TestCase):
             self.assertIn('scroll_offsets,BG0HOFS/BG0VOFS..BG3HOFS/BG3VOFS=0', stext)
             self.assertEqual('attr0=0x02F0 attr1=0x01F0 attr2=0x0C00', rows['hidden_oam']['value'])
             self.assertIn('start_sfx,SFX6 volume80', stext)
+
+
+    def test_pda_extractor_recovers_exact_page_maps_and_controls(self):
+        extractor = ROOT / 'tools' / 'extract_pda.py'
+        self.assertTrue(extractor.is_file(), 'tools/extract_pda.py')
+        spec = importlib.util.spec_from_file_location('extract_pda', extractor)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        data = module.extract_pda(rom)
+        self.assertEqual(('MESSAGES', 'STATUS', 'FRIENDS', 'BACKPACK'), data.page_names)
+        self.assertEqual((0x086540A4, 0x08653BF4, 0x08653744, 0x08653294), data.raw_map_addresses)
+        self.assertEqual(0x0864825C, data.translation_address)
+        self.assertEqual((600, 600, 600, 600), tuple(len(page) for page in data.page_maps))
+        hashes = tuple(hashlib.sha256(struct.pack('<600H', *page)).hexdigest() for page in data.page_maps)
+        self.assertEqual((
+            '8be8fb65d2fd54d1dc3a3ba6bd978bbd9075419048008a1922306685bf722aeb',
+            'fd82be70bb76e5ccfbeb8deac04753647da5912c7188ba2d9d3b83403bfbfa24',
+            '3673fd5e021a8456ef076f9e2519dfa306a1540e02631ffa5f16c4f2c7466170',
+            '5d86cd4006daffb840d5cdcb0e72802ac37dc5e3854403cda3f2a5da6e3c7919',
+        ), hashes)
+        self.assertEqual(('Kate', 'Stas', 'IQ 54', 'Kiata', 'Alex', 'Evelina'), data.friends_names)
+        self.assertEqual((2, 0, 1, 3, 4, 5), data.friends_profile_order)
+        self.assertEqual(3, data.friends_visible_rows)
+        self.assertEqual((0, 3), data.message_slot_bounds)
+        self.assertFalse(data.ordinary_close_key_proven)
+        self.assertEqual(145, len(data.text_tile_ids))
+        chrome_tiles = {entry & 0x03FF for page in data.page_maps for entry in page}
+        self.assertTrue(all(tile not in chrome_tiles for tile in data.text_tile_ids))
+        self.assertEqual(len(set(data.text_tile_ids)), len(data.text_tile_ids))
+        self.assertLess(max(data.text_tile_ids), 864)
+
+    def test_pda_generator_writes_deterministic_evidence_and_runtime_assets(self):
+        extractor = ROOT / 'tools' / 'extract_pda.py'
+        spec = importlib.util.spec_from_file_location('extract_pda_generate', extractor)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            module.generate(ROOT, out, Path(os.environ['GRAVEBLOOD_ROM']))
+            for rel in (
+                'data/pda_runtime_semantics.csv',
+                'data/pda_page_render_sources.csv',
+                'data/pda_cursor_semantics.csv',
+                'data/pda_friends_entries.csv',
+                'reconstruction/data/pda_assets.c',
+                'disasm/pda_renderer_080075F8.txt',
+                'disasm/pda_open_0800849E.txt',
+                'disasm/pda_navigation_080088EC.txt',
+                'disasm/pda_messages_select_08009568.txt',
+                'disasm/pda_friends_navigation_080089BE.txt',
+            ):
+                self.assertTrue((out / rel).is_file(), rel)
+            runtime = list(csv.DictReader((out / 'data/pda_runtime_semantics.csv').read_text(encoding='utf-8').splitlines()))
+            actions = {row['fact']: row for row in runtime}
+            self.assertEqual('fresh START', actions['open_input']['value'])
+            self.assertIn('channels 0,1,2', actions['open_audio']['value'])
+            self.assertEqual('fresh R shoulder page+1; fresh L shoulder page-1; bounds 0..3; no wrap', actions['page_navigation']['value'])
+            self.assertEqual('no ordinary direct close input proven', actions['ordinary_close']['value'])
+            cursor = list(csv.DictReader((out / 'data/pda_cursor_semantics.csv').read_text(encoding='utf-8').splitlines()))
+            by_page = {row['page']: row for row in cursor}
+            self.assertEqual('dpad LEFT/RIGHT', by_page['MESSAGES']['keys'])
+            self.assertEqual('0..3; skip selector -1', by_page['MESSAGES']['bounds'])
+            self.assertEqual('dpad UP/DOWN', by_page['FRIENDS']['keys'])
+            self.assertEqual('cursor row 0..2 plus scroll over 6 entries', by_page['FRIENDS']['bounds'])
+            self.assertEqual('SFX4 volume 0x50 on success; SFX12 volume 0x50 at absolute top/bottom boundary', by_page['FRIENDS']['sfx'])
+            ctext = (out / 'reconstruction/data/pda_assets.c').read_text(encoding='utf-8')
+            self.assertIn('gb_pda_page_maps[GB_PDA_PAGE_COUNT][GB_PDA_MAP_CELLS]', ctext)
+            self.assertIn('gb_pda_friend_names[GB_PDA_FRIEND_COUNT]', ctext)
+            self.assertIn('gb_pda_text_tile_ids[GB_PDA_TEXT_TILE_COUNT]', ctext)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,3 @@
+level,copy,descriptor_iwram,descriptor_field,descriptor_value,source_bias,effective_source_argument_0,argument_0_bytes,argument_0_end_exclusive,sfx13_overlap_bytes,confidence
+10,1,0x03000E80,+0x00 bg_tiles_source,0x085E2B60,0x0005E801,0x08641361,96000,0x08658A61,9157,high
+10,2,0x03000E80,+0x14 obj_tiles_source,0x08310654,0x0005E800,0x0836EE54,16000,0x08372CD4,0,high

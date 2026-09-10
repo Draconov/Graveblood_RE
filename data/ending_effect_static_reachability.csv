@@ -1,0 +1,2 @@
+argument_state,direct_player_update_writers,code_proven_seed_above_1000,repeat_effect_reachable_with_normal_zero_seed,scope_caveat,confidence
+0x03000674,0x080081D0;0x080088AA,none found,argument 0 only,direct Player_update writer inventory does not prove absence of indirect/external runtime writes,high for direct-writer inventory; conservative for global reachability

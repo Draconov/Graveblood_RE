@@ -1,0 +1,2 @@
+current_level_global,scene_selector_global,overlay_slot_base,slot0_list,slot1_list,slot_lists_identical,level_gate_function,entity_level_field,level_rule,initial_population_conclusion,scope_caveat,confidence
+0x03000808,0x030005EC,0x0300083C,0x08018E94,0x08018E94,yes,0x080043AC,actor+0x56,-1 wildcard or entity level == current level,selector does not change story overlay list in public demo; initial visibility is level-gated,initial population policy does not replace per-entity runtime/progression behavior or persistent consumption,high

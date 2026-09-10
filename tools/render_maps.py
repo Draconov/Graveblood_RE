@@ -253,6 +253,21 @@ def _level_has_actor(row: dict[str, str], level_index: int) -> bool:
     return str(level_index) in row.get("normal_level_indices", "").split(";")
 
 
+def actor_overlay_label(row: dict[str, str], level_index: int) -> str:
+    kind = row.get("type", "actor")
+    if kind == "player":
+        return "PLAYER"
+    if kind != "fgtile":
+        return kind
+    if level_index == 9 and row.get("treetype") == "20" and row.get("portTo") == "524":
+        return "treetype20->Y512"
+    if level_index == 10 and row.get("turn") in {"4", "5"} and row.get("portTo") == "8":
+        return "forced-gate"
+    if row.get("portTo"):
+        return f"portal->{row['portTo']}"
+    return kind
+
+
 def add_actor_overlay(image: Image.Image, actor_rows: Iterable[dict[str, str]], level_index: int) -> Image.Image:
     """Draw compact markers for recovered actors/portals without obscuring the map."""
     out = image.copy()
@@ -270,11 +285,7 @@ def add_actor_overlay(image: Image.Image, actor_rows: Iterable[dict[str, str]], 
         px, py = round(x), round(y)
         # Keep overlay intentionally monochrome/high-contrast; semantic labels carry meaning.
         draw.ellipse((px-radius, py-radius, px+radius, py+radius), outline="white", width=2)
-        label = kind
-        if kind == "fgtile" and row.get("portTo"):
-            label = f"portal->{row['portTo']}"
-        elif kind == "player":
-            label = "PLAYER"
+        label = actor_overlay_label(row, level_index)
         draw.text((px + radius + 2, py - radius), label, fill="white", stroke_width=2, stroke_fill="black")
     return out
 

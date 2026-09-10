@@ -53,20 +53,29 @@ KNOWN_FUNCTIONS = [
     (0x08000108, "crt_start_thumb", "runtime startup after ARM->Thumb switch"),
     (0x080010A4, "actor_list_loader_candidate", "0x08005950 calls it for the selected story-overlay list and again for LevelRecord+0x38 physical actors"),
     (0x08002268, "irq_handler_candidate", "installed at 0x03007FFC; VBlank/IRQ dispatch candidate"),
+    (0x08002480, "Grass_update", "grass vtable update method; literal no-op bx lr"),
+    (0x08002684, "Grass_draw", "grass vtable draw method; submits 16x16 logical tile 0x48 with turn-controlled HFLIP and player-depth priority"),
     (0x0800274C, "NPC_draw", "vtable 0x08018B00 draw method; stages four dynamic 16x8 source rows and submits two 16x16 OAM sprites"),
-    (0x08002914, "grass_factory", "spawnType=grass registry target; allocates 0x6C-byte grass/leaves object"),
+    (0x08002914, "grass_factory", "spawnType=grass registry target; allocates 0x6C-byte Grass object"),
     (0x0800298C, "npc_dialogue_actor_update_candidate", "dispatches actor state modes and consumes dial-indexed 0x90-byte dialogue records"),
+    (0x08002A0C, "npc_state2_dialogue_interaction", "actor state==2 proximity/interaction branch; exact geometry and fresh-A handoff exported by extract_extended_semantics.py"),
+    (0x08002ACA, "npc_state1_social_interaction", "actor state==1 social proximity/interaction branch; exact geometry and fresh-A handoff exported by extract_extended_semantics.py"),
+    (0x08002C0C, "npc_state4_collection_interaction", "actor state==4 collection proximity/interaction branch; exact geometry and fresh-A handoff exported by extract_extended_semantics.py"),
+    (0x08002D96, "npc_state2_fresh_a_activation", "fresh-A activation path for state-2 dialogue interaction; copies dial/alignment state into Player"),
+    (0x08002FA2, "npc_state1_social_activation_prelude", "state-1 fresh-A social activation prelude before Player interaction dispatch"),
+    (0x0800301C, "npc_state4_fresh_a_activation", "fresh-A activation and selector dispatch for state-4 collection interaction"),
     (0x08003998, "NPC_constructor", "called by NPC factory to initialize 0xFC-byte NPC/interactive-entity object"),
     (0x08003A60, "NPC_factory", "spawnType=npc registry target; allocates 0xFC bytes and calls 0x08003998"),
+    (0x08003AE8, "Fgtile_draw", "Fgtile vtable draw method; literal no-op bx lr"),
     (0x08003AEC, "fgtile_factory", "spawnType=fgtile registry target; allocates 0x90-byte foreground-tile object"),
     (0x080037F6, "state4_final_collection_handler", "state-4 opcode -5 handler; calls 0x08004FE0, plays SFX 13, sets 0x03000678=1, increments collection index, consumes pickup and clears dialogue"),
-    (0x08003B98, "Fgtile_update", "foreground-tile update; turn=4/5 switches after collection index 3->4 to a fresh-A forced vertical gate action; generic portTo -> request_scene block remains separate at 0x08004258"),
+    (0x08003B98, "Fgtile_update", "foreground-tile update; turn=4/5 switches after collection index 3->4 to a fresh-A forced vertical gate action; treetype=20 diverts through 0x0800417C to Player vertical-target helper without consuming portTo; generic portTo -> request_scene block remains separate at 0x08004258"),
     (0x080043AC, "actor_level_global_policy_candidate", "level mismatch invokes actor virtual method; setglobal==0 sets inherited actor+0x31 culling-bypass flag"),
     (0x080043F8, "actor_common_property_parse_candidate", "maps named actor properties into runtime object fields"),
     (0x08004670, "apply_actor_motion_with_tile_collision_candidate", "reads actor +0x18/+0x1C requested displacement, collision-tests the world tile grid, and applies permitted components to +0x08/+0x0C"),
     (0x08004A74, "TitleScene_exit", "no-op exit (bx lr)"),
     (0x08004F04, "dynamic_obj_tile_upload", "copies ROM-side 8bpp animation tiles into hardware-visible OBJ VRAM working slots"),
-    (0x08004FE0, "ending_vram_effect_candidate", "called by state-4 final-sketch opcode -5 handler and repeated while ending event flag is active; copies 1500*(arg+64) bytes to 0x06000000 and 250*(arg+64) bytes to 0x06010000"),
+    (0x08004FE0, "ending_vram_effect_candidate", "called with arg 0 by state-4 final-sketch opcode -5; Player_update repeats it when 0x03000678==1 after applying the 0x03000674 <=1000 reset / >1000 +20 gate; copies 1500*(arg+64) bytes to 0x06000000 and 250*(arg+64) bytes to 0x06010000"),
     (0x08004A78, "TitleScene_update", "PRESS START input and delayed scene transition"),
     (0x08004B74, "GameplayScene_update", "active gameplay scene update"),
     (0x08004C10, "GameplayScene_exit", "gameplay scene exit"),
@@ -83,6 +92,9 @@ KNOWN_FUNCTIONS = [
     (0x0800DBF4, "static_level_runtime_initializer", "patches runtime level-record dimensions and other static initialized fields; dimension patch segment at 0x0800DD74"),
     (0x08005C30, "request_scene", "queues pending scene + args + delay"),
     (0x08005CB0, "scene_manager_update", "transition/enter/exit/update virtual dispatch"),
+    (0x08005EDC, "Leaves_draw", "Leaves vtable draw method; literal no-op bx lr because the serialized Leaves object is an emitter"),
+    (0x08005EE0, "Leaves_factory", "type=leaves registry target; allocates 0x74-byte global leaf emitter object"),
+    (0x08005F80, "Leaves_update", "global leaf emitter update; shared cooldown/cycle, camera-x >2000 gate, and transient particle spawn via 0x0800B2BC"),
     (0x08005ED8, "bx_r3_trampoline", "interworking/indirect-call trampoline"),
     (0x0800621C, "Player_constructor", "player factory constructor; initializes sprite stride and copies 10x20-byte wardrobe label table to object+0x2B4"),
     (0x08006418, "Player_factory", "registered player actor factory; allocates/constructs Player object"),
@@ -93,10 +105,17 @@ KNOWN_FUNCTIONS = [
     (0x080081B0, "Player_update", "Player vtable update method at 0x08019694; dispatches 0x03000610 interaction-active state through Player+0x1EC"),
     (0x08005EDA, "bx_r5_trampoline", "interworking/indirect-call trampoline"),
     (0x08006D6C, "message_selector_slot_copy_candidate", "selects one of four message selector slots for Messages UI"),
+    (0x080075C8, "pda_return_to_gameplay_transition_candidate", "PDA/menu return-to-gameplay helper; plays SFX7, restores gameplay/UI state, and clears pending byte 0x03000618"),
     (0x0800A208, "configure_gameplay_backgrounds", "programs BG0..BG3 as 8bpp text backgrounds at screenblocks 27..30 with priorities 0..3"),
     (0x0800A8F0, "submit_obj_oam", "writes OAM entry from screen position, logical 8bpp tile, Graveblood size enum, flips and priority"),
+    (0x0800AB60, "LeafParticle_update", "leaf particle update; fixed8 velocity -150/+150 and camera-relative cull"),
+    (0x0800AC1C, "LeafParticle_draw", "leaf particle draw; cycles initialized tile table 0x4C/0x4D/0x5C/0x5D with countdown 10"),
+    (0x0800B250, "effect_object_sfx4_constructor_candidate", "distinct effect-object constructor using vtable 0x08A8C198; plays SFX4 at volume 0x50"),
+    (0x0800B2BC, "LeafParticle_constructor", "constructor used by Leaves_update; initializes fixed8 -150/+150 velocity and 4-frame leaf animation state"),
+    (0x0800B31C, "effect_object_sfx3_constructor_candidate", "distinct effect-object constructor using vtable 0x08A8C1E8; plays SFX3 at volume 0x50; spawned by 0x080026E8 and 0x080060C4"),
     (0x0800D968, "register_spawn_factories_npc_grass", "binds literal spawnType keys npc/grass to concrete factory callbacks"),
     (0x0800DBB4, "register_spawn_factory_fgtile", "binds literal spawnType key fgtile to 0x08003AEC"),
+    (0x0800DFB0, "register_spawn_factory_leaves", "binds literal type key leaves to 0x08005EE0"),
     (0x0800D870, "main", "VBlank-synchronized main loop; reads KEYINPUT and updates scene manager"),
     (0x0801061C, "cpp_runtime_init_candidate", "startup-time runtime/global-constructor-style initializer; alpha homolog at 0x08008B20"),
 ]
@@ -109,6 +128,8 @@ KNOWN_GLOBALS = [
     (0x03000560, "tile_translation_table_ptr", "graphics descriptor +0x08; translates source tile IDs before VRAM upload"),
     (0x03000564, "visual_world_layer_b_ptr", "level+0x10; second streamed u16 world tile layer"),
     (0x03000568, "visual_world_layer_a_ptr", "level+0x08; first streamed u16 world tile layer"),
+    (0x0300056C, "camera_y", "subtracted from actor/particle world Y by Grass_draw and LeafParticle_draw"),
+    (0x03000570, "camera_x", "subtracted from actor/particle world X and threshold-tested by Leaves_update"),
     (0x03000554, "frame_counter", "incremented once per VBlank/main-loop iteration"),
     (0x03000574, "npc_spatial_query_scratch_candidate", "used by NPC state 1/2/4 proximity/collision queries; not the route table"),
     (0x030005BC, "scene_manager", "pending/active scene state"),
@@ -116,9 +137,15 @@ KNOWN_GLOBALS = [
     (0x030005C8, "pending_scene", "scene_manager +0x0C"),
     (0x030005F8, "active_scene", "scene_manager +0x3C"),
     (0x03000610, "player_interaction_active_flag", "NPC fresh-A handler sets to 1 at 0x08002FF2 after copying dial/X/Y into Player; Player_update gates +0x1EC interaction dispatch at 0x08008BC8 and clears it at 0x0800965C"),
+    (0x03000614, "pda_menu_page_selector", "0x080075F8 dispatches values 0..3 to MESSAGES/STATUS/FRIENDS/BACKPACK; fresh L at 0x0800897C decrements above 0 and fresh R at 0x0800903A increments below 3; both play SFX11"),
     (0x0300061C, "state4_monster_render_flag", "state-4 opcode -4 sets to 1; Player_draw branches to 0x080068BC when value == 1"),
     (0x03000620, "state4_collection_progress_index", "state-4 branch indexes six-entry selector with this value; completed pickups increment it; Fgtile_update gates behavior at >3"),
-    (0x03000674, "ending_effect_progress_counter_candidate", "incremented while opcode -5 event flag is active and fed to 0x08004FE0"),
+    (0x03000628, "leaf_emitter_cycle_index", "Leaves_update cycles this shared global through 0..5 before each cooldown reset"),
+    (0x03001040, "leaf_emitter_cooldown", "startup-initialized to 12; Leaves_update decrements to zero then resets to 23"),
+    (0x03001044, "leaf_emitter_x_offset_table", "six startup-initialized offsets 350,250,170,0,340,290"),
+    (0x0300106C, "leaf_emitter_y_offset_table", "six startup-initialized offsets 40,60,80,30,20,50"),
+    (0x03001B4C, "leaf_particle_frame_tile_table", "four startup-initialized logical OBJ tiles 0x4C,0x4D,0x5C,0x5D"),
+    (0x03000674, "ending_effect_argument_state_candidate", "Player_update compares this state to 1000: <=1000 resets to 0; >1000 increments by 20; when 0x03000678==1 the resulting value is fed to 0x08004FE0"),
     (0x03000678, "ending_event_active_flag", "set to 1 by state-4 final-sketch opcode -5 handler 0x080037F6; monitored by gameplay update"),
     (0x030006AC, "story_progression_stage", "written by normal-context dialogue opcode -4; consumed as stage index by Messages UI; state-4 pickup -4 does not write it"),
     (0x030006BC, "keys_current", "inverted KEYINPUT mask"),
@@ -596,8 +623,15 @@ def main():
     } for prop, off, storage, default, transform, evidence in ACTOR_RUNTIME_FIELDS]
     write_csv(args.out / "actor_runtime_fields.csv", list(runtime_field_rows[0]), runtime_field_rows)
 
-    # Proven level-transition edges: 0x08004258 loads actor+0x52 (portTo)
-    # and passes it as request_scene(GameplayScene, level, 0, 10).
+    # Proven generic level-transition edges: 0x08004258 loads actor+0x52
+    # (portTo) and passes it as request_scene(GameplayScene, level, 0, 10).
+    #
+    # Do not classify every Fgtile carrying a portTo property as a scene
+    # transition.  Two recovered special branches divert before 0x08004258:
+    # - Level 10 turn=4/5 gate tiles use the collection-gated forced-motion
+    #   path and never consume portTo=8 as a scene destination.
+    # - The Level 9 treetype=20 tile takes the 0x0800417C vertical-target
+    #   branch; its stored portTo=524 is likewise not handed to request_scene.
     portal_rows = []
     for row in actor_rows:
         if row["type"] != "fgtile" or row["portTo"] == "":
@@ -610,6 +644,10 @@ def main():
             if not source_s:
                 continue
             source = int(source_s)
+            if source == 10 and row.get("turn") in {"4", "5"}:
+                continue
+            if row.get("treetype") == "20":
+                continue
             portal_rows.append({
                 "source_level": source,
                 "destination": dest,
