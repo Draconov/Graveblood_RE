@@ -182,6 +182,8 @@ enum {
     GB_FONT_GLYPH_COUNT = 127,
     GB_MONSTER_SPRITE_COUNT = 5,
     GB_MONSTER_SPRITE_HALFWORDS = 128,
+    GB_LEVEL_STATIC_SPRITE_COUNT = 4,
+    GB_LEVEL_STATIC_SPRITE_HALFWORDS = 128,
     GB_BG0_UI_TILE_COUNT = 87,
     GB_TITLE_MAP_WIDTH = 30,
     GB_TITLE_MAP_HEIGHT = 20,
@@ -233,6 +235,7 @@ extern const char* const gb_social_criticize_topics[GB_SOCIAL_CRITICIZE_TOPIC_CO
 extern const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT];
 extern const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT];
 extern const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS];
+extern const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS];
 extern const u16 gb_title_bg_tiles[0xD800 / 2];
 extern const u16 gb_title_bg_palette[GB_TITLE_BG_PALETTE_COUNT];
 extern const u16 gb_title_obj_tiles[GB_TITLE_OBJ_TILE_HALFWORDS];

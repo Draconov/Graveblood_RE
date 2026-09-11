@@ -24,7 +24,8 @@ static void gb_player_animation_tick(GbPlayer* player)
         {
             ++player->animation_frame;
         }
-        player->animation_countdown = player->animation_state == GB_PLAYER_ANIM_IDLE ? 8 : 5;
+        player->animation_countdown =
+            player->animation_state == GB_PLAYER_ANIM_IDLE && player->idle_selector == 0 ? 8 : 5;
     }
 }
 

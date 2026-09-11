@@ -1,6 +1,7 @@
 property,actor_offset,semantic,proven_behavior,confidence
 level,+0x56,level filter,"if value != -1 and != current level (0x03000808), virtual method at vtable+0x18 is invoked",high
-setglobal,+0x58,inherited culling-policy control,"if value == 0, byte actor+0x31 is set to 1; inherited object manager skips normal spatial/camera-cull path when +0x31 != 0",high for machine behavior; original naming polarity unresolved
+setglobal,+0x58,inherited culling-policy control,"parser default is 1; if value == 0, byte actor+0x31 is set to 1; inherited object manager skips normal spatial/camera-cull path when +0x31 != 0",high for machine behavior; original naming polarity unresolved
+leaves_global_override,+0x31,Leaves_factory forces inherited global-active/culling-bypass byte,Leaves_factory 0x08005EE0 constructor tail 0x08005F44 writes actor+0x31 = 1 even though actor+0x58 is initialized to 1,high
 state,+0x5A,NPC behavior/interaction mode enum,"dispatches states 1,2,3,4 inside 0x0800298C; state 3 is route following",high
 dial,+0x5C,dialogue script index,indexes pointer table at 0x0300078C,high
 route,+0x64,NPC route index,state 3 indexes route pointer table at 0x03001818 and follows six waypoints,high

@@ -14,3 +14,10 @@ known_character_source_sample,source base 2198,valid 16x32 Vika-style frame reco
 normal_idle_selector0,"mirrored sources 3468,3470,3532,3534,3534,3532,3470,3468",Player_draw state-8 branch when Player+0x1E0 != 1
 normal_idle_selector1,"contiguous sources 3392,3394,3396,3398,3400,3402,3404,3406",Player_draw state-8 branch at 0x08006C06 when Player+0x1E0 == 1
 player_plus_1e0,current LevelRecord+0x3C copied during scene activation,0x08005CFC loads record+0x3C; 0x08005D06 stores to Player+0x1E0
+normal_oam_geometry,two stacked 16x16 sprites; bottom then top,0x080066B6..0x08006710 submits bottom then top via 0x0800A8F0
+normal_screen_anchor,x=PlayerX-cameraX; y=PlayerY-cameraY-16/-32,0x080066B6..0x0800670E; no -8 X bias
+normal_priority,2,0x080066D6 loads 2 and stores it to OAM priority argument for both normal Player cells
+alternate_idle_countdown_reset,5,0x08008382..0x08008392 overwrites state-8 reset with 5 when Player+0x1E0 != 0
+monster_priority,2,0x080068CA seeds priority 2 before the fifth-sketch monster OAM sequence
+level9_fixed_composite,"32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2",Player_draw Level 9 branch 0x08006C18 plus shared lower-row tail 0x08006BAA
+level10_fixed_composite,"32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2",Player_draw Level 10 branch 0x08006B6A..0x08006BDA

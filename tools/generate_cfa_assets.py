@@ -48,6 +48,7 @@ ACTOR_VISUAL_NONE = 0xFF
 FONT_TABLE_ADDR = 0x080199A0
 FONT_GLYPH_COUNT = 127
 MONSTER_TILE_ARGS = (0x159, 0x178, 0x17A, 0x198, 0x19A)
+LEVEL_STATIC_TILE_ARGS = (0x17C, 0x17E, 0x19C, 0x19E)
 BG0_UI_TILE_COUNT = 87
 ENDING_ARG0_COPY1_SOURCE = 0x08641361
 ENDING_ARG0_COPY1_BYTES = 96000
@@ -372,6 +373,23 @@ def pack_monster_sprite_bank(rom: bytes) -> PackedActorSpriteBank:
     return PackedActorSpriteBank(len(MONSTER_TILE_ARGS), tuple(palette), bytes(packed))
 
 
+def pack_level_static_obj_bank(rom: bytes) -> PackedActorSpriteBank:
+    """Pack the four initial-OBJ 16x16 pieces drawn by Player_draw in Levels 9/10."""
+    src_base = OBJ_TILES_SOURCE - ROM_BASE
+    if src_base < 0 or src_base + 0x8000 > len(rom):
+        raise ValueError('initial OBJ source outside ROM')
+    initial = rom[src_base:src_base + 0x8000]
+    packed = bytearray()
+    for tile_arg in LEVEL_STATIC_TILE_ARGS:
+        base = tile_arg & 0x1FF
+        for logical in (base, base + 1, base + 16, base + 17):
+            start = logical * 64
+            packed.extend(initial[start:start + 64])
+    palette_off = OBJ_PALETTE_SOURCE - ROM_BASE
+    palette = struct.unpack_from('<256H', rom, palette_off)
+    return PackedActorSpriteBank(len(LEVEL_STATIC_TILE_ARGS), tuple(palette), bytes(packed))
+
+
 def build_graphics_variants(root: Path) -> dict[tuple[int, int], GraphicsVariantSpec]:
     out: dict[tuple[int, int], GraphicsVariantSpec] = {}
     for row in _read_csv(root / 'data' / 'level_graphics_variants.csv'):
@@ -513,7 +531,7 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
             dial=_actor_number(row, 'dial', minimum=0, maximum=255),
             turn=_actor_number(row, 'turn', minimum=0, maximum=255),
             level=_actor_number(row, 'level', default=255, minimum=0, maximum=255),
-            setglobal=_actor_number(row, 'setglobal', minimum=0, maximum=255),
+            setglobal=_actor_number(row, 'setglobal', default=1, minimum=0, maximum=255),
             visual_index=visual_for(actor_class, legs_color, subtype),
         )
         index = len(physical)
@@ -1102,11 +1120,15 @@ const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT] = {{
 """
 
 
-def _monster_sprite_c(monster: PackedActorSpriteBank) -> str:
+def _monster_sprite_c(monster: PackedActorSpriteBank, level_static: PackedActorSpriteBank) -> str:
     return f"""#include <graveblood/assets.h>
 
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {{
 {_c_values(_bytes_to_u16(monster.data), 12, 4)}
+}};
+
+const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(level_static.data), 12, 4)}
 }};
 """
 
@@ -1288,6 +1310,8 @@ enum {{
     GB_FONT_GLYPH_COUNT = 127,
     GB_MONSTER_SPRITE_COUNT = 5,
     GB_MONSTER_SPRITE_HALFWORDS = 128,
+    GB_LEVEL_STATIC_SPRITE_COUNT = 4,
+    GB_LEVEL_STATIC_SPRITE_HALFWORDS = 128,
     GB_BG0_UI_TILE_COUNT = 87,
     GB_TITLE_MAP_WIDTH = 30,
     GB_TITLE_MAP_HEIGHT = 20,
@@ -1339,6 +1363,7 @@ extern const char* const gb_social_criticize_topics[GB_SOCIAL_CRITICIZE_TOPIC_CO
 extern const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT];
 extern const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT];
 extern const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS];
+extern const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS];
 extern const u16 gb_title_bg_tiles[0xD800 / 2];
 extern const u16 gb_title_bg_palette[GB_TITLE_BG_PALETTE_COUNT];
 extern const u16 gb_title_obj_tiles[GB_TITLE_OBJ_TILE_HALFWORDS];
@@ -1481,6 +1506,7 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     story_data = build_story_runtime_data(root)
     font = extract_canonical_font(rom)
     monster = pack_monster_sprite_bank(rom)
+    level_static = pack_level_static_obj_bank(rom)
     ending_copy1, ending_copy2 = extract_ending_argument0_payloads(rom)
 
     for level, variant in sorted(variants):
@@ -1507,7 +1533,7 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     (out / 'data' / 'actor_sprite_data.c').write_text(_actor_sprite_c(actor_data, actor_sprites, foreground_sprites), encoding='utf-8')
     (out / 'data' / 'story_data.c').write_text(_story_data_c(story_data), encoding='utf-8')
     (out / 'data' / 'font_data.c').write_text(_font_data_c(font), encoding='utf-8')
-    (out / 'data' / 'monster_sprite.c').write_text(_monster_sprite_c(monster), encoding='utf-8')
+    (out / 'data' / 'monster_sprite.c').write_text(_monster_sprite_c(monster, level_static), encoding='utf-8')
     (out / 'data' / 'ending' / 'argument0_copy1.bin').write_bytes(ending_copy1)
     (out / 'data' / 'ending' / 'argument0_copy2.bin').write_bytes(ending_copy2)
     (out / 'data' / 'ending_effect.s').write_text(_ending_effect_s(), encoding='utf-8')

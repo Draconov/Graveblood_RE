@@ -55,7 +55,7 @@ def sha256(data: bytes) -> str:
 
 def write_csv(path: Path, fields: list[str], rows: list[dict]):
     with path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fields)
+        w = csv.DictWriter(f, fieldnames=fields, lineterminator="\n")
         w.writeheader(); w.writerows(rows)
 
 
@@ -231,6 +231,42 @@ def extract_npc_sprite_pipeline(data: bytes) -> list[dict]:
     if _unpack_halfwords(data, 0x080028EE, len(cadence_reload)) != cadence_reload:
         raise ValueError("NPC draw cadence reload sequence drifted")
 
+    # Draw geometry/depth contract.  NPC_draw compares actor Y against the
+    # current Player Y, stores priority 1 for actors below the Player and 2
+    # otherwise, then submits bottom/top 16x16 cells at exact actor X and
+    # Y-16/Y-32 respectively.  No historical -8 X bias exists in the ROM.
+    depth_select = (0x68E3, 0x1219, 0x4B5D, 0x6A5B, 0x68DB, 0x121B,
+                    0x4299, 0xDD5C, 0x2384, 0x2201, 0x50E2, 0x3B83,
+                    0x9302)
+    if _unpack_halfwords(data, 0x0800278A, len(depth_select)) != depth_select:
+        raise ValueError("NPC draw depth-priority selection drifted")
+    depth_else = (0x2384, 0x2202, 0x50E2, 0x3B82, 0x9302)
+    if _unpack_halfwords(data, 0x08002854, len(depth_else)) != depth_else:
+        raise ValueError("NPC draw priority-2 fallback drifted")
+    bottom_submit = (0x68A3, 0x1218, 0x4B54, 0x46B1, 0x681B, 0x59A6,
+                     0x1AC0, 0x46B0, 0x4B52, 0x264C, 0x681B, 0x3910,
+                     0x1AC9)
+    if _unpack_halfwords(data, 0x080027B0, len(bottom_submit)) != bottom_submit:
+        raise ValueError("NPC bottom-sprite screen anchor drifted")
+    top_submit = (0x68E3, 0x1219, 0x4B3B, 0x681B, 0x3920, 0x1AC9,
+                  0x68A3, 0x1218, 0x4B37, 0x681B, 0x1AC0, 0x2384,
+                  0x58E3, 0x9300, 0x2303)
+    if _unpack_halfwords(data, 0x0800281A, len(top_submit)) != top_submit:
+        raise ValueError("NPC top-sprite screen anchor drifted")
+
+    # NPC constructor initializes inherited setglobal to 1.  The common
+    # level/global policy only writes inherited +0x31 when setglobal == 0;
+    # therefore ordinary NPCs retain +0x31 clear and take the engine's normal
+    # spatial-dispatch/camera-cull path before NPC_draw is reached.
+    npc_setglobal_default = (0x4B23, 0x2201, 0x6543, 0x2331, 0x64C5,
+                             0x6505, 0x65C5, 0x6605, 0x6645, 0x6582,
+                             0x54C5)
+    if _unpack_halfwords(data, 0x080039CA, len(npc_setglobal_default)) != npc_setglobal_default:
+        raise ValueError("NPC inherited setglobal default drifted")
+    global_policy = (0x2358, 0x5EE3, 0x2B00, 0xD102, 0x2201, 0x3331, 0x54E2)
+    if _unpack_halfwords(data, 0x080043C8, len(global_policy)) != global_policy:
+        raise ValueError("actor setglobal/+0x31 policy drifted")
+
     # State 3 rewrites actor+0x4E from its constructor-copied base at +0xEC.
     # The shared 0x08002BF2 tail commits base+8/6 frames; upward branches add
     # another 8 before entering the same tail, yielding base+16/6.  Idle at
@@ -269,6 +305,14 @@ def extract_npc_sprite_pipeline(data: bytes) -> list[dict]:
          "evidence":"0x08002780..0x08002788 decrements positive countdown; zero/negative enters the advance/reload path"},
         {"fact":"countdown_reload", "value":"5 * trunc(8 / actor+0x50)",
          "evidence":"0x080028EE..0x08002900 loads frame count, divides 8 by it, then multiplies quotient by 5"},
+        {"fact":"normal_oam_geometry", "value":"two stacked 16x16 sprites; bottom then top",
+         "evidence":"0x080027B0..0x08002838 submits Y-16 first and Y-32 second through 0x0800A8F0"},
+        {"fact":"normal_screen_anchor", "value":"x=actorX-cameraX; y=actorY-cameraY-16/-32",
+         "evidence":"0x080027B0..0x080027C8 and 0x0800281A..0x0800282E; no -8 X bias"},
+        {"fact":"depth_priority", "value":"1 when actorY > PlayerY; otherwise 2",
+         "evidence":"0x0800278A..0x080027A2 selects 1; 0x08002854..0x0800285E selects 2; actor+0x84 feeds both OAM submits"},
+        {"fact":"spatial_dispatch", "value":"setglobal default 1 => inherited +0x31 clear => camera-culled before NPC_draw",
+         "evidence":"NPC constructor 0x080039CA..0x080039DE sets +0x58=1/+0x31=0; common policy 0x080043C8..0x080043D4 only sets +0x31 when +0x58==0"},
         {"fact":"state3_base_family_field", "value":"actor+0xEC",
          "evidence":"NPC constructor copies serialized legsColor into the state-3 base-family field before route updates"},
         {"fact":"state3_directional_families", "value":"base / base+8 / base+16",
@@ -277,6 +321,123 @@ def extract_npc_sprite_pipeline(data: bytes) -> list[dict]:
          "evidence":"actor+0xF4 writes across 0x08002BE4..0x08002D94 and 0x08003268..0x080032BE"},
         {"fact":"semantic_warning", "value":"runtime npc class is not synonymous with human NPC",
          "evidence":"standalone state=4 records with subtype=6 render paper/sketch-like graphics through the same class"},
+    ]
+
+
+def extract_player_sprite_pipeline(data: bytes) -> list[dict]:
+    """Export ROM-guarded Player draw/animation visual contracts."""
+    # Normal avatar draw: exact actor X, bottom Y-16 then top Y-32, both
+    # 16x16 OAM shape 3 at priority 2.
+    bottom_submit = (0x68A3, 0x1218, 0x683B, 0x6962, 0x1AC0, 0x68E3,
+                     0x1A99, 0x464B, 0x3101, 0x681B, 0x1209, 0x1AC9,
+                     0x2E02, 0xD100, 0xE15D, 0x264C, 0x2502, 0x5FA2,
+                     0x2380, 0x0292, 0x405A, 0x9500, 0x3B7D,
+                     0xF004, 0xF904)
+    if _unpack_halfwords(data, 0x080066B6, len(bottom_submit)) != bottom_submit:
+        raise ValueError("Player bottom OAM submit contract drifted")
+    top_submit = (0x5FA2, 0x2360, 0x0292, 0x405A, 0x6961, 0x68E3,
+                  0x1A59, 0x464B, 0x3101, 0x681B, 0x1209, 0x3910,
+                  0x1AC9, 0x68A3, 0x1218, 0x683B, 0x9500, 0x1AC0,
+                  0x2303, 0xF004, 0xF8EF)
+    if _unpack_halfwords(data, 0x080066E8, len(top_submit)) != top_submit:
+        raise ValueError("Player top OAM submit contract drifted")
+
+    # Player_update normally keeps the state-derived reset (8 for idle), but
+    # any non-zero +0x1E0 selector overwrites that reset with 5.
+    alt_idle_cadence = (0x20F0, 0x0040, 0x5820, 0x2800, 0xD101,
+                        0x2A08, 0xD000, 0x2205, 0x66EA)
+    if _unpack_halfwords(data, 0x08008382, len(alt_idle_cadence)) != alt_idle_cadence:
+        raise ValueError("Player alternate-idle countdown override drifted")
+
+    # Fifth-sketch monster branch seeds priority 2 and reuses it for all five
+    # OAM submits.
+    monster_priority = (0x2502, 0x225A, 0x4F23, 0x68A3, 0x1218, 0x683B,
+                        0x3914, 0x1AC0, 0x9500, 0x2303, 0x32FF,
+                        0xF004, 0xF806)
+    if _unpack_halfwords(data, 0x080068CA, len(monster_priority)) != monster_priority:
+        raise ValueError("Player monster priority/OAM sequence drifted")
+
+    # Levels 9/10 branch to four fixed initial-OBJ cells before returning to
+    # the normal Player path.  The tile arguments 0x17C/0x17E/0x19C/0x19E
+    # are encoded as 0xBE/0xBF/0xCE/0xCF << 1, all with priority 2.
+    level_gate = (0x4BD0, 0x681B, 0x2B09, 0xD100, 0xE2F5,
+                  0x2B0A, 0xD100, 0xE29B)
+    if _unpack_halfwords(data, 0x08006622, len(level_gate)) != level_gate:
+        raise ValueError("Player Level-9/10 fixed-composite dispatch drifted")
+    level10_head = (0x25DD, 0x4B63, 0x4699, 0x681B, 0x00AD, 0x1AE9,
+                    0x683A, 0x4B61, 0x1A98, 0x469B, 0x22BE, 0x2302,
+                    0x0052, 0x469A, 0x9300, 0x3301, 0xF003, 0xFEB1,
+                    0x464B, 0x681B, 0x1AE9, 0x683B, 0x4D5B, 0x22BF,
+                    0x1AE8, 0x4653, 0x0052, 0x9300, 0x26E1, 0x3301,
+                    0xF003, 0xFEA3)
+    if _unpack_halfwords(data, 0x08006B6A, len(level10_head)) != level10_head:
+        raise ValueError("Player Level-10 fixed-composite head drifted")
+    shared_tail = (0x00B6, 0x464B, 0x681B, 0x1AF1, 0x465B, 0x683A,
+                   0x1A98, 0x4653, 0x22CE, 0x9300, 0x0052, 0x3301,
+                   0xF003, 0xFE95, 0x464B, 0x681B, 0x1AF1, 0x683B,
+                   0x22CF, 0x1AE8, 0x4653, 0x0052, 0x9300, 0x3301,
+                   0xF003, 0xFE89)
+    if _unpack_halfwords(data, 0x08006BAA, len(shared_tail)) != shared_tail:
+        raise ValueError("Player Level-9/10 fixed-composite lower-row tail drifted")
+    level9_head = (0x25EE, 0x4B38, 0x4699, 0x681B, 0x006D, 0x1AE9,
+                   0x23FC, 0x683A, 0x005B, 0x1A98, 0x22BE, 0x469B,
+                   0x3BF7, 0x3BFF, 0x469A, 0x9300, 0x0052, 0x3301,
+                   0xF003, 0xFE58, 0x464B, 0x681B, 0x1AE9, 0x683B,
+                   0x352C, 0x1AE8, 0x22BF, 0x4653, 0x26F6, 0x9300,
+                   0x0052, 0x3301, 0xF003, 0xFE4A)
+    if _unpack_halfwords(data, 0x08006C18, len(level9_head)) != level9_head:
+        raise ValueError("Player Level-9 fixed-composite head drifted")
+
+    return [
+        {"fact":"factory", "value":"0x08006418", "evidence":"player actor registration/factory chain"},
+        {"fact":"constructor", "value":"0x0800621C", "evidence":"factory target initializes Player object"},
+        {"fact":"vtable", "value":"0x08019688", "evidence":"Player object vtable used by draw dispatch"},
+        {"fact":"draw", "value":"0x080065FC", "evidence":"stages dynamic OBJ rows then submits player sprites"},
+        {"fact":"dynamic_obj_upload", "value":"0x08004F04", "evidence":"ROM OBJ source -> OBJ VRAM tile copy"},
+        {"fact":"oam_submit", "value":"0x0800A8F0", "evidence":"constructs 8-byte OAM entries"},
+        {"fact":"graphics_stride_field", "value":"player+0x1DC = 192", "evidence":"constructor writes 0xC0; player draw multiplies animation/bank selection by field"},
+        {"fact":"wardrobe_labels", "value":"10 slots x 20 bytes @ 0x080198A0 -> player+0x2B4", "evidence":"constructor copies 0xC8 bytes"},
+        {"fact":"wardrobe_selector", "value":"player+0x240", "evidence":"constructor initializes 0; Wardrobe label/highlight/navigation paths read/write this field; normal arrow range 0..6"},
+        {"fact":"animation_state_block", "value":"0x03001254", "evidence":"Player_draw/Player_update state+frame block; old shared wardrobe/avatar label rejected by full xref trace"},
+        {"fact":"live_graphics_bank", "value":"0x0300103C = 15 at startup", "evidence":"Player_draw source-bank multiplier; recovered Wardrobe path previews alternatives but does not mutate this live bank"},
+        {"fact":"known_character_source_sample", "value":"source base 2198", "evidence":"valid 16x32 Vika-style frame reconstruction; not claimed as constructor/default outfit"},
+        {"fact":"normal_idle_selector0", "value":"mirrored sources 3468,3470,3532,3534,3534,3532,3470,3468", "evidence":"Player_draw state-8 branch when Player+0x1E0 != 1"},
+        {"fact":"normal_idle_selector1", "value":"contiguous sources 3392,3394,3396,3398,3400,3402,3404,3406", "evidence":"Player_draw state-8 branch at 0x08006C06 when Player+0x1E0 == 1"},
+        {"fact":"player_plus_1e0", "value":"current LevelRecord+0x3C copied during scene activation", "evidence":"0x08005CFC loads record+0x3C; 0x08005D06 stores to Player+0x1E0"},
+        {"fact":"normal_oam_geometry", "value":"two stacked 16x16 sprites; bottom then top", "evidence":"0x080066B6..0x08006710 submits bottom then top via 0x0800A8F0"},
+        {"fact":"normal_screen_anchor", "value":"x=PlayerX-cameraX; y=PlayerY-cameraY-16/-32", "evidence":"0x080066B6..0x0800670E; no -8 X bias"},
+        {"fact":"normal_priority", "value":"2", "evidence":"0x080066D6 loads 2 and stores it to OAM priority argument for both normal Player cells"},
+        {"fact":"alternate_idle_countdown_reset", "value":"5", "evidence":"0x08008382..0x08008392 overwrites state-8 reset with 5 when Player+0x1E0 != 0"},
+        {"fact":"monster_priority", "value":"2", "evidence":"0x080068CA seeds priority 2 before the fifth-sketch monster OAM sequence"},
+        {"fact":"level9_fixed_composite", "value":"32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2", "evidence":"Player_draw Level 9 branch 0x08006C18 plus shared lower-row tail 0x08006BAA"},
+        {"fact":"level10_fixed_composite", "value":"32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2", "evidence":"Player_draw Level 10 branch 0x08006B6A..0x08006BDA"},
+    ]
+
+
+def extract_new_actor_field_semantics(data: bytes) -> list[dict]:
+    """Export guarded semantics for the Graveblood-era common actor fields."""
+    # The property parser supplies default=1 specifically for setglobal before
+    # storing its result to actor+0x58.
+    setglobal_parse = (0x4669, 0x7453, 0x0030, 0x2201, 0xF7FB, 0xFEEC,
+                       0x2358, 0x52E8)
+    if _unpack_halfwords(data, 0x080045A0, len(setglobal_parse)) != setglobal_parse:
+        raise ValueError("setglobal parser default/store sequence drifted")
+    global_policy = (0x2358, 0x5EE3, 0x2B00, 0xD102, 0x2201, 0x3331, 0x54E2)
+    if _unpack_halfwords(data, 0x080043C8, len(global_policy)) != global_policy:
+        raise ValueError("setglobal inherited +0x31 policy drifted")
+    leaves_override = (0x2101, 0x2268, 0x64C3, 0x6503, 0x65C3, 0x6603,
+                       0x6643, 0x6581, 0x5483, 0x3A69, 0x66C2, 0x6703,
+                       0x3331, 0x54C1)
+    if _unpack_halfwords(data, 0x08005F2C, len(leaves_override)) != leaves_override:
+        raise ValueError("Leaves inherited global-active override drifted")
+
+    return [
+        {"property":"level","actor_offset":"+0x56","semantic":"level filter","proven_behavior":"if value != -1 and != current level (0x03000808), virtual method at vtable+0x18 is invoked","confidence":"high"},
+        {"property":"setglobal","actor_offset":"+0x58","semantic":"inherited culling-policy control","proven_behavior":"parser default is 1; if value == 0, byte actor+0x31 is set to 1; inherited object manager skips normal spatial/camera-cull path when +0x31 != 0","confidence":"high for machine behavior; original naming polarity unresolved"},
+        {"property":"leaves_global_override","actor_offset":"+0x31","semantic":"Leaves_factory forces inherited global-active/culling-bypass byte","proven_behavior":"Leaves_factory 0x08005EE0 constructor tail 0x08005F44 writes actor+0x31 = 1 even though actor+0x58 is initialized to 1","confidence":"high"},
+        {"property":"state","actor_offset":"+0x5A","semantic":"NPC behavior/interaction mode enum","proven_behavior":"dispatches states 1,2,3,4 inside 0x0800298C; state 3 is route following","confidence":"high"},
+        {"property":"dial","actor_offset":"+0x5C","semantic":"dialogue script index","proven_behavior":"indexes pointer table at 0x0300078C","confidence":"high"},
+        {"property":"route","actor_offset":"+0x64","semantic":"NPC route index","proven_behavior":"state 3 indexes route pointer table at 0x03001818 and follows six waypoints","confidence":"high"},
     ]
 
 
@@ -338,6 +499,70 @@ def extract_state4_collection_selector(data: bytes) -> list[dict]:
     ]
 
 
+def extract_npc_state3_field_usage(data: bytes) -> dict:
+    """Prove the recovered state-3 route follower does not consume actor.dial.
+
+    State 3 enters at 0x08002B72.  Its route core loads actor+0x64, its
+    waypoint cursor from actor+0xF8 and the serialized/base sprite family from
+    actor+0xEC.  The direction-family continuation at 0x08003262 returns to
+    the route core or directly to the NPC_update epilogue.  The compiler uses
+    an immediate word LDR for actor+0x5C everywhere NPC_update consumes dial
+    (encoding 0x6DE8..0x6DEF); no such read occurs in the state-3 blocks.
+    """
+    entry = (0x4B65, 0x6A59, 0x688B, 0x4A64, 0x12DB, 0x6013, 0x68CB, 0x12DB,
+             0x6053, 0x68AB, 0x12DC, 0x6E6B, 0x4A62, 0x009B, 0x589F, 0x23F8,
+             0x58EE)
+    if _unpack_halfwords(data, 0x08002B72, len(entry)) != entry:
+        raise ValueError("NPC state-3 route/waypoint entry drifted")
+
+    base_family = (0x23EC, 0x69AA, 0x58EB)
+    if _unpack_halfwords(data, 0x08002BCE, len(base_family)) != base_family:
+        raise ValueError("NPC state-3 base-family load drifted")
+
+    state_exit = (0x2350, 0x3A48, 0x52EA, 0x330A, 0x5EEB, 0xE6E8)
+    if _unpack_halfwords(data, 0x08002BF8, len(state_exit)) != state_exit:
+        raise ValueError("NPC state-3 family/state exit drifted")
+
+    idle_family = (0x2A00, 0xDB28, 0xD008, 0x22F4, 0x2102)
+    if _unpack_halfwords(data, 0x08003262, len(idle_family)) != idle_family:
+        raise ValueError("NPC state-3 directional-family continuation drifted")
+
+    # actor+0x5C is a word-aligned field and is compiled as LDR [r5,#0x5C],
+    # whose possible destination-register encodings are 0x6DE8..0x6DEF.
+    # Scan every recovered state-3 block, including its out-of-line direction
+    # family continuation.  This is deliberately path-scoped, not a claim
+    # that NPC_update as a whole never reads dial (states 1/2 do).
+    state3_ranges = (
+        (0x08002B72, 0x08002C04),
+        (0x08002CC4, 0x08002D96),
+        (0x08003262, 0x080032C8),
+    )
+    dial_reads = []
+    for start, end in state3_ranges:
+        for addr in range(start, end, 2):
+            hw = struct.unpack_from("<H", data, addr - ROM_BASE)[0]
+            if 0x6DE8 <= hw <= 0x6DEF:
+                dial_reads.append(addr)
+    if dial_reads:
+        raise ValueError(
+            "unexpected actor+0x5C read in state-3 route path: "
+            + ", ".join(f"0x{x:08X}" for x in dial_reads)
+        )
+
+    return {
+        "state": 3,
+        "entry": "0x08002B72",
+        "route_field": "actor+0x64",
+        "waypoint_field": "actor+0xF8",
+        "base_sprite_family_field": "actor+0xEC",
+        "dialogue_field": "actor+0x5C",
+        "dialogue_field_use": "not consulted by recovered state-3 route-follow path",
+        "identity_consequence": "state-3 dial metadata cannot prove narrative identity",
+        "evidence": "0x08002B72..0x08002D94 + out-of-line 0x08003262..0x080032C6; no LDR [r5,#0x5C] on recovered state-3 path",
+        "confidence": "high",
+    }
+
+
 def extract_story_entity_identities() -> list[dict]:
     """Conservative semantic labels for the 16 code-proven story-overlay records.
 
@@ -354,20 +579,45 @@ def extract_story_entity_identities() -> list[dict]:
             "identity": "unidentified",
             "semantic_role": "story-controlled entity",
             "identity_confidence": "unknown",
+            "role_confidence": "unknown",
             "evidence": "no narrative identity assigned without dialogue+metadata proof",
         }
-        if index == 4:
+        if index == 0:
             row.update({
-                "identity": "IQ 54",
-                "semantic_role": "walking story character",
-                "identity_confidence": "high",
-                "evidence": "overlay #4 has dial=2, state=3, route=0; script 2 is spoken by IQ 54 and asks Vika to find five sketches",
+                "semantic_role": "passive visible story actor",
+                "role_confidence": "high",
+                "evidence": "overlay #0 is level=0,state=0,legsColor=56; NPC_update has no special state-0 interaction branch and legsColor!=1 remains drawable",
+            })
+        elif index == 1:
+            row.update({
+                "semantic_role": "visible dialogue entity",
+                "role_confidence": "high",
+                "evidence": "overlay #1 is level=0,state=2,dial=0,legsColor=56; state 2 is the fresh-A dialogue path and legsColor!=1 remains drawable",
+            })
+        elif index == 2:
+            row.update({
+                "semantic_role": "visible dialogue entity",
+                "role_confidence": "high",
+                "evidence": "overlay #2 is level=5,state=2,dial=1,legsColor=16; state 2 is the fresh-A dialogue path and legsColor!=1 remains drawable",
+            })
+        elif index == 3:
+            row.update({
+                "semantic_role": "visible dialogue entity",
+                "role_confidence": "high",
+                "evidence": "overlay #3 is level=0,state=2,dial=1,legsColor=56; state 2 is the fresh-A dialogue path and legsColor!=1 remains drawable",
+            })
+        elif index == 4:
+            row.update({
+                "semantic_role": "route-following story actor",
+                "role_confidence": "high",
+                "evidence": "overlay #4 is state=3,route=0; recovered state-3 route-follow uses actor+0x64/+0xF8/+0xEC and actor+0x5C (dial) is not consulted, so dial=2 cannot prove identity",
             })
         elif index == 5:
             row.update({
                 "identity": "Stas",
                 "semantic_role": "social-interaction character",
                 "identity_confidence": "high",
+                "role_confidence": "high",
                 "evidence": "overlay #5 is state=1,dial=0; the sole state-1 social bootstrap copies dial to profile selector 0, whose proper social profile name is Stas",
             })
         elif index == 6:
@@ -375,13 +625,27 @@ def extract_story_entity_identities() -> list[dict]:
                 "identity": "Julia",
                 "semantic_role": "social-interaction character",
                 "identity_confidence": "high",
+                "role_confidence": "high",
                 "evidence": "overlay #6 is state=1,dial=1; the sole state-1 social bootstrap copies dial to profile selector 1, whose proper social profile name is Julia",
+            })
+        elif index == 7:
+            row.update({
+                "semantic_role": "invisible dialogue hotspot",
+                "role_confidence": "high",
+                "evidence": "overlay #7 is level=7,state=2,dial=0,legsColor=1; state 2 supplies the fresh-A dialogue interaction while NPC_draw branches to its draw epilogue for legsColor=1",
+            })
+        elif index == 8:
+            row.update({
+                "semantic_role": "invisible dialogue hotspot",
+                "role_confidence": "high",
+                "evidence": "overlay #8 is level=7,state=2,dial=1,legsColor=1; state 2 supplies the fresh-A dialogue interaction while NPC_draw branches to its draw epilogue for legsColor=1",
             })
         elif index == 9:
             row.update({
                 "identity": "IQ 54",
                 "semantic_role": "story character",
                 "identity_confidence": "high",
+                "role_confidence": "high",
                 "evidence": "overlay #9 is level=10, state=2, dial=2; dial is the proven dialogue-script index and script 2's speaking NPC is IQ 54",
             })
         elif index == 10:
@@ -389,12 +653,13 @@ def extract_story_entity_identities() -> list[dict]:
                 "identity": "Katya",
                 "semantic_role": "story character",
                 "identity_confidence": "high",
+                "role_confidence": "high",
                 "evidence": "overlay #10 has dial=3; script 3 is Katya's sister/bicycle conversation",
             })
         elif 11 <= index <= 15:
             row.update({
                 "semantic_role": "collection pickup",
-                "identity_confidence": "high",
+                "role_confidence": "high",
                 "evidence": "five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches",
             })
         rows.append(row)
@@ -1273,6 +1538,147 @@ def extract_player_interaction_runtime_dispatch(data: bytes) -> list[dict]:
     return rows
 
 
+def extract_player_interaction_leaf_commit_semantics(data: bytes) -> list[dict]:
+    """Separate code-reachable TALK leaf commits from inert prototype pages.
+
+    All sixteen leaf records can enter interaction state 2.  The later fresh-A
+    gate does *not* treat them equally: after requiring positive interaction
+    depth it compares Player+0x1E8 to page base 4.  Only that TALK page falls
+    through to the state-3 store.  Page bases 8/12/16 call the common
+    Player-update finalizer at 0x08008B5E, whose local epilogue returns from
+    Player_update before the state-3 store can execute.  Thus the twelve
+    FLIRT/ASSAULT/SHARE leaves are selectable prototype data but inert on A in
+    the canonical demo, while TALK/JOKE is the one zero-count leaf that still
+    commits and reaches the quadrant-2 shared follow-up.
+    """
+    gate = (0x22E3, 0x25F4, 0x0092, 0x58A2, 0x006D, 0x5960,
+            0x2A00, 0xDC00, 0xE30E, 0x2804, 0xD001)
+    if _unpack_halfwords(data, PLAYER_INTERACTION_STATE2_FRESH_A_GATE, len(gate)) != gate:
+        raise ValueError("interaction leaf fresh-A gate drifted")
+    if _thumb1_bl_target(data, 0x08009624 - ROM_BASE) != 0x08008B5E:
+        raise ValueError("interaction non-TALK Player-update finalizer target drifted")
+    if _unpack_halfwords(data, 0x0800962C, 4) != (0x23F6, 0x2203, 0x005B, 0x50E2):
+        raise ValueError("interaction TALK state-3 store drifted")
+
+    finalizer_prefix = (0x2501, 0x4029, 0x000A, 0x0020)
+    if _unpack_halfwords(data, 0x08008B5E, len(finalizer_prefix)) != finalizer_prefix:
+        raise ValueError("interaction common Player-update finalizer entry drifted")
+    finalizer_epilogue = (0xB00F, 0xBC3C, 0x4690, 0x4699, 0x46A2, 0x46AB,
+                          0xBCF0, 0xBC01, 0x4700)
+    if _unpack_halfwords(data, 0x08008B7E, len(finalizer_epilogue)) != finalizer_epilogue:
+        raise ValueError("interaction common Player-update finalizer epilogue drifted")
+
+    action_rows = extract_player_interaction_action_table(data)[4:]
+    rows = []
+    response_paths = {
+        0: "SUBJECT response bank",
+        1: "quadrant 1 shared +0x382 follow-up",
+        2: "quadrant 2 shared +0x382 follow-up",
+        3: "CRITICIZE response bank",
+    }
+    for action in action_rows:
+        index = action["index"]
+        page_base = (index // 4) * 4
+        quadrant = index - page_base
+        talk_commit = page_base == 4
+        rows.append({
+            "action_index": index,
+            "action_label": action["label"],
+            "page_base": page_base,
+            "quadrant": quadrant,
+            "topic_count": action["field_28"],
+            "fresh_a_gate": f"0x{PLAYER_INTERACTION_STATE2_FRESH_A_GATE:08X}",
+            "fresh_a_outcome": (
+                "commit to interaction state 3" if talk_commit
+                else "exit Player_update; remain in state 2"
+            ),
+            "post_countdown_path": (
+                response_paths[quadrant] if talk_commit
+                else "unreachable from canonical state-2 fresh-A gate"
+            ),
+            "runtime_class": (
+                "TALK leaf with code-proven commit" if talk_commit
+                else "prototype/inert leaf in canonical demo"
+            ),
+            "b_return": "state 0/root page + SFX7",
+            "evidence": (
+                "page_base==4 falls through to 0x0800962C state-3 store"
+                if talk_commit else
+                "page_base!=4 calls 0x08008B5E common finalizer, whose 0x08008B7E..0x08008B8E epilogue returns from Player_update before state-3 store"
+            ),
+            "confidence": "high",
+        })
+    return rows
+
+
+
+def extract_player_interaction_followup_flag_references(data: bytes) -> list[dict]:
+    """Inventory every recovered PC-relative reference to Player+0x382.
+
+    The shared response flag has eight literal references in the canonical ROM.
+    Five are reads, two are zeroing stores (constructor and accepted follow-up),
+    and exactly one writes 1: the quadrant-1/2 dispatcher at 0x08009214.
+    This proves the recovered Ask-about/JOKE follow-up has one shared runtime
+    arm point and no leaf discriminator at that setter.
+    """
+    refs = _thumb_literal_refs_to(data, PLAYER_INTERACTION_SECONDARY_FLAG_OFFSET)
+    expected = [
+        0x0800637A, 0x080083CE, 0x0800843A, 0x0800852E,
+        0x08008598, 0x080087AC, 0x08008B50, 0x08009214,
+    ]
+    if refs != expected:
+        raise ValueError(
+            "Player+0x382 literal-reference inventory drifted: "
+            + str([f"0x{x:08X}" for x in refs])
+        )
+
+    next_halfword = {
+        0x0800637A: 0x54E5,
+        0x080083CE: 0x5CA2,
+        0x0800843A: 0x5CA2,
+        0x0800852E: 0x5CE3,
+        0x08008598: 0x54A3,
+        0x080087AC: 0x5CA2,
+        0x08008B50: 0x5CE3,
+        0x08009214: 0x54E2,
+    }
+    for addr, expected_hw in next_halfword.items():
+        actual = struct.unpack_from("<H", data, addr + 2 - ROM_BASE)[0]
+        if actual != expected_hw:
+            raise ValueError(f"Player+0x382 access drifted at 0x{addr:08X}")
+    if struct.unpack_from("<H", data, 0x08006220 - ROM_BASE)[0] != 0x2500:
+        raise ValueError("Player constructor zero-register setup drifted")
+    if struct.unpack_from("<H", data, 0x08008596 - ROM_BASE)[0] != 0x2300:
+        raise ValueError("Player+0x382 follow-up clear value drifted")
+    if struct.unpack_from("<H", data, 0x08009212 - ROM_BASE)[0] != 0x2201:
+        raise ValueError("Player+0x382 response-arm value drifted")
+
+    semantics = {
+        0x0800637A: ("clear 0", "Player constructor initialization"),
+        0x080083CE: ("read", "normal Player-update interaction guard"),
+        0x0800843A: ("read", "normal Player-update input guard"),
+        0x0800852E: ("read", "shared fresh-A follow-up consumer"),
+        0x08008598: ("clear 0", "accepted shared follow-up teardown"),
+        0x080087AC: ("read", "Player-update interaction guard"),
+        0x08008B50: ("read", "Player-update finalizer/solver guard"),
+        0x08009214: ("set 1", "quadrant 1/2 response dispatcher"),
+    }
+    rows = []
+    for addr in refs:
+        access, source = semantics[addr]
+        rows.append({
+            "address": f"0x{addr:08X}",
+            "field": "Player+0x382",
+            "access": access,
+            "source": source,
+            "leaf_discriminator": (
+                "none; dispatch key is quadrant only"
+                if addr == 0x08009214 else "not applicable"
+            ),
+            "confidence": "high",
+        })
+    return rows
+
 
 def extract_player_interaction_followup_handshake(data: bytes) -> dict:
     """Export the shared fresh-A handshake armed by response quadrants 1/2.
@@ -1316,7 +1722,7 @@ def extract_player_interaction_followup_handshake(data: bytes) -> dict:
         "clears": "Player+0x382|Player+0x381|Player+0x1EC",
         "active_global_write": "0x03000610=1",
         "result_state": 0,
-        "exact_leaf_effect": "not proved; dispatcher is quadrant-only",
+        "exact_leaf_effect": "no distinct Ask-about/JOKE effect recovered; the sole runtime setter is the shared quadrant-1/2 dispatcher",
         "confidence": "high",
     }
 
@@ -2224,9 +2630,11 @@ def extract_player_interaction_state_transitions(data: bytes) -> list[dict]:
 
     State 1 is the four-way action selector.  Branch records return to state 0
     after replacing Player+0x1E8 with their +0x24 child base; leaf records enter
-    state 2.  State 2's exact leaf-action semantics remain unresolved, but its B
-    return/back path to state 0 is proved; cancel-versus-commit meaning is not.  State 3 is a teardown path that
-    resets the interaction base/state and clears 0x03000610.
+    state 2.  State-2 fresh-A handling is page-gated: TALK page base 4 can
+    commit through state 3, while FLIRT/ASSAULT/SHARE page bases 8/12/16 take
+    the Player-update exit path and remain in state 2.  Fresh B returns to the
+    root page/state 0.  State 3 is a teardown path that resets the interaction
+    base/state and clears 0x03000610.
     """
     # State 0 setup ends by storing 1 to Player+0x1EC.
     if _unpack_halfwords(data, PLAYER_INTERACTION_STATE0_TO_1, 4) != (0x23F6, 0x2201, 0x005B, 0x50E2):
@@ -2307,7 +2715,7 @@ def extract_player_interaction_state_transitions(data: bytes) -> list[dict]:
          "proven_behavior": "copies selected record +0x24 child base to Player+0x1E8, then returns to state 0 to render that four-action page"},
         {**common, "transition": "selector_leaf_confirm", "handler": "0x08009DDA", "from_state": 1, "to_state": 2,
          "input": "fresh A", "choice": "selected", "condition": "selected record +0x20 == 1",
-         "proven_behavior": "initializes the secondary leaf-action interaction state and stores state 2 regardless of +0x28 topic count; exact leaf payload semantics remain unresolved"},
+         "proven_behavior": "initializes the secondary leaf-action interaction state and stores state 2 regardless of +0x28 topic count; later fresh-A handling is page-gated (TALK page base 4 can commit, FLIRT/ASSAULT/SHARE page bases 8/12/16 remain state 2)"},
         {**common, "transition": "secondary_b_return", "handler": "0x08009CB6", "from_state": 2, "to_state": 0,
          "input": "fresh B", "choice": "", "condition": "state == 2",
          "proven_behavior": "runs UI cleanup, plays SFX7 volume 0x50, clears Player+0x1E8 page base and Player+0x1EC state to 0"},
@@ -3190,23 +3598,7 @@ def main():
     }]
     write_csv(args.out / "obj_graphics_summary.csv", list(obj_rows[0]), obj_rows)
 
-    player_rows = [
-        {"fact":"factory", "value":"0x08006418", "evidence":"player actor registration/factory chain"},
-        {"fact":"constructor", "value":"0x0800621C", "evidence":"factory target initializes Player object"},
-        {"fact":"vtable", "value":"0x08019688", "evidence":"Player object vtable used by draw dispatch"},
-        {"fact":"draw", "value":"0x080065FC", "evidence":"stages dynamic OBJ rows then submits player sprites"},
-        {"fact":"dynamic_obj_upload", "value":"0x08004F04", "evidence":"ROM OBJ source -> OBJ VRAM tile copy"},
-        {"fact":"oam_submit", "value":"0x0800A8F0", "evidence":"constructs 8-byte OAM entries"},
-        {"fact":"graphics_stride_field", "value":"player+0x1DC = 192", "evidence":"constructor writes 0xC0; player draw multiplies animation/bank selection by field"},
-        {"fact":"wardrobe_labels", "value":"10 slots x 20 bytes @ 0x080198A0 -> player+0x2B4", "evidence":"constructor copies 0xC8 bytes"},
-        {"fact":"wardrobe_selector", "value":"player+0x240", "evidence":"constructor initializes 0; Wardrobe label/highlight/navigation paths read/write this field; normal arrow range 0..6"},
-        {"fact":"animation_state_block", "value":"0x03001254", "evidence":"Player_draw/Player_update state+frame block; old shared wardrobe/avatar label rejected by full xref trace"},
-        {"fact":"live_graphics_bank", "value":"0x0300103C = 15 at startup", "evidence":"Player_draw source-bank multiplier; recovered Wardrobe path previews alternatives but does not mutate this live bank"},
-        {"fact":"known_character_source_sample", "value":"source base 2198", "evidence":"valid 16x32 Vika-style frame reconstruction; not claimed as constructor/default outfit"},
-        {"fact":"normal_idle_selector0", "value":"mirrored sources 3468,3470,3532,3534,3534,3532,3470,3468", "evidence":"Player_draw state-8 branch when Player+0x1E0 != 1"},
-        {"fact":"normal_idle_selector1", "value":"contiguous sources 3392,3394,3396,3398,3400,3402,3404,3406", "evidence":"Player_draw state-8 branch at 0x08006C06 when Player+0x1E0 == 1"},
-        {"fact":"player_plus_1e0", "value":"current LevelRecord+0x3C copied during scene activation", "evidence":"0x08005CFC loads record+0x3C; 0x08005D06 stores to Player+0x1E0"},
-    ]
+    player_rows = extract_player_sprite_pipeline(data)
     write_csv(args.out / "player_sprite_pipeline.csv", ["fact","value","evidence"], player_rows)
 
     player_idle_rows = extract_player_level_idle_selector(data)
@@ -3261,13 +3653,7 @@ def main():
               ["family","serialized_total","physical_count","story_overlay_count","factory","constructor",
                "update","draw","vtable","runtime_role","confidence"], inventory_rows)
 
-    field_rows = [
-        {"property":"level","actor_offset":"+0x56","semantic":"level filter","proven_behavior":"if value != -1 and != current level (0x03000808), virtual method at vtable+0x18 is invoked","confidence":"high"},
-        {"property":"setglobal","actor_offset":"+0x58","semantic":"inherited culling-policy control","proven_behavior":"if value == 0, byte actor+0x31 is set to 1; inherited object manager skips normal spatial/camera-cull path when +0x31 != 0","confidence":"high for machine behavior; original naming polarity unresolved"},
-        {"property":"state","actor_offset":"+0x5A","semantic":"NPC behavior/interaction mode enum","proven_behavior":"dispatches states 1,2,3,4 inside 0x0800298C; state 3 is route following","confidence":"high"},
-        {"property":"dial","actor_offset":"+0x5C","semantic":"dialogue script index","proven_behavior":"indexes pointer table at 0x0300078C","confidence":"high"},
-        {"property":"route","actor_offset":"+0x64","semantic":"NPC route index","proven_behavior":"state 3 indexes route pointer table at 0x03001818 and follows six waypoints","confidence":"high"},
-    ]
+    field_rows = extract_new_actor_field_semantics(data)
     write_csv(args.out / "new_actor_field_semantics.csv",
               ["property","actor_offset","semantic","proven_behavior","confidence"], field_rows)
 
@@ -3292,9 +3678,12 @@ def main():
               ["progress_index","dialogue_script","script_role","selector_global","selector_dispatch",
                "completion_behavior","confidence"], state4_rows)
 
+    state3_field_row = extract_npc_state3_field_usage(data)
+    write_csv(args.out / "npc_state3_field_usage.csv", list(state3_field_row), [state3_field_row])
+
     identity_rows = extract_story_entity_identities()
     write_csv(args.out / "story_entity_identities.csv",
-              ["index","identity","semantic_role","identity_confidence","evidence"], identity_rows)
+              ["index","identity","semantic_role","identity_confidence","role_confidence","evidence"], identity_rows)
 
     gate_rows = extract_level10_collection_gate_policy(data)
     write_csv(args.out / "level10_collection_gate_policy.csv",
@@ -3362,6 +3751,17 @@ def main():
               ["action_index","action_label","page_base","quadrant","runtime_path","dispatcher",
                "dispatch_key","page_base_consulted","shared_flag_offset","reconstruction_warning","confidence"],
               interaction_runtime_dispatch_rows)
+
+    interaction_leaf_commit_rows = extract_player_interaction_leaf_commit_semantics(data)
+    write_csv(args.out / "player_interaction_leaf_commit_semantics.csv",
+              ["action_index","action_label","page_base","quadrant","topic_count","fresh_a_gate",
+               "fresh_a_outcome","post_countdown_path","runtime_class","b_return","evidence","confidence"],
+              interaction_leaf_commit_rows)
+
+    interaction_followup_refs = extract_player_interaction_followup_flag_references(data)
+    write_csv(args.out / "player_interaction_followup_flag_references.csv",
+              ["address","field","access","source","leaf_discriminator","confidence"],
+              interaction_followup_refs)
 
     interaction_followup_row = extract_player_interaction_followup_handshake(data)
     write_csv(args.out / "player_interaction_followup_handshake.csv", list(interaction_followup_row),

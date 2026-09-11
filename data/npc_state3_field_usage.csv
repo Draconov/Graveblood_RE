@@ -1,0 +1,2 @@
+state,entry,route_field,waypoint_field,base_sprite_family_field,dialogue_field,dialogue_field_use,identity_consequence,evidence,confidence
+3,0x08002B72,actor+0x64,actor+0xF8,actor+0xEC,actor+0x5C,not consulted by recovered state-3 route-follow path,state-3 dial metadata cannot prove narrative identity,"0x08002B72..0x08002D94 + out-of-line 0x08003262..0x080032C6; no LDR [r5,#0x5C] on recovered state-3 path",high

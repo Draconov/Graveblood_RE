@@ -114,6 +114,10 @@ class CfaAssetTests(unittest.TestCase):
         shared = set(data.level_indices[0]) & set(data.level_indices[6])
         self.assertTrue(shared)
         self.assertTrue(all(data.physical[index].actor_class != g.ACTOR_CLASS_PLAYER for index in shared))
+        # Missing setglobal properties retain the ROM parser/constructor default 1.
+        # The 16 standalone story overlays explicitly serialize setglobal=0.
+        self.assertTrue(all(item.setglobal == 1 for item in data.physical))
+        self.assertTrue(all(item.descriptor.setglobal == 0 for item in data.story))
 
     def test_generator_emits_actor_data_routes_and_exact_npc_frame_bank(self):
         g = self._module()
@@ -137,6 +141,25 @@ class CfaAssetTests(unittest.TestCase):
             self.assertIn('GB_ACTOR_VISUAL_COUNT = 34', header)
             self.assertIn('GB_ACTOR_MAX_FRAMES = 8', header)
             self.assertIn('GB_ACTOR_ROUTE_COUNT = 5', header)
+
+    def test_generator_packs_level9_level10_fixed_composite_from_initial_obj_bank(self):
+        g = self._module()
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        self.assertTrue(hasattr(g, 'pack_level_static_obj_bank'))
+        packed = g.pack_level_static_obj_bank(rom)
+        self.assertEqual(4, packed.frame_count)
+        self.assertEqual(4 * 16 * 16, len(packed.data))
+
+        # Player_draw submits the same four 16x16 initial-OBJ pieces as one
+        # 32x32 composite in Levels 9 and 10: 0x17C/0x17E over 0x19C/0x19E.
+        source_base = g.OBJ_TILES_SOURCE - g.ROM_BASE
+        expected = bytearray()
+        for tile_arg in (0x17C, 0x17E, 0x19C, 0x19E):
+            base = tile_arg & 0x1FF
+            for logical in (base, base + 1, base + 16, base + 17):
+                start = source_base + logical * 64
+                expected.extend(rom[start:start + 64])
+        self.assertEqual(bytes(expected), packed.data)
 
     def test_generator_packs_exact_grass_and_leaf_particle_tiles(self):
         g = self._module()

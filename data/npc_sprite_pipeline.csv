@@ -11,6 +11,10 @@ invisible_legs_color,1,0x08002756..0x08002762 branches to draw epilogue before f
 frame_field,actor+0x78 (1-based),0x08002770..0x0800277E clamps to 1..actor+0x50; 0x08002860 advances before staging when countdown expires
 countdown_field,actor+0x7C,0x08002780..0x08002788 decrements positive countdown; zero/negative enters the advance/reload path
 countdown_reload,5 * trunc(8 / actor+0x50),"0x080028EE..0x08002900 loads frame count, divides 8 by it, then multiplies quotient by 5"
+normal_oam_geometry,two stacked 16x16 sprites; bottom then top,0x080027B0..0x08002838 submits Y-16 first and Y-32 second through 0x0800A8F0
+normal_screen_anchor,x=actorX-cameraX; y=actorY-cameraY-16/-32,0x080027B0..0x080027C8 and 0x0800281A..0x0800282E; no -8 X bias
+depth_priority,1 when actorY > PlayerY; otherwise 2,0x0800278A..0x080027A2 selects 1; 0x08002854..0x0800285E selects 2; actor+0x84 feeds both OAM submits
+spatial_dispatch,setglobal default 1 => inherited +0x31 clear => camera-culled before NPC_draw,NPC constructor 0x080039CA..0x080039DE sets +0x58=1/+0x31=0; common policy 0x080043C8..0x080043D4 only sets +0x31 when +0x58==0
 state3_base_family_field,actor+0xEC,NPC constructor copies serialized legsColor into the state-3 base-family field before route updates
 state3_directional_families,base / base+8 / base+16,8 / 6 / 6 frames: idle 0x0800327A restores base/8; horizontal/down 0x08002BF2 selects base+8/6; upward branches 0x08002D38..0x08002D94 select base+16/6
 state3_movement_codes,down=0; down-right=1; right=2; up-right=3; up=4; up-left=5; left=6; down-left=7; idle=8,actor+0xF4 writes across 0x08002BE4..0x08002D94 and 0x08003268..0x080032BE

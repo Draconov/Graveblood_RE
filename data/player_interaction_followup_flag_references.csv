@@ -1,0 +1,9 @@
+address,field,access,source,leaf_discriminator,confidence
+0x0800637A,Player+0x382,clear 0,Player constructor initialization,not applicable,high
+0x080083CE,Player+0x382,read,normal Player-update interaction guard,not applicable,high
+0x0800843A,Player+0x382,read,normal Player-update input guard,not applicable,high
+0x0800852E,Player+0x382,read,shared fresh-A follow-up consumer,not applicable,high
+0x08008598,Player+0x382,clear 0,accepted shared follow-up teardown,not applicable,high
+0x080087AC,Player+0x382,read,Player-update interaction guard,not applicable,high
+0x08008B50,Player+0x382,read,Player-update finalizer/solver guard,not applicable,high
+0x08009214,Player+0x382,set 1,quadrant 1/2 response dispatcher,none; dispatch key is quadrant only,high

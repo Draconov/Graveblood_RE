@@ -13,9 +13,10 @@
 #define GB_OBJ_SIZE_1 (1u << 14)
 #define GB_PLAYER_PALETTE_BANK 15
 #define GB_MONSTER_OBJ_TILE_BASE (GB_PLAYER_FRAME_COUNT * 8)
-#define GB_ACTOR_OAM_FIRST 5
-#define GB_ACTOR_OAM_COUNT 52
-#define GB_ACTOR_OBJ_TILE_BASE (GB_MONSTER_OBJ_TILE_BASE + GB_MONSTER_SPRITE_COUNT * 8)
+#define GB_LEVEL_STATIC_OBJ_TILE_BASE (GB_MONSTER_OBJ_TILE_BASE + GB_MONSTER_SPRITE_COUNT * 8)
+#define GB_ACTOR_OAM_FIRST 9
+#define GB_ACTOR_OAM_COUNT 48
+#define GB_ACTOR_OBJ_TILE_BASE (GB_LEVEL_STATIC_OBJ_TILE_BASE + GB_LEVEL_STATIC_SPRITE_COUNT * 8)
 #define GB_STORY_UI_COLUMNS 29
 #define GB_STORY_UI_ROWS 3
 #define GB_STORY_UI_MAP_Y 17
@@ -157,6 +158,10 @@ static void gb_video_restore_gameplay_obj_assets(void)
     gb_copy_u16((volatile u16*)SPR_VRAM(0) + GB_PLAYER_FRAME_COUNT * 128,
                 gb_monster_obj_frames,
                 GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS);
+    gb_copy_u16((volatile u16*)SPR_VRAM(0) + GB_PLAYER_FRAME_COUNT * 128 +
+                    GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS,
+                gb_level_static_obj_tiles,
+                GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS);
 }
 
 void gb_video_wait_vblank(void)
@@ -598,23 +603,52 @@ static int gb_actor_npc_visual_index(const GbActor* actor)
     return -1;
 }
 
+static int gb_video_sprite_visible_16(s16 x, s16 y)
+{
+    return x >= -16 && x < 240 && y >= -16 && y < 160;
+}
+
+static void gb_video_hide_oam_entry(volatile u16* oam, int index)
+{
+    oam[index * 4] = 160;
+    oam[index * 4 + 1] = 0;
+    oam[index * 4 + 2] = 0;
+    oam[index * 4 + 3] = 0;
+}
+
+static int gb_video_npc_draw_dispatched(const GbActor* actor, s16 camera_x, s16 camera_y)
+{
+    if(actor->descriptor->setglobal == 0)
+    {
+        return 1;
+    }
+
+    /* Inherited object-manager culling at 0x08001642 uses the NPC's
+       constructor-proven 16x32 fixed8 body.  +0x31 bypasses this path; the
+       common actor parser sets +0x31 only for explicit setglobal == 0. */
+    const s16 left = gb_actor_pixel_x(actor);
+    const s16 right = (s16)(left + 16);
+    const s16 bottom = gb_actor_pixel_y(actor);
+    const s16 top = (s16)(bottom - 32);
+    return right >= camera_x && left <= (s16)(camera_x + 240) &&
+           bottom >= camera_y && top <= (s16)(camera_y + 160);
+}
+
 void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 camera_x, s16 camera_y)
 {
     volatile u16* oam = (volatile u16*)OAM;
     volatile u16* actor_vram = (volatile u16*)SPR_VRAM(0) + GB_PLAYER_FRAME_COUNT * 128 +
-                               GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS;
-    u8 visible = 0;
+                               GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS +
+                               GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS;
+    u8 oam_used = 0;
+    u8 slots_used = 0;
 
     for(int i = 0; i < GB_ACTOR_OAM_COUNT; ++i)
     {
-        const int oam_index = GB_ACTOR_OAM_FIRST + i;
-        oam[oam_index * 4] = 160;
-        oam[oam_index * 4 + 1] = 0;
-        oam[oam_index * 4 + 2] = 0;
-        oam[oam_index * 4 + 3] = 0;
+        gb_video_hide_oam_entry(oam, GB_ACTOR_OAM_FIRST + i);
     }
 
-    for(u8 i = 0; i < system->count && visible < GB_ACTOR_OAM_COUNT; ++i)
+    for(u8 i = 0; i < system->count && oam_used < GB_ACTOR_OAM_COUNT; ++i)
     {
         GbActor* actor = &system->actors[i];
         if(! actor->active || ! actor->descriptor)
@@ -622,10 +656,12 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
             continue;
         }
 
-        const int oam_index = GB_ACTOR_OAM_FIRST + visible;
-        volatile u16* slot = actor_vram + visible * GB_ACTOR_FRAME_HALFWORDS;
         if(actor->descriptor->actor_class == GB_ACTOR_NPC)
         {
+            if(! gb_video_npc_draw_dispatched(actor, camera_x, camera_y))
+            {
+                continue;
+            }
             if(! gb_actor_npc_should_draw(actor))
             {
                 continue;
@@ -636,22 +672,40 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
                 continue;
             }
             const u8 frame = gb_actor_npc_frame_for_draw(actor);
-            const s16 sx = (s16)(gb_actor_pixel_x(actor) - camera_x - 8);
-            const s16 sy = (s16)(gb_actor_pixel_y(actor) - camera_y - 32);
-            if(sx < -16 || sx >= 240 || sy < -32 || sy >= 160)
+            const s16 sx = (s16)(gb_actor_pixel_x(actor) - camera_x);
+            const s16 bottom_y = (s16)(gb_actor_pixel_y(actor) - camera_y - 16);
+            const s16 top_y = (s16)(bottom_y - 16);
+            const int bottom_visible = gb_video_sprite_visible_16(sx, bottom_y);
+            const int top_visible = gb_video_sprite_visible_16(sx, top_y);
+            if(! bottom_visible && ! top_visible)
             {
                 continue;
             }
+            volatile u16* slot = actor_vram + slots_used * GB_ACTOR_FRAME_HALFWORDS;
             const u32 frame_index = (u32)visual * GB_ACTOR_MAX_FRAMES + (frame - 1);
+            const u16 tile_base = (u16)(GB_ACTOR_OBJ_TILE_BASE + slots_used * 16);
+            const u16 priority = (u16)((gb_actor_pixel_y(actor) > player->y ? 1u : 2u) << 10);
+            const u16 hflip = actor->facing_right ? GB_OBJ_HFLIP : 0;
             gb_copy_u16(slot,
                         gb_actor_obj_frames + frame_index * GB_ACTOR_FRAME_HALFWORDS,
                         GB_ACTOR_FRAME_HALFWORDS);
-            oam[oam_index * 4] = (u16)(sy & 0x00FF) | GB_OBJ_TALL | GB_OBJ_256_COLOR;
-            oam[oam_index * 4 + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_2 |
-                                     (actor->facing_right ? GB_OBJ_HFLIP : 0);
-            oam[oam_index * 4 + 2] = (u16)(GB_ACTOR_OBJ_TILE_BASE + visible * 16);
-            oam[oam_index * 4 + 3] = 0;
-            ++visible;
+            if(bottom_visible && oam_used < GB_ACTOR_OAM_COUNT)
+            {
+                const int oam_index = GB_ACTOR_OAM_FIRST + oam_used++;
+                oam[oam_index * 4] = (u16)(bottom_y & 0x00FF) | GB_OBJ_256_COLOR;
+                oam[oam_index * 4 + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_1 | hflip;
+                oam[oam_index * 4 + 2] = (u16)(tile_base + 8u) | priority;
+                oam[oam_index * 4 + 3] = 0;
+            }
+            if(top_visible && oam_used < GB_ACTOR_OAM_COUNT)
+            {
+                const int oam_index = GB_ACTOR_OAM_FIRST + oam_used++;
+                oam[oam_index * 4] = (u16)(top_y & 0x00FF) | GB_OBJ_256_COLOR;
+                oam[oam_index * 4 + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_1 | hflip;
+                oam[oam_index * 4 + 2] = tile_base | priority;
+                oam[oam_index * 4 + 3] = 0;
+            }
+            ++slots_used;
         }
         else if(actor->descriptor->actor_class == GB_ACTOR_GRASS && player)
         {
@@ -662,22 +716,25 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
             }
             const s16 sx = (s16)(gb_actor_pixel_x(actor) - camera_x);
             const s16 sy = (s16)(gb_actor_pixel_y(actor) - 16 - camera_y);
-            if(sx < -16 || sx >= 240 || sy < -16 || sy >= 160)
+            if(! gb_video_sprite_visible_16(sx, sy))
             {
                 continue;
             }
+            const int oam_index = GB_ACTOR_OAM_FIRST + oam_used;
+            volatile u16* slot = actor_vram + slots_used * GB_ACTOR_FRAME_HALFWORDS;
             gb_copy_u16(slot, gb_grass_obj_tiles, GB_GRASS_OBJ_HALFWORDS);
             oam[oam_index * 4] = (u16)(sy & 0x00FF) | GB_OBJ_256_COLOR;
             oam[oam_index * 4 + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_1 |
                                      (draw.hflip ? GB_OBJ_HFLIP : 0);
-            oam[oam_index * 4 + 2] = (u16)((GB_ACTOR_OBJ_TILE_BASE + visible * 16) |
+            oam[oam_index * 4 + 2] = (u16)((GB_ACTOR_OBJ_TILE_BASE + slots_used * 16) |
                                            ((u16)draw.priority << 10));
             oam[oam_index * 4 + 3] = 0;
-            ++visible;
+            ++oam_used;
+            ++slots_used;
         }
     }
 
-    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY && visible < GB_ACTOR_OAM_COUNT; ++i)
+    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY && oam_used < GB_ACTOR_OAM_COUNT; ++i)
     {
         GbLeafParticle* particle = &system->leaf_particles[i];
         if(! particle->active)
@@ -691,35 +748,61 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
         {
             continue;
         }
-        const int oam_index = GB_ACTOR_OAM_FIRST + visible;
-        volatile u16* slot = actor_vram + visible * GB_ACTOR_FRAME_HALFWORDS;
+        const int oam_index = GB_ACTOR_OAM_FIRST + oam_used;
+        volatile u16* slot = actor_vram + slots_used * GB_ACTOR_FRAME_HALFWORDS;
         gb_copy_u16(slot,
                     gb_leaf_obj_frames + frame * GB_LEAF_FRAME_HALFWORDS,
                     GB_LEAF_FRAME_HALFWORDS);
         oam[oam_index * 4] = (u16)(sy & 0x00FF) | GB_OBJ_256_COLOR;
         oam[oam_index * 4 + 1] = (u16)(sx & 0x01FF);
-        oam[oam_index * 4 + 2] = (u16)(GB_ACTOR_OBJ_TILE_BASE + visible * 16);
+        oam[oam_index * 4 + 2] = (u16)(GB_ACTOR_OBJ_TILE_BASE + slots_used * 16);
         oam[oam_index * 4 + 3] = 0;
-        ++visible;
+        ++oam_used;
+        ++slots_used;
+    }
+}
+
+static void gb_video_draw_player_oam(const GbPlayer* player, s16 camera_x, s16 camera_y, int first_oam)
+{
+    const s16 sx = (s16)(player->x - camera_x);
+    const s16 bottom_y = (s16)(player->y - camera_y - 16);
+    const s16 top_y = (s16)(bottom_y - 16);
+    const u16 tile_base = (u16)(gb_player_frame_index(player) * 8);
+    const u16 attr1 = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_1 |
+                      (player->facing_right ? GB_OBJ_HFLIP : 0);
+    const u16 priority_palette = (u16)((2u << 10) | (GB_PLAYER_PALETTE_BANK << 12));
+    volatile u16* oam = (volatile u16*)OAM;
+
+    if(gb_video_sprite_visible_16(sx, bottom_y))
+    {
+        const int o = first_oam * 4;
+        oam[o] = (u16)(bottom_y & 0x00FF);
+        oam[o + 1] = attr1;
+        oam[o + 2] = (u16)(tile_base + 4u) | priority_palette;
+        oam[o + 3] = 0;
+    }
+    else
+    {
+        gb_video_hide_oam_entry(oam, first_oam);
+    }
+
+    if(gb_video_sprite_visible_16(sx, top_y))
+    {
+        const int o = (first_oam + 1) * 4;
+        oam[o] = (u16)(top_y & 0x00FF);
+        oam[o + 1] = attr1;
+        oam[o + 2] = tile_base | priority_palette;
+        oam[o + 3] = 0;
+    }
+    else
+    {
+        gb_video_hide_oam_entry(oam, first_oam + 1);
     }
 }
 
 void gb_video_draw_player(const GbPlayer* player, s16 camera_x, s16 camera_y)
 {
-    const s16 sx = (s16)(player->x - camera_x - 8);
-    const s16 sy = (s16)(player->y - camera_y - 32);
-    volatile u16* oam = (volatile u16*)OAM;
-
-    if(sx < -16 || sx >= 240 || sy < -32 || sy >= 160)
-    {
-        oam[0] = 160;
-        return;
-    }
-
-    oam[0] = (u16)(sy & 0x00FF) | GB_OBJ_TALL;
-    oam[1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_2 | (player->facing_right ? GB_OBJ_HFLIP : 0);
-    oam[2] = (u16)(gb_player_frame_index(player) * 8) | (GB_PLAYER_PALETTE_BANK << 12);
-    oam[3] = 0;
+    gb_video_draw_player_oam(player, camera_x, camera_y, 0);
 }
 
 static void gb_story_ui_fill(u8 value)
@@ -973,7 +1056,7 @@ void gb_video_draw_message(const GbMessageRecord* message)
 static void gb_video_hide_player_oam(void)
 {
     volatile u16* oam = (volatile u16*)OAM;
-    for(int i = 0; i < 5; ++i)
+    for(int i = 0; i < GB_ACTOR_OAM_FIRST; ++i)
     {
         oam[i * 4] = 160;
         oam[i * 4 + 1] = 0;
@@ -1000,9 +1083,45 @@ static void gb_video_draw_monster(const GbPlayer* player, s16 camera_x)
     {
         oam[i * 4] = (u16)(ys[i] & 0x00FF) | GB_OBJ_256_COLOR;
         oam[i * 4 + 1] = (u16)(xs[i] & 0x01FF) | GB_OBJ_SIZE_1;
-        oam[i * 4 + 2] = (u16)(GB_MONSTER_OBJ_TILE_BASE + i * 8);
+        oam[i * 4 + 2] = (u16)(GB_MONSTER_OBJ_TILE_BASE + i * 8) | (2u << 10);
         oam[i * 4 + 3] = 0;
     }
+}
+
+static int gb_video_draw_level_static_composite(s16 camera_x, s16 camera_y, int first_oam)
+{
+    if(! gb_video_level || (gb_video_level->level_id != 9 && gb_video_level->level_id != 10))
+    {
+        return 0;
+    }
+
+    const s16 world_x = gb_video_level->level_id == 9 ? 504 : 706;
+    const s16 world_y = gb_video_level->level_id == 9 ? 476 : 884;
+    const s16 sx[4] = {
+        (s16)(world_x - camera_x), (s16)(world_x + 16 - camera_x),
+        (s16)(world_x - camera_x), (s16)(world_x + 16 - camera_x),
+    };
+    const s16 sy[4] = {
+        (s16)(world_y - camera_y), (s16)(world_y - camera_y),
+        (s16)(world_y + 16 - camera_y), (s16)(world_y + 16 - camera_y),
+    };
+    volatile u16* oam = (volatile u16*)OAM;
+    for(int i = 0; i < 4; ++i)
+    {
+        const int index = first_oam + i;
+        if(gb_video_sprite_visible_16(sx[i], sy[i]))
+        {
+            oam[index * 4] = (u16)(sy[i] & 0x00FF) | GB_OBJ_256_COLOR;
+            oam[index * 4 + 1] = (u16)(sx[i] & 0x01FF) | GB_OBJ_SIZE_1;
+            oam[index * 4 + 2] = (u16)(GB_LEVEL_STATIC_OBJ_TILE_BASE + i * 8) | (2u << 10);
+            oam[index * 4 + 3] = 0;
+        }
+        else
+        {
+            gb_video_hide_oam_entry(oam, index);
+        }
+    }
+    return 4;
 }
 
 void gb_video_draw_player_state(const GbPlayer* player, const GbStoryRuntime* story,
@@ -1012,8 +1131,10 @@ void gb_video_draw_player_state(const GbPlayer* player, const GbStoryRuntime* st
     if(story && story->state.monster_render_enabled)
     {
         gb_video_draw_monster(player, camera_x);
+        gb_video_draw_level_static_composite(camera_x, camera_y, 5);
         return;
     }
     gb_monster_animation_counter = 0;
-    gb_video_draw_player(player, camera_x, camera_y);
+    const int player_oam = gb_video_draw_level_static_composite(camera_x, camera_y, 0);
+    gb_video_draw_player_oam(player, camera_x, camera_y, player_oam);
 }

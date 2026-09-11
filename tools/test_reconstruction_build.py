@@ -334,8 +334,8 @@ typedef int32_t s32;
         video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
         header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
         self.assertIn('void gb_video_draw_actors', header)
-        self.assertIn('#define GB_ACTOR_OAM_FIRST 5', video)
-        self.assertIn('#define GB_ACTOR_OAM_COUNT 52', video)
+        self.assertIn('#define GB_ACTOR_OAM_FIRST 9', video)
+        self.assertIn('#define GB_ACTOR_OAM_COUNT 48', video)
         self.assertIn('#define GB_OBJ_256_COLOR (1u << 13)', video)
         self.assertIn('#define GB_PLAYER_PALETTE_BANK 15', video)
         self.assertIn('gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256)', video)
@@ -410,6 +410,321 @@ extern volatile u16 gb_test_vram[0x18000 / 2];
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(0, proc.returncode, proc.stderr)
             self.assertTrue(obj.is_file())
+
+    def test_player_and_npc_oam_match_rom_split_depth_and_anchor_contract(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount;
+volatile u16 gb_test_dispcnt;
+volatile u16 gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256];
+volatile u16 gb_test_obj_colors[256];
+volatile u16 gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {
+    { 24, 0 },
+};
+const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = { 0x1234 };
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = { 0 };
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = { 0 };
+
+u8 gb_player_frame_index(const GbPlayer* player)
+{
+    (void)player;
+    return 3;
+}
+
+static void clear_oam(void)
+{
+    for(int i = 0; i < 512; ++i)
+        gb_test_oam[i] = 0;
+}
+
+int main(void)
+{
+    GbPlayer player = { 0 };
+    player.x = 100;
+    player.y = 80;
+    player.facing_right = 1;
+
+    clear_oam();
+    gb_video_draw_player(&player, 10, 5);
+
+    /* Player_draw submits bottom 16x16 first, then top 16x16, both at priority 2.
+       X is the object's +0x08 left-edge anchor; there is no clean-room -8 shift. */
+    assert((gb_test_oam[0] & 0x00FF) == 59); /* 80 - 16 - 5 */
+    assert((gb_test_oam[1] & 0x01FF) == 90); /* 100 - 10 */
+    assert((gb_test_oam[1] & (1u << 12)) != 0); /* H flip */
+    assert((gb_test_oam[2] & 0x0C00) == (2u << 10));
+    assert((gb_test_oam[2] & 0x03FF) == (3u * 8u + 4u));
+
+    assert((gb_test_oam[4] & 0x00FF) == 43); /* 80 - 32 - 5 */
+    assert((gb_test_oam[5] & 0x01FF) == 90);
+    assert((gb_test_oam[5] & (1u << 12)) != 0);
+    assert((gb_test_oam[6] & 0x0C00) == (2u << 10));
+    assert((gb_test_oam[6] & 0x03FF) == (3u * 8u));
+
+    GbActorDescriptor desc = { 0 };
+    desc.actor_class = GB_ACTOR_NPC;
+    desc.legs_color = 24;
+    desc.subtype = 0;
+    desc.num = 1;
+
+    GbActorSystem system = { 0 };
+    system.count = 1;
+    system.actors[0].descriptor = &desc;
+    system.actors[0].fixed_x = 100 << 8;
+    system.actors[0].fixed_y = 80 << 8;
+    system.actors[0].visual_legs_color = 24;
+    system.actors[0].frame = 1;
+    system.actors[0].frame_countdown = 1;
+    system.actors[0].animation_frame_count = 1;
+    system.actors[0].facing_right = 1;
+    system.actors[0].active = 1;
+
+    /* Actor below Player => ROM priority 1 (draw in front of Player priority 2). */
+    player.y = 70;
+    clear_oam();
+    gb_video_draw_actors(&system, &player, 10, 5);
+    const int npc0 = 9 * 4;
+    const int npc1 = 10 * 4;
+    assert((gb_test_oam[npc0] & 0x00FF) == 59); /* bottom first */
+    assert((gb_test_oam[npc0 + 1] & 0x01FF) == 90);
+    assert((gb_test_oam[npc0 + 1] & (1u << 12)) != 0);
+    assert((gb_test_oam[npc0 + 2] & 0x0C00) == (1u << 10));
+    assert((gb_test_oam[npc1] & 0x00FF) == 43); /* top second */
+    assert((gb_test_oam[npc1 + 1] & 0x01FF) == 90);
+    assert((gb_test_oam[npc1 + 2] & 0x0C00) == (1u << 10));
+
+    /* Actor at/above Player => priority 2, so lower OAM-index Player stays in front. */
+    player.y = 90;
+    clear_oam();
+    gb_video_draw_actors(&system, &player, 10, 5);
+    assert((gb_test_oam[npc0 + 2] & 0x0C00) == (2u << 10));
+    assert((gb_test_oam[npc1 + 2] & 0x0C00) == (2u << 10));
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount;
+extern volatile u16 gb_test_dispcnt;
+extern volatile u16 gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256];
+extern volatile u16 gb_test_obj_colors[256];
+extern volatile u16 gb_test_oam[512];
+extern volatile u16 gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'oam_parity_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'oam_parity_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(td / 'oam_parity_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
+
+    def test_level9_level10_player_draw_submits_fixed_rom_composite_before_player(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount;
+volatile u16 gb_test_dispcnt;
+volatile u16 gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256];
+volatile u16 gb_test_obj_colors[256];
+volatile u16 gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const u16 gb_actor_obj_palette[256] = {0};
+const u16 gb_player_obj_palette[16] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+/* Future renderer asset; keeping this test declaration macro-free makes the RED
+   failure behavioral on the pre-feature tree instead of a compile-only failure. */
+const u16 gb_level_static_obj_tiles[4 * 128] = {0};
+
+u8 gb_player_frame_index(const GbPlayer* player) { (void)player; return 0; }
+
+static const u16 palette[256] = {0};
+static const u16 tile = 0;
+
+static void clear_oam(void)
+{
+    for(int i = 0; i < 512; ++i)
+        gb_test_oam[i] = 0;
+}
+
+static void verify_fixed_four(int x, int y, int player_x, int player_y)
+{
+    /* Player_draw emits the fixed 32x32 initial-OBJ composite before the
+       ordinary Player. Four 16x16 cells, all priority 2. */
+    const int xs[4] = { x, x + 16, x, x + 16 };
+    const int ys[4] = { y, y, y + 16, y + 16 };
+    for(int i = 0; i < 4; ++i)
+    {
+        const int o = i * 4;
+        assert((gb_test_oam[o] & 0x00FF) == (ys[i] & 0xFF));
+        assert((gb_test_oam[o + 1] & 0x01FF) == (xs[i] & 0x1FF));
+        assert((gb_test_oam[o + 2] & 0x0C00) == (2u << 10));
+    }
+
+    /* Normal Player follows the four fixed cells: bottom then top. */
+    assert((gb_test_oam[4 * 4] & 0x00FF) == ((player_y - 16) & 0xFF));
+    assert((gb_test_oam[4 * 4 + 1] & 0x01FF) == (player_x & 0x1FF));
+    assert((gb_test_oam[5 * 4] & 0x00FF) == ((player_y - 32) & 0xFF));
+    assert((gb_test_oam[5 * 4 + 1] & 0x01FF) == (player_x & 0x1FF));
+}
+
+int main(void)
+{
+    GbPlayer player = {0};
+    GbStoryRuntime story = {0};
+    player.x = 550;
+    player.y = 550;
+
+    GbLevelAssets level = {0};
+    level.bg_palette = palette;
+    level.bg_tiles = &tile;
+    level.bg_tile_halfwords = 1;
+
+    level.level_id = 9;
+    gb_video_load_level(&level);
+    clear_oam();
+    gb_video_draw_player_state(&player, &story, 500, 470);
+    verify_fixed_four(4, 6, 50, 80); /* (504,476) - camera; Player - camera */
+
+    level.level_id = 10;
+    gb_video_load_level(&level);
+    clear_oam();
+    player.x = 750;
+    player.y = 950;
+    gb_video_draw_player_state(&player, &story, 700, 880);
+    verify_fixed_four(6, 4, 50, 70); /* (706,884) - camera */
+
+    level.level_id = 8;
+    gb_video_load_level(&level);
+    clear_oam();
+    player.x = 100;
+    player.y = 80;
+    gb_video_draw_player_state(&player, &story, 10, 5);
+    /* No fixed composite outside Levels 9/10: normal Player keeps OAM 0/1. */
+    assert((gb_test_oam[0] & 0x00FF) == 59);
+    assert((gb_test_oam[1] & 0x01FF) == 90);
+    assert((gb_test_oam[4] & 0x00FF) == 43);
+    assert((gb_test_oam[5] & 0x01FF) == 90);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16; typedef uint32_t u32; typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512], gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'level_static_oam_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'level_static_oam_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(td / 'level_static_oam_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
 
     def test_story_video_uses_canonical_font_safe_bg0_tiles_and_monster_oam(self):
         video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
@@ -488,6 +803,215 @@ extern volatile u16 gb_test_vram[0x18000 / 2];
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(0, proc.returncode, proc.stderr)
             self.assertTrue(obj.is_file())
+
+    def test_npc_draw_culling_respects_setglobal_and_freezes_physical_offscreen_cadence(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount;
+volatile u16 gb_test_dispcnt;
+volatile u16 gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256];
+volatile u16 gb_test_obj_colors[256];
+volatile u16 gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{ 24, 0 }};
+const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {0};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
+
+u8 gb_player_frame_index(const GbPlayer* player) { (void)player; return 0; }
+
+int main(void)
+{
+    GbActorDescriptor desc = {0};
+    desc.actor_class = GB_ACTOR_NPC;
+    desc.legs_color = 24;
+    desc.num = 2;
+    desc.setglobal = 1;
+
+    GbActorSystem system = {0};
+    GbPlayer player = {0};
+    system.count = 1;
+    system.actors[0].descriptor = &desc;
+    system.actors[0].active = 1;
+    system.actors[0].fixed_x = 400 << 8;
+    system.actors[0].fixed_y = 80 << 8;
+    system.actors[0].visual_legs_color = 24;
+    system.actors[0].animation_frame_count = 2;
+    system.actors[0].frame = 1;
+    system.actors[0].frame_countdown = 0;
+
+    /* Default setglobal=1 keeps inherited +0x31 clear, so an object wholly
+       outside the 240x160 camera rectangle never reaches NPC_draw. */
+    gb_video_draw_actors(&system, &player, 0, 0);
+    assert(system.actors[0].frame == 1);
+    assert(system.actors[0].frame_countdown == 0);
+
+    /* Explicit setglobal=0 sets inherited +0x31=1 and bypasses object-manager
+       camera culling. NPC_draw therefore advances even when OAM submit culls. */
+    desc.setglobal = 0;
+    system.actors[0].frame = 1;
+    system.actors[0].frame_countdown = 0;
+    gb_video_draw_actors(&system, &player, 0, 0);
+    assert(system.actors[0].frame == 2);
+    assert(system.actors[0].frame_countdown == 20); /* 5 * trunc(8/2) */
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16; typedef uint32_t u32; typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512], gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'npc_cull_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'npc_cull_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(td / 'npc_cull_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
+
+    def test_monster_oam_uses_rom_priority_two_contract(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount;
+volatile u16 gb_test_dispcnt;
+volatile u16 gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256];
+volatile u16 gb_test_obj_colors[256];
+volatile u16 gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const u16 gb_actor_obj_palette[256] = {0};
+const u16 gb_player_obj_palette[16] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{0,0}};
+const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {0};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
+
+u8 gb_player_frame_index(const GbPlayer* player) { (void)player; return 0; }
+
+int main(void)
+{
+    GbPlayer player = {0};
+    GbStoryRuntime story = {0};
+    player.x = 100;
+    player.y = 80;
+    story.state.monster_render_enabled = 1;
+    gb_video_draw_player_state(&player, &story, 10, 5);
+    for(int i = 0; i < 5; ++i)
+        assert((gb_test_oam[i * 4 + 2] & 0x0C00) == (2u << 10));
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16; typedef uint32_t u32; typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512], gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)(gb_test_vram + 0x10000 / 2))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'monster_oam_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'monster_oam_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(td / 'monster_oam_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
 
     def test_pda_video_uses_exact_chrome_and_safe_dynamic_text_layer(self):
         header = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')
@@ -1786,26 +2310,55 @@ int main(void)
     gb_story_update(&story, &actors, &fresh_a);
     assert(! gb_story_ui_active(&story));
 
-    /* Zero-count leaves still enter state 2; B returns to root and plays SFX7. */
+    /* All twelve FLIRT/ASSAULT/SHARE leaves enter state 2 but fresh A is inert.
+       This exhausts page bases 8/12/16 instead of relying on one example. */
+    static const u8 prototype_pages[] = { 8, 12, 16 };
+    for(unsigned p = 0; p < sizeof(prototype_pages) / sizeof(prototype_pages[0]); ++p)
+    {
+        for(u8 quadrant = 0; quadrant < 4; ++quadrant)
+        {
+            gb_story_init(&story);
+            one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
+            gb_story_handle_interaction(&story, &actors, &social);
+            story.social.page_base = prototype_pages[p];
+            story.social.selected_quadrant = quadrant;
+            gb_story_update(&story, &actors, &fresh_a); /* confirm leaf */
+            assert(story.social.state == GB_SOCIAL_SECONDARY);
+            assert(story.social.action_index == prototype_pages[p] + quadrant);
+            assert(story.social.topic_count == 0);
+            gb_story_update(&story, &actors, &fresh_a); /* canonical non-TALK A exits Player_update */
+            assert(story.social.state == GB_SOCIAL_SECONDARY);
+            assert(story.social.page_base == prototype_pages[p]);
+            assert(story.social.action_index == prototype_pages[p] + quadrant);
+            gb_story_update(&story, &actors, &fresh_b);
+            assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+            assert(story.social.page_base == 0);
+            assert(story.social.selected_quadrant == 0);
+            assert(gb_story_take_pending_sfx(&story) == 7);
+        }
+    }
+
+    /* JOKE is the sole zero-count TALK leaf: unlike the twelve prototype
+       leaves it commits, waits 150 updates and arms the shared +0x382 path. */
     gb_story_init(&story);
     one_actor(&actors, &social_stas_desc, GB_ACTOR_STORY_NONE);
     gb_story_handle_interaction(&story, &actors, &social);
-    gb_story_update(&story, &actors, &fresh_right); /* select FLIRT */
-    assert(story.social.page_base == 0);
-    gb_story_update(&story, &actors, &fresh_a);     /* confirm FLIRT submenu */
-    assert(story.social.page_base == 8);
-    gb_story_update(&story, &actors, &fresh_down);  /* select DIRTY JOKE */
-    gb_story_update(&story, &actors, &fresh_a);     /* confirm zero-count leaf */
+    story.social.page_base = 4;
+    story.social.selected_quadrant = 2;
+    gb_story_update(&story, &actors, &fresh_a); /* confirm JOKE */
     assert(story.social.state == GB_SOCIAL_SECONDARY);
+    assert(story.social.action_index == 6);
     assert(story.social.topic_count == 0);
-    gb_story_update(&story, &actors, &fresh_a); /* non-TALK leaf has no code-proven commit */
-    assert(story.social.state == GB_SOCIAL_SECONDARY);
-    assert(story.social.page_base == 8);
-    gb_story_update(&story, &actors, &fresh_b);
-    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
-    assert(story.social.page_base == 0);
-    assert(story.social.selected_quadrant == 0);
-    assert(gb_story_take_pending_sfx(&story) == 7);
+    gb_story_update(&story, &actors, &fresh_a); /* TALK page base 4 commits */
+    assert(story.social.state == GB_SOCIAL_POST_DELAY);
+    assert(story.social.post_countdown == 150);
+    for(int i = 0; i < 150; ++i)
+        gb_story_update(&story, &actors, &none);
+    gb_story_update(&story, &actors, &none);
+    assert(story.social.state == GB_SOCIAL_RESPONSE);
+    assert(story.social.followup_armed == 1);
+    gb_story_update(&story, &actors, &fresh_a);
+    assert(! gb_story_ui_active(&story));
 
     /* Invalid dialogue/script and exhausted collection indices fail closed. */
     gb_story_init(&story);
@@ -2327,6 +2880,24 @@ int main(void)
     assert(player.animation_countdown == 3);
     assert(player.facing_right == 1);
     assert(gb_player_frame_index(&player) == 13);
+
+    /* Player+0x1E0 changes the idle cadence as well as the frame bank:
+       selector 0 reloads 8, selector 1 reloads 5. */
+    player.idle_selector = 0;
+    player.animation_state = GB_PLAYER_ANIM_IDLE;
+    player.animation_frame = 1;
+    player.animation_countdown = 0;
+    gb_player_update(&player, &level, &idle);
+    assert(player.animation_frame == 2);
+    assert(player.animation_countdown == 8);
+
+    player.idle_selector = 1;
+    player.animation_state = GB_PLAYER_ANIM_IDLE;
+    player.animation_frame = 1;
+    player.animation_countdown = 0;
+    gb_player_update(&player, &level, &idle);
+    assert(player.animation_frame == 2);
+    assert(player.animation_countdown == 5);
     return 0;
 }
 """
@@ -2615,6 +3186,7 @@ const u16 gb_actor_obj_palette[256] = {0};
 const u16 gb_player_obj_palette[16] = {0};
 const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {0};
 
 static const u16 gameplay_palette[256] = {0x1234};
 static const u16 gameplay_tiles[1] = {0x5678};

@@ -1,17 +1,17 @@
-index,identity,semantic_role,identity_confidence,evidence
-0,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-1,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-2,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-3,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-4,IQ 54,walking story character,high,"overlay #4 has dial=2, state=3, route=0; script 2 is spoken by IQ 54 and asks Vika to find five sketches"
-5,Stas,social-interaction character,high,"overlay #5 is state=1,dial=0; the sole state-1 social bootstrap copies dial to profile selector 0, whose proper social profile name is Stas"
-6,Julia,social-interaction character,high,"overlay #6 is state=1,dial=1; the sole state-1 social bootstrap copies dial to profile selector 1, whose proper social profile name is Julia"
-7,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-8,unidentified,story-controlled entity,unknown,no narrative identity assigned without dialogue+metadata proof
-9,IQ 54,story character,high,"overlay #9 is level=10, state=2, dial=2; dial is the proven dialogue-script index and script 2's speaking NPC is IQ 54"
-10,Katya,story character,high,overlay #10 has dial=3; script 3 is Katya's sister/bicycle conversation
-11,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
-12,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
-13,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
-14,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
-15,unidentified,collection pickup,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+index,identity,semantic_role,identity_confidence,role_confidence,evidence
+0,unidentified,passive visible story actor,unknown,high,"overlay #0 is level=0,state=0,legsColor=56; NPC_update has no special state-0 interaction branch and legsColor!=1 remains drawable"
+1,unidentified,visible dialogue entity,unknown,high,"overlay #1 is level=0,state=2,dial=0,legsColor=56; state 2 is the fresh-A dialogue path and legsColor!=1 remains drawable"
+2,unidentified,visible dialogue entity,unknown,high,"overlay #2 is level=5,state=2,dial=1,legsColor=16; state 2 is the fresh-A dialogue path and legsColor!=1 remains drawable"
+3,unidentified,visible dialogue entity,unknown,high,"overlay #3 is level=0,state=2,dial=1,legsColor=56; state 2 is the fresh-A dialogue path and legsColor!=1 remains drawable"
+4,unidentified,route-following story actor,unknown,high,"overlay #4 is state=3,route=0; recovered state-3 route-follow uses actor+0x64/+0xF8/+0xEC and actor+0x5C (dial) is not consulted, so dial=2 cannot prove identity"
+5,Stas,social-interaction character,high,high,"overlay #5 is state=1,dial=0; the sole state-1 social bootstrap copies dial to profile selector 0, whose proper social profile name is Stas"
+6,Julia,social-interaction character,high,high,"overlay #6 is state=1,dial=1; the sole state-1 social bootstrap copies dial to profile selector 1, whose proper social profile name is Julia"
+7,unidentified,invisible dialogue hotspot,unknown,high,"overlay #7 is level=7,state=2,dial=0,legsColor=1; state 2 supplies the fresh-A dialogue interaction while NPC_draw branches to its draw epilogue for legsColor=1"
+8,unidentified,invisible dialogue hotspot,unknown,high,"overlay #8 is level=7,state=2,dial=1,legsColor=1; state 2 supplies the fresh-A dialogue interaction while NPC_draw branches to its draw epilogue for legsColor=1"
+9,IQ 54,story character,high,high,"overlay #9 is level=10, state=2, dial=2; dial is the proven dialogue-script index and script 2's speaking NPC is IQ 54"
+10,Katya,story character,high,high,overlay #10 has dial=3; script 3 is Katya's sister/bicycle conversation
+11,unidentified,collection pickup,unknown,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+12,unidentified,collection pickup,unknown,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+13,unidentified,collection pickup,unknown,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+14,unidentified,collection pickup,unknown,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches
+15,unidentified,collection pickup,unknown,high,five overlay records share state=4 and the paper/sketch source family; IQ script 2 explicitly asks for five sketches

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
 import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,14 @@ class WardrobeExtractionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.data = ROM_PATH.read_bytes()
+
+    def test_csv_writer_uses_repository_lf_line_endings(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "probe.csv"
+            mod.write_csv(out, ["name", "value"], [{"name": "alpha", "value": 1}])
+            raw = out.read_bytes()
+        self.assertNotIn(b"\r\n", raw)
+        self.assertEqual(raw, b"name,value\nalpha,1\n")
 
     def test_player_constructor_wardrobe_table_is_ten_fixed_20_byte_slots(self):
         rows = mod.extract_wardrobe_labels(self.data)
@@ -132,6 +141,26 @@ class SpawnFactoryExtractionTests(unittest.TestCase):
         self.assertTrue(all(row['loader_function'] == '0x080010A4' for row in rows))
         self.assertTrue(all(row['level_gate_function'] == '0x080043AC' for row in rows))
 
+    def test_player_sprite_pipeline_exports_step2_oam_cadence_and_level_static_contracts(self):
+        self.assertTrue(hasattr(mod, 'extract_player_sprite_pipeline'))
+        rows = mod.extract_player_sprite_pipeline(self.data)
+        by_fact = {row['fact']: row for row in rows}
+        self.assertEqual(by_fact['normal_oam_geometry']['value'], 'two stacked 16x16 sprites; bottom then top')
+        self.assertEqual(by_fact['normal_screen_anchor']['value'], 'x=PlayerX-cameraX; y=PlayerY-cameraY-16/-32')
+        self.assertEqual(by_fact['normal_priority']['value'], '2')
+        self.assertEqual(by_fact['alternate_idle_countdown_reset']['value'], '5')
+        self.assertEqual(by_fact['monster_priority']['value'], '2')
+        self.assertEqual(by_fact['level9_fixed_composite']['value'], '32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2')
+        self.assertEqual(by_fact['level10_fixed_composite']['value'], '32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2')
+
+    def test_actor_field_semantics_guards_setglobal_default_and_leaves_global_override(self):
+        self.assertTrue(hasattr(mod, 'extract_new_actor_field_semantics'))
+        rows = mod.extract_new_actor_field_semantics(self.data)
+        by_property = {row['property']: row for row in rows}
+        self.assertIn('parser default is 1', by_property['setglobal']['proven_behavior'])
+        self.assertIn('Leaves_factory', by_property['leaves_global_override']['semantic'])
+        self.assertIn('actor+0x31 = 1', by_property['leaves_global_override']['proven_behavior'])
+
     def test_npc_sprite_pipeline_exports_correct_initialized_source_base(self):
         rows = mod.extract_npc_sprite_pipeline(self.data)
         by_fact = {row['fact']: row for row in rows}
@@ -145,6 +174,10 @@ class SpawnFactoryExtractionTests(unittest.TestCase):
         self.assertEqual(by_fact['frame_field']['value'], 'actor+0x78 (1-based)')
         self.assertEqual(by_fact['countdown_field']['value'], 'actor+0x7C')
         self.assertEqual(by_fact['countdown_reload']['value'], '5 * trunc(8 / actor+0x50)')
+        self.assertEqual(by_fact['normal_oam_geometry']['value'], 'two stacked 16x16 sprites; bottom then top')
+        self.assertEqual(by_fact['normal_screen_anchor']['value'], 'x=actorX-cameraX; y=actorY-cameraY-16/-32')
+        self.assertEqual(by_fact['depth_priority']['value'], '1 when actorY > PlayerY; otherwise 2')
+        self.assertEqual(by_fact['spatial_dispatch']['value'], 'setglobal default 1 => inherited +0x31 clear => camera-culled before NPC_draw')
         self.assertEqual(by_fact['state3_base_family_field']['value'], 'actor+0xEC')
         self.assertEqual(by_fact['state3_directional_families']['value'], 'base / base+8 / base+16')
         self.assertIn('8 / 6 / 6 frames', by_fact['state3_directional_families']['evidence'])
@@ -183,9 +216,13 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         rows = mod.extract_story_entity_identities()
         keyed = {row["index"]: row for row in rows}
         self.assertEqual(len(rows), 16)
-        self.assertEqual(keyed[4]["identity"], "IQ 54")
-        self.assertEqual(keyed[4]["identity_confidence"], "high")
-        self.assertIn("dial=2", keyed[4]["evidence"])
+        self.assertEqual(keyed[4]["identity"], "unidentified")
+        self.assertEqual(keyed[4]["semantic_role"], "route-following story actor")
+        self.assertEqual(keyed[4]["identity_confidence"], "unknown")
+        self.assertEqual(keyed[4]["role_confidence"], "high")
+        self.assertIn("state=3", keyed[4]["evidence"])
+        self.assertIn("actor+0x5C", keyed[4]["evidence"])
+        self.assertIn("not consulted", keyed[4]["evidence"])
         self.assertEqual(keyed[10]["identity"], "Katya")
         self.assertIn("dial=3", keyed[10]["evidence"])
         self.assertEqual(keyed[9]["identity"], "IQ 54")
@@ -199,7 +236,37 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(keyed[6]["identity_confidence"], "high")
         self.assertIn("selector 1", keyed[6]["evidence"])
         self.assertEqual([keyed[i]["semantic_role"] for i in range(11, 16)], ["collection pickup"] * 5)
+        self.assertTrue(all(keyed[i]["identity"] == "unidentified" for i in range(11, 16)))
+        self.assertTrue(all(keyed[i]["identity_confidence"] == "unknown" for i in range(11, 16)))
+        self.assertTrue(all(keyed[i]["role_confidence"] == "high" for i in range(11, 16)))
         self.assertTrue(all(keyed[i]["identity"] == "unidentified" for i in (0, 1, 2, 3, 7, 8)))
+        self.assertEqual(keyed[0]["semantic_role"], "passive visible story actor")
+        self.assertEqual([keyed[i]["semantic_role"] for i in (1, 2, 3)],
+                         ["visible dialogue entity"] * 3)
+        self.assertEqual([keyed[i]["semantic_role"] for i in (7, 8)],
+                         ["invisible dialogue hotspot"] * 2)
+        self.assertTrue(all(keyed[i]["role_confidence"] == "high" for i in (0, 1, 2, 3, 7, 8)))
+        self.assertIn("state=0", keyed[0]["evidence"])
+        self.assertIn("state=2", keyed[1]["evidence"])
+        self.assertIn("dial=0", keyed[1]["evidence"])
+        self.assertIn("legsColor=1", keyed[7]["evidence"])
+        self.assertIn("draw epilogue", keyed[7]["evidence"])
+
+    def test_state3_route_follow_does_not_use_dialogue_identity_field(self):
+        self.assertTrue(
+            hasattr(mod, "extract_npc_state3_field_usage"),
+            "missing state-3 field-usage extractor",
+        )
+        row = mod.extract_npc_state3_field_usage(self.data)
+        self.assertEqual(row["state"], 3)
+        self.assertEqual(row["entry"], "0x08002B72")
+        self.assertEqual(row["route_field"], "actor+0x64")
+        self.assertEqual(row["waypoint_field"], "actor+0xF8")
+        self.assertEqual(row["base_sprite_family_field"], "actor+0xEC")
+        self.assertEqual(row["dialogue_field"], "actor+0x5C")
+        self.assertEqual(row["dialogue_field_use"], "not consulted by recovered state-3 route-follow path")
+        self.assertEqual(row["identity_consequence"], "state-3 dial metadata cannot prove narrative identity")
+        self.assertEqual(row["confidence"], "high")
 
     def test_level10_gate_policy_switches_exactly_after_rusty_key_progress(self):
         rows = mod.extract_level10_collection_gate_policy(self.data)
@@ -438,6 +505,57 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertTrue(all(row["page_base_consulted"] == "no" for row in rows))
         self.assertTrue(all(row["confidence"] == "high" for row in rows))
 
+    def test_interaction_leaf_commit_semantics_separate_talk_from_prototype_pages(self):
+        self.assertTrue(
+            hasattr(mod, "extract_player_interaction_leaf_commit_semantics"),
+            "missing interaction leaf-commit extractor",
+        )
+        rows = mod.extract_player_interaction_leaf_commit_semantics(self.data)
+        self.assertEqual(len(rows), 16)
+        keyed = {row["action_label"]: row for row in rows}
+
+        talk = [row for row in rows if row["page_base"] == 4]
+        prototype = [row for row in rows if row["page_base"] in (8, 12, 16)]
+        self.assertEqual(len(talk), 4)
+        self.assertEqual(len(prototype), 12)
+        self.assertTrue(all(row["fresh_a_outcome"] == "commit to interaction state 3" for row in talk))
+        self.assertTrue(all(row["fresh_a_outcome"] == "exit Player_update; remain in state 2" for row in prototype))
+        self.assertTrue(all(row["runtime_class"] == "prototype/inert leaf in canonical demo" for row in prototype))
+
+        self.assertEqual(keyed["JOKE"]["topic_count"], 0)
+        self.assertEqual(keyed["JOKE"]["fresh_a_outcome"], "commit to interaction state 3")
+        self.assertEqual(keyed["JOKE"]["post_countdown_path"], "quadrant 2 shared +0x382 follow-up")
+        self.assertEqual(keyed["DIRTY JOKE"]["topic_count"], 0)
+        self.assertEqual(keyed["DIRTY JOKE"]["fresh_a_outcome"], "exit Player_update; remain in state 2")
+        self.assertEqual(keyed["KISS CHEEK"]["post_countdown_path"], "unreachable from canonical state-2 fresh-A gate")
+        self.assertEqual(keyed["SWEAR"]["post_countdown_path"], "unreachable from canonical state-2 fresh-A gate")
+        self.assertEqual(keyed["GIFT"]["post_countdown_path"], "unreachable from canonical state-2 fresh-A gate")
+        self.assertTrue(all(row["b_return"] == "state 0/root page + SFX7" for row in rows))
+        self.assertTrue(all(row["confidence"] == "high" for row in rows))
+
+    def test_interaction_followup_flag_reference_inventory_has_one_runtime_setter(self):
+        self.assertTrue(
+            hasattr(mod, "extract_player_interaction_followup_flag_references"),
+            "missing +0x382 reference inventory extractor",
+        )
+        rows = mod.extract_player_interaction_followup_flag_references(self.data)
+        self.assertEqual(
+            [row["address"] for row in rows],
+            [
+                "0x0800637A", "0x080083CE", "0x0800843A", "0x0800852E",
+                "0x08008598", "0x080087AC", "0x08008B50", "0x08009214",
+            ],
+        )
+        setters = [row for row in rows if row["access"] == "set 1"]
+        clears = [row for row in rows if row["access"] == "clear 0"]
+        readers = [row for row in rows if row["access"] == "read"]
+        self.assertEqual([row["address"] for row in setters], ["0x08009214"])
+        self.assertEqual([row["address"] for row in clears], ["0x0800637A", "0x08008598"])
+        self.assertEqual(len(readers), 5)
+        self.assertEqual(setters[0]["source"], "quadrant 1/2 response dispatcher")
+        self.assertEqual(setters[0]["leaf_discriminator"], "none; dispatch key is quadrant only")
+        self.assertTrue(all(row["confidence"] == "high" for row in rows))
+
     def test_interaction_shared_quadrant_followup_flag_has_fresh_a_handshake(self):
         self.assertTrue(
             hasattr(mod, "extract_player_interaction_followup_handshake"),
@@ -659,6 +777,8 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(keyed["selector_leaf_confirm"]["condition"], "selected record +0x20 == 1")
         self.assertEqual(keyed["selector_leaf_confirm"]["to_state"], 2)
         self.assertIn("regardless of +0x28", keyed["selector_leaf_confirm"]["proven_behavior"])
+        self.assertIn("later fresh-A handling is page-gated", keyed["selector_leaf_confirm"]["proven_behavior"])
+        self.assertNotIn("unresolved", keyed["selector_leaf_confirm"]["proven_behavior"])
         self.assertEqual(keyed["secondary_b_return"]["from_state"], 2)
         self.assertEqual(keyed["secondary_b_return"]["to_state"], 0)
         self.assertIn("Player+0x1E8", keyed["secondary_b_return"]["proven_behavior"])
