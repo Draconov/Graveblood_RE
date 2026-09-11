@@ -1,0 +1,4 @@
+mode,level_guard,entry,behavior,next_mode,mode_global,mode_global_literal_refs,evidence,confidence
+0,,ordinary Player_update path,normal gameplay / non-scripted controller path,,0x03000624,0x080081F2|0x08008806,0x080086BC dispatch falls through when value is neither 5 nor 6,high
+5,10 after queued Level-9 handoff,0x08008820..0x08008832 writes 5,+370 fixed8 X each Level-10 update; increment controller counter; when X > 700 and counter > 350 snap Y to 870 and switch to mode 6,6,0x03000624,0x080081F2|0x08008806,0x0800935A counter/+370 block; 0x080093A2 handoff,high
+6,10,mode-5 handoff,-256 fixed8 Y while Y > 780; Y <= 780 clears requested Y and controller mode,0,0x03000624,0x080081F2|0x08008806,mode-6 branch and 0x080094F4 exit block,high

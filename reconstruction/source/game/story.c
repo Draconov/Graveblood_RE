@@ -683,7 +683,7 @@ GbStoryGateResult gb_story_try_level10_gate(const GbStoryRuntime* story,
            recovered 2x2 contact grid dispatches the vertical traversal. */
         if(story->state.collection_progress > 3 && grid_contact)
         {
-            player->y = gate->target_y;
+            gb_player_queue_vertical_target(player, gate->target_y);
             return GB_STORY_GATE_TRAVERSED;
         }
         return GB_STORY_GATE_BLOCKED;
@@ -706,12 +706,12 @@ GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* lev
        y=456, 16x16.  Fgtile_update diverts this object at 0x0800417C
        before the generic portTo handler; fresh A sends Player+0x394 to
        0x00020000 (512 px) through 0x080080A4.  The compact clean-room
-       player currently stores pixel coordinates directly, so commit the
-       recovered target while preserving X. */
+       recovered helper queues targetY-currentY into the normal fixed8
+       collision path while preserving X. */
     if(player->x >= 512 && player->x < 528 &&
        player->y >= 456 && player->y < 472)
     {
-        player->y = 512;
+        gb_player_queue_vertical_target(player, 512);
         return GB_STORY_GATE_TRAVERSED;
     }
 

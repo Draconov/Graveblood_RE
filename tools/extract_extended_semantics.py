@@ -2991,6 +2991,81 @@ def extract_player_wardrobe_slots(data: bytes) -> list[dict]:
     return rows
 
 
+
+def extract_player_controller_modes(data: bytes) -> list[dict]:
+    """Recover the dedicated Player controller-mode global.
+
+    The low-ROM code has exactly two literal references to 0x03000624.  The
+    central Player_update dispatch compares only values 5 and 6; value 0 is
+    the ordinary non-scripted path.  Other large Player_update state machines
+    are driven by different Player fields/globals and must not be folded into
+    this controller-mode inventory.
+    """
+    mode_global = 0x03000624
+    refs = _thumb_literal_refs_to(data, mode_global, 0x08000000, 0x08012000)
+    expected_refs = [0x080081F2, 0x08008806]
+    if refs != expected_refs:
+        raise ValueError(f"Player controller-mode global xrefs drifted: {refs!r}")
+
+    dispatch = (0x9B09, 0x32FF, 0x681B, 0x4590, 0xDC02, 0x4642, 0x3203,
+                0x61A2, 0x2B05, 0xD100, 0xE10C, 0x2B06, 0xD000, 0xE10F)
+    if _unpack_halfwords(data, 0x080086BC, len(dispatch)) != dispatch:
+        raise ValueError("Player controller-mode 5/6 dispatch drifted")
+
+    boundary = (0x3301, 0x2200, 0x4830, 0x210A, 0xF7FD, 0xFA02,
+                0x2305, 0x9A09, 0x6AA8, 0x6013)
+    if _unpack_halfwords(data, 0x08008820, len(boundary)) != boundary:
+        raise ValueError("Level-9 boundary mode-5 write drifted")
+
+    mode5_head = (0x6F2B, 0x3301, 0x4699, 0x672B, 0x23B9, 0x005B, 0x61A3)
+    if _unpack_halfwords(data, 0x0800935A, len(mode5_head)) != mode5_head:
+        raise ValueError("Player mode-5 counter/+370 request block drifted")
+
+    mode5_handoff = (0x2700, 0x4835, 0x60E0, 0x4835, 0x6007,
+                     0x2006, 0x61A7, 0x9F09, 0x6038)
+    if _unpack_halfwords(data, 0x080093A2, len(mode5_handoff)) != mode5_handoff:
+        raise ValueError("Player mode-5 to mode-6 handoff drifted")
+
+    mode6_exit = (0x2208, 0x2300, 0x6032, 0x9A09, 0x61E3, 0x6013)
+    if _unpack_halfwords(data, 0x080094F4, len(mode6_exit)) != mode6_exit:
+        raise ValueError("Player mode-6 exit block drifted")
+
+    ref_text = "|".join(f"0x{ref:08X}" for ref in refs)
+    common = {
+        "mode_global": "0x03000624",
+        "mode_global_literal_refs": ref_text,
+        "confidence": "high",
+    }
+    return [
+        {
+            **common,
+            "mode": 0,
+            "level_guard": "",
+            "entry": "ordinary Player_update path",
+            "behavior": "normal gameplay / non-scripted controller path",
+            "next_mode": "",
+            "evidence": "0x080086BC dispatch falls through when value is neither 5 nor 6",
+        },
+        {
+            **common,
+            "mode": 5,
+            "level_guard": "10 after queued Level-9 handoff",
+            "entry": "0x08008820..0x08008832 writes 5",
+            "behavior": "+370 fixed8 X each Level-10 update; increment controller counter; when X > 700 and counter > 350 snap Y to 870 and switch to mode 6",
+            "next_mode": "6",
+            "evidence": "0x0800935A counter/+370 block; 0x080093A2 handoff",
+        },
+        {
+            **common,
+            "mode": 6,
+            "level_guard": "10",
+            "entry": "mode-5 handoff",
+            "behavior": "-256 fixed8 Y while Y > 780; Y <= 780 clears requested Y and controller mode",
+            "next_mode": "0",
+            "evidence": "mode-6 branch and 0x080094F4 exit block",
+        },
+    ]
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("rom", type=Path)
@@ -3287,6 +3362,11 @@ def main():
                "alignment_entry","alignment_handler","horizontal_formula","intended_horizontal_separation_px",
                "vertical_formula","facing_value","collision_motion_solver","next_state","normal_path_anchor_reset",
                "constructor_anchor_init","confidence"], interaction_alignment_rows)
+
+    controller_mode_rows = extract_player_controller_modes(data)
+    write_csv(args.out / "player_controller_modes.csv",
+              ["mode","level_guard","entry","behavior","next_mode","mode_global",
+               "mode_global_literal_refs","evidence","confidence"], controller_mode_rows)
 
     ending_copy_rows = extract_ending_vram_effect_copy_model(data)
     write_csv(args.out / "ending_vram_effect_copy_model.csv",

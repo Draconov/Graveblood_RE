@@ -2,6 +2,7 @@
 #define GRAVEBLOOD_ACTOR_H
 
 #include <gba.h>
+#include <graveblood/assets.h>
 
 enum {
     GB_PLAYER_ANIM_WALK_REGULAR = 2,
@@ -23,6 +24,11 @@ typedef struct {
     s32 collision_width_fixed;
     s32 collision_height_fixed;
     u16 collision_status;
+    /* ROM Player+0x390/+0x394 are dual-purpose target/reset fields.  The
+       normal path stores 1 in both; 0x080080A4 clears both after queuing a
+       forced vertical request so that request survives one normal update. */
+    u8 motion_reset_x;
+    u8 motion_reset_y;
     /* Clean-room representation of the controller-owned scripted Player
        mode/counter used by the Level-9 -> Level-10 entrance sequence. */
     u8 script_mode;
@@ -36,6 +42,9 @@ typedef struct {
 } GbPlayer;
 
 void gb_player_spawn(GbPlayer* player, s16 x, s16 y);
+void gb_player_queue_vertical_target(GbPlayer* player, s16 target_y);
+void gb_player_queue_social_alignment(GbPlayer* player, s16 anchor_x, s16 anchor_y);
+void gb_player_resolve_queued_motion(GbPlayer* player, const GbLevelAssets* level);
 u8 gb_player_try_level10_boundary(GbPlayer* player, u8 current_level);
 u8 gb_player_frame_index(const GbPlayer* player);
 

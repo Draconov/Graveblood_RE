@@ -863,32 +863,30 @@ int main(void)
     input.held = KEY_A;
 
     /* turn=4 gate: exact recovered contact grid, pre-key blocks generic portal. */
-    player.x = 808;
-    player.y = 392;
+    gb_player_spawn(&player, 808, 392);
     story.state.collection_progress = 3;
     assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_BLOCKED);
     assert(player.x == 808 && player.y == 392);
 
     /* collection progress 3->4 activates the forced vertical path; X is not consumed. */
     story.state.collection_progress = 4;
-    player.x = 810;
-    player.y = 392;
+    gb_player_spawn(&player, 810, 392);
     assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_TRAVERSED);
-    assert(player.x == 810);
-    assert(player.y == 360);
+    assert(player.x == 810 && player.y == 392);
+    assert(player.request_y_fixed == (360 - 392) * 256);
+    assert(player.motion_reset_x == 0 && player.motion_reset_y == 0);
 
     /* turn=5 uses the other recovered target. */
-    player.x = 808;
-    player.y = 360;
+    gb_player_spawn(&player, 808, 360);
     assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_TRAVERSED);
-    assert(player.x == 808);
-    assert(player.y == 410);
+    assert(player.x == 808 && player.y == 360);
+    assert(player.request_y_fixed == (410 - 360) * 256);
+    assert(player.motion_reset_x == 0 && player.motion_reset_y == 0);
 
     /* A held without a fresh press is not an interaction. */
     input.pressed = 0;
     input.held = KEY_A;
-    player.x = 808;
-    player.y = 392;
+    gb_player_spawn(&player, 808, 392);
     assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_NONE);
     assert(player.y == 392);
 
@@ -901,8 +899,7 @@ int main(void)
        the turn-4/5 records can never fall through to generic portTo=8. */
     level.level_id = 10;
     story.state.collection_progress = 4;
-    player.x = 808;
-    player.y = 384;
+    gb_player_spawn(&player, 808, 384);
     assert(gb_story_try_level10_gate(&story, &level, &player, &input) == GB_STORY_GATE_BLOCKED);
     assert(player.y == 384);
     return 0;
@@ -935,6 +932,8 @@ typedef int32_t s32;
                 'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/game/story.c'),
+                str(ROOT / 'reconstruction/source/game/player.c'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
                 str(ROOT / 'reconstruction/data/story_data.c'),
                 str(td / 'gate_test.c'), '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
@@ -961,14 +960,14 @@ int main(void)
     input.held = KEY_A;
 
     /* Canonical Level-9 treetype=20 Fgtile occupies 512,456..528,472. */
-    player.x = 512;
-    player.y = 456;
+    gb_player_spawn(&player, 512, 456);
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_TRAVERSED);
-    assert(player.x == 512);
-    assert(player.y == 512);
+    assert(player.x == 512 && player.y == 456);
+    assert(player.request_y_fixed == (512 - 456) * 256);
+    assert(player.motion_reset_x == 0 && player.motion_reset_y == 0);
 
     /* It is a fresh-A action, not an automatic contact trigger. */
-    player.y = 456;
+    gb_player_spawn(&player, 512, 456);
     input.pressed = 0;
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
     assert(player.y == 456);
@@ -976,12 +975,13 @@ int main(void)
     /* The special action exists only in Level 9 and never consumes portTo=524. */
     input.pressed = KEY_A;
     level.level_id = 8;
+    gb_player_spawn(&player, 512, 456);
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
     assert(player.y == 456);
 
     /* Outside the physical tile rectangle it does nothing. */
     level.level_id = 9;
-    player.x = 511;
+    gb_player_spawn(&player, 511, 456);
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
     return 0;
 }
@@ -1013,6 +1013,8 @@ typedef int32_t s32;
                 'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/game/story.c'),
+                str(ROOT / 'reconstruction/source/game/player.c'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
                 str(ROOT / 'reconstruction/data/story_data.c'),
                 str(td / 'level9_special_test.c'), '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
@@ -1457,6 +1459,8 @@ typedef int32_t s32;
                 'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/game/story.c'),
+                str(ROOT / 'reconstruction/source/game/player.c'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
                 str(ROOT / 'reconstruction/source/game/actors.c'),
                 str(ROOT / 'reconstruction/data/story_data.c'),
                 str(ROOT / 'reconstruction/data/actor_data.c'),

@@ -54,6 +54,8 @@ void gb_player_spawn(GbPlayer* player, s16 x, s16 y)
     player->collision_width_fixed = 0x1000;
     player->collision_height_fixed = 0x1000;
     player->collision_status = 0;
+    player->motion_reset_x = 1;
+    player->motion_reset_y = 1;
     player->script_mode = 0;
     player->script_counter = 0;
     player->facing_x = 0;
@@ -64,6 +66,66 @@ void gb_player_spawn(GbPlayer* player, s16 x, s16 y)
     player->animation_countdown = 5;
 }
 
+
+void gb_player_queue_vertical_target(GbPlayer* player, s16 target_y)
+{
+    if(! player)
+    {
+        return;
+    }
+
+    /* 0x080080A4 writes targetY-currentY to Player+0x1C, then clears
+       Player+0x390/+0x394.  The following normal Player update therefore
+       preserves the queued request long enough to pass through collision. */
+    player->request_y_fixed = ((s32)target_y << 8) - player->y_fixed;
+    player->motion_reset_x = 0;
+    player->motion_reset_y = 0;
+}
+
+void gb_player_queue_social_alignment(GbPlayer* player, s16 anchor_x, s16 anchor_y)
+{
+    if(! player)
+    {
+        return;
+    }
+
+    /* Player interaction state 0 (0x0800921A/0x08009552) aligns to the
+       NPC's Y and leaves exactly 0x1300 fixed8 (19 px) between Player and
+       NPC on the appropriate side before advancing the social selector. */
+    const s32 anchor_x_fixed = (s32)anchor_x << 8;
+    const s32 anchor_y_fixed = (s32)anchor_y << 8;
+    if(anchor_x_fixed >= player->x_fixed)
+    {
+        player->request_x_fixed = anchor_x_fixed - player->x_fixed - 0x1300;
+        player->facing_right = 1;
+        player->facing_x = 1;
+    }
+    else
+    {
+        player->request_x_fixed = anchor_x_fixed - player->x_fixed + 0x1300;
+        player->facing_right = 0;
+        player->facing_x = -1;
+    }
+    player->request_y_fixed = anchor_y_fixed - player->y_fixed;
+    player->facing_y = 0;
+    player->motion_reset_x = 0;
+    player->motion_reset_y = 0;
+}
+
+void gb_player_resolve_queued_motion(GbPlayer* player, const GbLevelAssets* level)
+{
+    if(! player)
+    {
+        return;
+    }
+
+    /* Interaction alignment uses the common 0x08004670 collision tail rather
+       than the normal D-pad path.  Re-arm the two normal-reset sentinels so
+       the surviving request is cleared on the following gameplay update. */
+    player->motion_reset_x = 1;
+    player->motion_reset_y = 1;
+    gb_collision_apply_player_motion(level, player);
+}
 
 u8 gb_player_try_level10_boundary(GbPlayer* player, u8 current_level)
 {
@@ -101,8 +163,14 @@ void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInpu
 {
     gb_player_sync_external_pixel_position(player);
 
-    player->request_x_fixed = 0;
-    player->request_y_fixed = 0;
+    if(player->motion_reset_x)
+    {
+        player->request_x_fixed = 0;
+    }
+    if(player->motion_reset_y)
+    {
+        player->request_y_fixed = 0;
+    }
 
     /* Controller mode 5/6 is the recovered Level-10 scripted entrance.
        Mode 5 is inert before Level 10 arrives.  In Level 10 it increments
@@ -188,6 +256,10 @@ void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInpu
         player->animation_state = GB_PLAYER_ANIM_IDLE;
     }
 
+    /* Normal ROM path 0x0800842A..0x08008434 re-arms both +0x390/+0x394
+       sentinels before the common collision resolver. */
+    player->motion_reset_x = 1;
+    player->motion_reset_y = 1;
     gb_collision_apply_player_motion(level, player);
 }
 

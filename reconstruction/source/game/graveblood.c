@@ -200,6 +200,23 @@ void gb_game_run(void)
 
             if(gate == GB_STORY_GATE_NONE)
             {
+                /* The original NPC fresh-A paths align Player through the
+                   common collision solver before handing control to social or
+                   dialogue UI.  State 1 uses full X/Y alignment with a 19px
+                   side gap; state 2 aligns only Y when legsColor != 1. */
+                if(interaction.type == GB_INTERACTION_SOCIAL)
+                {
+                    gb_player_queue_social_alignment(&player, interaction.actor_x, interaction.actor_y);
+                    gb_player_resolve_queued_motion(&player, world.assets);
+                }
+                else if(interaction.type == GB_INTERACTION_DIALOGUE &&
+                        interaction.actor_index < actors.count &&
+                        actors.actors[interaction.actor_index].descriptor &&
+                        actors.actors[interaction.actor_index].descriptor->legs_color != 1)
+                {
+                    gb_player_queue_vertical_target(&player, interaction.actor_y);
+                    gb_player_resolve_queued_motion(&player, world.assets);
+                }
                 gb_story_handle_interaction(&story, &actors, &interaction);
             }
 
