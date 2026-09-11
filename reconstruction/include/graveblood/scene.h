@@ -29,6 +29,8 @@ typedef struct {
 } GbSceneTick;
 
 void gb_scene_init(GbSceneRuntime *scene);
+void gb_scene_request_gameplay(GbSceneRuntime *scene, u8 level, u16 delay);
+GbSceneTick gb_scene_update_pending(GbSceneRuntime *scene);
 GbSceneTick gb_scene_update_title(GbSceneRuntime *scene, const GbInput *input);
 
 #endif

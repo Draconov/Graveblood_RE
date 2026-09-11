@@ -7,5 +7,6 @@
 
 bool gb_collision_point_walkable(const GbLevelAssets* level, s16 x, s16 y);
 bool gb_collision_can_stand(const GbLevelAssets* level, s16 x, s16 y);
+void gb_collision_apply_player_motion(const GbLevelAssets* level, GbPlayer* player);
 
 #endif

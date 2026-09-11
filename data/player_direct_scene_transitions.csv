@@ -1,0 +1,2 @@
+source_level,destination,x_condition,required_mode,mode_after_request,delay_updates,request_callsite,mode_global,level_global,scene_object,evidence
+9,10,>2555,0,5,10,0x08008828,0x03000624,0x03000808,0x0300080C,Player_update 0x080081E6..0x08008834; threshold literal 0x08008550=0x9FB

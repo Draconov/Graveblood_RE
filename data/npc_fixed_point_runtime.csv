@@ -1,0 +1,2 @@
+position_fraction_bits,one_pixel_fixed,position_fields,property_parse_sites,route_waypoint_units,route_target_shift,interaction_grid_shift,interaction_grid_cell_pixels,special_timer_address,special_timer_storage,special_timer_initial,special_timer_reload,confidence
+8,0x100,actor+0x08|actor+0x0C,0x08004414|0x08004438,8-pixel cells,11,11,8,0x03000800,32-bit,15,5,high

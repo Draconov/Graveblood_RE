@@ -916,7 +916,14 @@ void gb_video_draw_story_ui(const GbStoryRuntime* story)
     }
     if(story->social.state != GB_SOCIAL_INACTIVE)
     {
-        gb_story_ui_draw_social(story);
+        if(story->social.state == GB_SOCIAL_POST_DELAY)
+        {
+            gb_video_clear_story_ui();
+        }
+        else
+        {
+            gb_story_ui_draw_social(story);
+        }
         return;
     }
     gb_video_clear_story_ui();

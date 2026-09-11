@@ -23,8 +23,16 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
         return;
     }
 
+    const u8 saved_script_mode = player->script_mode;
+    const u32 saved_script_counter = player->script_counter;
+
     gb_world_load(world, assets);
     gb_player_spawn(player, assets->spawn_x, assets->spawn_y);
+    if(level_id == 10 && saved_script_mode == 5)
+    {
+        player->script_mode = saved_script_mode;
+        player->script_counter = saved_script_counter;
+    }
     gb_actor_system_load(actors, assets);
     gb_story_on_level_load(story, actors);
     gb_audio_play_music(level_id == 10 ? 1 : 0);
@@ -37,7 +45,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
 void gb_game_run(void)
 {
     GbWorld world;
-    GbPlayer player;
+    GbPlayer player = {0};
     GbActorSystem actors;
     GbStoryRuntime story;
     GbSceneRuntime scene;
@@ -75,6 +83,15 @@ void gb_game_run(void)
             gb_video_title_set_animation(scene.title_animation_state);
             gb_video_title_set_prompt_visible(tick.prompt_visible);
             continue;
+        }
+
+        {
+            const GbSceneTick pending_scene = gb_scene_update_pending(&scene);
+            if(pending_scene.enter_gameplay)
+            {
+                gb_enter_level(&world, &player, &actors, &story, pending_scene.gameplay_level);
+                continue;
+            }
         }
 
         if(scene.active == GB_SCENE_PDA)
@@ -115,8 +132,7 @@ void gb_game_run(void)
             const GbWardrobeTick wardrobe_tick = gb_wardrobe_update(&wardrobe, &input);
             if(wardrobe_tick.exit_gameplay)
             {
-                scene.active = GB_SCENE_GAMEPLAY;
-                gb_enter_level(&world, &player, &actors, &story, 7);
+                gb_scene_request_gameplay(&scene, 7, 10);
                 continue;
             }
             if(wardrobe_tick.selector_changed)
@@ -167,6 +183,14 @@ void gb_game_run(void)
         else
         {
             gb_actor_system_update(&actors, &player, &input, &interaction);
+            /* legsColor==112 proximity activation is an NPC-update event, not
+               a story UI event.  Consume it before gates/portals can continue
+               the frame so SFX9 cannot be lost on a same-frame traversal. */
+            const int actor_sfx = gb_actor_system_take_pending_sfx(&actors);
+            if(actor_sfx >= 0)
+            {
+                gb_audio_play_sfx((u8)actor_sfx);
+            }
             GbStoryGateResult gate =
                 gb_story_try_level10_gate(&story, world.assets, &player, &input);
             if(gate == GB_STORY_GATE_NONE)
@@ -181,6 +205,10 @@ void gb_game_run(void)
 
             if(! gb_story_ui_active(&story) && gate != GB_STORY_GATE_TRAVERSED)
             {
+                if(gb_player_try_level10_boundary(&player, world.assets->level_id))
+                {
+                    gb_scene_request_gameplay(&scene, 10, 10);
+                }
                 gb_player_update(&player, world.assets, &input);
             }
 
@@ -189,7 +217,7 @@ void gb_game_run(void)
                 const int portal_target = gb_portal_try_activate(world.assets, &player, &input);
                 if(gb_level_default_assets(portal_target))
                 {
-                    gb_enter_level(&world, &player, &actors, &story, portal_target);
+                    gb_scene_request_gameplay(&scene, (u8)portal_target, 10);
                     continue;
                 }
             }

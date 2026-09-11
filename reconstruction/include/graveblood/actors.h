@@ -7,7 +7,7 @@
 
 enum {
     GB_ACTOR_CAPACITY = 72,
-    GB_ACTOR_FIXED_SHIFT = 11,
+    GB_ACTOR_FIXED_SHIFT = 8,
     GB_ACTOR_FIXED_ONE = 1 << GB_ACTOR_FIXED_SHIFT,
     GB_ACTOR_ROUTE_SPEED_FIXED = 0x100,
     GB_ACTOR_STORY_NONE = 0xFF,
@@ -58,6 +58,7 @@ typedef struct {
     s16 dialogue_step;
     u8 consumed;
     u8 story_visible;
+    u8 special_mover_latched;
 } GbActor;
 
 typedef struct {
@@ -66,6 +67,8 @@ typedef struct {
     u8 count;
     u8 leaf_emitter_cooldown;
     u8 leaf_emitter_cycle;
+    s32 npc_special_timer;
+    s8 pending_sfx;
 } GbActorSystem;
 
 void gb_actor_system_init(GbActorSystem* system);
@@ -79,5 +82,6 @@ s16 gb_leaf_particle_pixel_x(const GbLeafParticle* particle);
 s16 gb_leaf_particle_pixel_y(const GbLeafParticle* particle);
 s16 gb_actor_pixel_x(const GbActor* actor);
 s16 gb_actor_pixel_y(const GbActor* actor);
+int gb_actor_system_take_pending_sfx(GbActorSystem* system);
 
 #endif

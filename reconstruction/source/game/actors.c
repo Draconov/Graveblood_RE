@@ -25,6 +25,8 @@ void gb_actor_system_init(GbActorSystem* system)
     system->count = 0;
     system->leaf_emitter_cooldown = 12;
     system->leaf_emitter_cycle = 0;
+    system->npc_special_timer = 15;
+    system->pending_sfx = -1;
     gb_actor_clear_leaf_particles(system);
 }
 
@@ -56,6 +58,7 @@ static void gb_actor_init(GbActor* actor, const GbActorDescriptor* descriptor, u
     actor->dialogue_step = -1;
     actor->consumed = 0;
     actor->story_visible = 1;
+    actor->special_mover_latched = descriptor->port_to != 0;
 }
 
 static void gb_actor_append(GbActorSystem* system, const GbActorDescriptor* descriptor, u8 overlay_index)
@@ -126,8 +129,10 @@ static void gb_actor_update_route(GbActor* actor)
     }
 
     const GbRoutePoint* target = &gb_actor_routes[descriptor->route][actor->waypoint_index];
-    const s32 target_x = (s32)target->x * GB_ACTOR_FIXED_ONE;
-    const s32 target_y = (s32)target->y * GB_ACTOR_FIXED_ONE;
+    /* Route coordinates are serialized in 8-pixel cells while actor positions
+       are 24.8 fixed point: cell << 3 pixels, then << 8 fixed = << 11. */
+    const s32 target_x = ((s32)target->x) << 11;
+    const s32 target_y = ((s32)target->y) << 11;
     const s32 old_x = actor->fixed_x;
 
     actor->fixed_x = gb_actor_step_axis(actor->fixed_x, target_x);
@@ -189,12 +194,70 @@ static int gb_actor_player_in_interaction(const GbActor* actor, const GbPlayer* 
         return 0;
     }
 
-    const s16 actor_x = gb_actor_pixel_x(actor);
-    const s16 actor_y = gb_actor_pixel_y(actor);
-    const s16 left = (s16)(actor_x - 2);
-    const s16 top = (s16)(actor_y - 2);
-    return player->x >= left && player->x < left + size &&
-           player->y >= top && player->y < top + size;
+    /* The ROM subtracts 0x1000 fixed units (16 px), then shifts both actor
+       and Player coordinates by 11.  With 24.8 storage that is an 8-pixel
+       interaction grid, not a literal 4/5-pixel rectangle. */
+    const s32 actor_left_cell = (actor->fixed_x - 0x1000) >> 11;
+    const s32 actor_top_cell = (actor->fixed_y - 0x1000) >> 11;
+    const s32 player_x_cell = ((s32)player->x * GB_ACTOR_FIXED_ONE) >> 11;
+    const s32 player_y_cell = ((s32)player->y * GB_ACTOR_FIXED_ONE) >> 11;
+    return player_x_cell >= actor_left_cell && player_x_cell < actor_left_cell + size &&
+           player_y_cell >= actor_top_cell && player_y_cell < actor_top_cell + size;
+}
+
+static int gb_actor_special_mover_near_player(const GbActor* actor, const GbPlayer* player)
+{
+    const s32 actor_x = actor->fixed_x >> GB_ACTOR_FIXED_SHIFT;
+    const s32 actor_y = actor->fixed_y >> GB_ACTOR_FIXED_SHIFT;
+    const s32 player_x = (s32)player->x + 8;
+    const s32 player_y = (s32)player->y + 16;
+    const s32 dx = actor_x - player_x;
+    const s32 dy = actor_y - player_y;
+    return dx * dx + dy * dy < 1024;
+}
+
+static void gb_actor_update_npc_special(GbActorSystem* system, GbActor* actor, const GbPlayer* player)
+{
+    const GbActorDescriptor* descriptor = actor->descriptor;
+    if(descriptor->legs_color == 40)
+    {
+        actor->fixed_x -= 150;
+        return;
+    }
+    if(descriptor->legs_color != 112)
+    {
+        return;
+    }
+
+    if(! actor->special_mover_latched)
+    {
+        if(system->npc_special_timer <= 0)
+        {
+            system->npc_special_timer = 5;
+            if(gb_actor_special_mover_near_player(actor, player))
+            {
+                actor->special_mover_latched = 1;
+                if(system->pending_sfx < 0)
+                {
+                    system->pending_sfx = 9;
+                }
+            }
+        }
+        --system->npc_special_timer;
+    }
+
+    if(actor->special_mover_latched)
+    {
+        actor->fixed_x += 600 * (s32)descriptor->turn - 300;
+        actor->fixed_y -= 250;
+    }
+}
+
+int gb_actor_system_take_pending_sfx(GbActorSystem* system)
+{
+    const int result = system->pending_sfx;
+    system->pending_sfx = -1;
+    return result;
 }
 
 static GbLeafParticle* gb_actor_allocate_leaf_particle(GbActorSystem* system)
@@ -334,6 +397,10 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
         if(! actor->active || ! actor->descriptor)
         {
             continue;
+        }
+        if(actor->descriptor->actor_class == GB_ACTOR_NPC)
+        {
+            gb_actor_update_npc_special(system, actor, player);
         }
         if(actor->descriptor->state == 3)
         {

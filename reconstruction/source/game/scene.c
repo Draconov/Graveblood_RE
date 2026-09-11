@@ -15,20 +15,51 @@ void gb_scene_init(GbSceneRuntime *scene)
     scene->pending_level = 0;
 }
 
+
+void gb_scene_request_gameplay(GbSceneRuntime *scene, u8 level, u16 delay)
+{
+    if(! scene || scene->pending_gameplay)
+    {
+        return;
+    }
+    scene->pending_gameplay = 1;
+    scene->pending_level = level;
+    scene->transition_delay = delay;
+}
+
+GbSceneTick gb_scene_update_pending(GbSceneRuntime *scene)
+{
+    GbSceneTick tick = {0, 0, 0, 0};
+    if(! scene || ! scene->pending_gameplay)
+    {
+        return tick;
+    }
+
+    if(scene->transition_delay > 0)
+    {
+        --scene->transition_delay;
+        return tick;
+    }
+
+    scene->active = GB_SCENE_GAMEPLAY;
+    scene->pending_gameplay = 0;
+    tick.enter_gameplay = 1;
+    tick.gameplay_level = scene->pending_level;
+    return tick;
+}
+
 GbSceneTick gb_scene_update_title(GbSceneRuntime *scene, const GbInput *input)
 {
     GbSceneTick tick = {0, 0, 0, 0};
 
-    if(scene->pending_gameplay && scene->transition_delay == 0)
+    if(scene->pending_gameplay)
     {
-        scene->active = GB_SCENE_GAMEPLAY;
-        tick.enter_gameplay = 1;
-        tick.gameplay_level = scene->pending_level;
-        return tick;
+        GbSceneTick pending = gb_scene_update_pending(scene);
+        if(pending.enter_gameplay)
+        {
+            return pending;
+        }
     }
-
-    if(scene->pending_gameplay && scene->transition_delay > 0)
-        --scene->transition_delay;
 
     if(scene->title_animation_counter <= 5)
     {
@@ -49,12 +80,7 @@ GbSceneTick gb_scene_update_title(GbSceneRuntime *scene, const GbInput *input)
     if((input->pressed & GB_TITLE_START_KEY) != 0)
     {
         tick.play_start_sfx = 1;
-        if(!scene->pending_gameplay)
-        {
-            scene->pending_gameplay = 1;
-            scene->pending_level = GB_TITLE_START_LEVEL;
-            scene->transition_delay = GB_TITLE_TRANSITION_DELAY;
-        }
+        gb_scene_request_gameplay(scene, GB_TITLE_START_LEVEL, GB_TITLE_TRANSITION_DELAY);
     }
 
     return tick;

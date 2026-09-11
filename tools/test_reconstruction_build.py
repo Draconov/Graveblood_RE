@@ -666,6 +666,7 @@ static void one_actor(GbActorSystem* system, const GbActorDescriptor* desc)
     system->actors[0].waypoint_index = 0;
     system->actors[0].facing_right = 0;
     system->actors[0].active = 1;
+    system->actors[0].special_mover_latched = desc->port_to != 0;
 }
 
 int main(void)
@@ -678,6 +679,9 @@ int main(void)
     GbInput held_a = { KEY_A, 0 };
     GbPlayer player = { 0 };
 
+    gb_actor_system_init(&system);
+    assert(GB_ACTOR_FIXED_SHIFT == 8);
+    assert(system.npc_special_timer == 15);
     level.level_id = 0;
     gb_actor_system_load(&system, &level);
     assert(system.count == 55);
@@ -706,22 +710,25 @@ int main(void)
     const s32 before_x = route_actor->fixed_x;
     const s32 before_y = route_actor->fixed_y;
     gb_actor_system_update(&system, &player, &none, &event);
-    assert(route_actor->fixed_x == before_x - GB_ACTOR_ROUTE_SPEED_FIXED);
-    assert(route_actor->fixed_y == before_y - GB_ACTOR_ROUTE_SPEED_FIXED);
-    assert(route_actor->facing_right == 0);
+    assert(route_actor->fixed_x == before_x + GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->fixed_y == before_y + GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->facing_right == 1);
     assert(event.type == GB_INTERACTION_NONE);
 
     route_actor->waypoint_index = 5;
-    route_actor->fixed_x = ((s32)gb_actor_routes[0][5].x) << GB_ACTOR_FIXED_SHIFT;
-    route_actor->fixed_y = ((s32)gb_actor_routes[0][5].y) << GB_ACTOR_FIXED_SHIFT;
+    route_actor->fixed_x = ((s32)gb_actor_routes[0][5].x) << 11;
+    route_actor->fixed_y = ((s32)gb_actor_routes[0][5].y) << 11;
     gb_actor_system_update(&system, &player, &none, &event);
     assert(route_actor->waypoint_index == 0);
 
     one_actor(&system, &social_desc);
-    player.x = 102; player.y = 102;
+    player.x = 80; player.y = 80;
     gb_actor_system_update(&system, &player, &fresh_a, &event);
     assert(event.type == GB_INTERACTION_SOCIAL && event.dial == 7);
-    player.x = 103; player.y = 100;
+    player.x = 119; player.y = 119;
+    gb_actor_system_update(&system, &player, &fresh_a, &event);
+    assert(event.type == GB_INTERACTION_SOCIAL);
+    player.x = 120; player.y = 100;
     gb_actor_system_update(&system, &player, &fresh_a, &event);
     assert(event.type == GB_INTERACTION_NONE);
     player.x = 100; player.y = 100;
@@ -729,24 +736,57 @@ int main(void)
     assert(event.type == GB_INTERACTION_NONE);
 
     one_actor(&system, &dialogue4_desc);
-    player.x = 101; player.y = 101;
+    player.x = 80; player.y = 80;
     gb_actor_system_update(&system, &player, &fresh_a, &event);
     assert(event.type == GB_INTERACTION_DIALOGUE && event.dial == 3);
-    player.x = 102; player.y = 100;
+    player.x = 112; player.y = 100;
     gb_actor_system_update(&system, &player, &fresh_a, &event);
     assert(event.type == GB_INTERACTION_NONE);
 
     one_actor(&system, &dialogue5_desc);
-    player.x = 102; player.y = 102;
+    player.x = 119; player.y = 119;
     gb_actor_system_update(&system, &player, &fresh_a, &event);
     assert(event.type == GB_INTERACTION_DIALOGUE && event.dial == 4);
 
     one_actor(&system, &collection_desc);
-    player.x = 101; player.y = 101;
+    player.x = 80; player.y = 80;
     gb_actor_system_update(&system, &player, &fresh_a, &event);
     assert(event.type == GB_INTERACTION_COLLECTION && event.dial == 5);
     assert(event.actor_index == 0 && event.state == 4);
     assert(event.actor_x == 100 && event.actor_y == 100);
+
+    /* legsColor 40 is the unique continuous -150 fixed-X mover. */
+    static const GbActorDescriptor mover40 = {
+        .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC, .legs_color = 40
+    };
+    one_actor(&system, &mover40);
+    const s32 mover40_before = system.actors[0].fixed_x;
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(system.actors[0].fixed_x == mover40_before - 150);
+
+    /* legsColor 112 checks proximity on the shared countdown, latches, emits SFX9,
+       then uses x += 600*turn-300 and y -= 250 every update. */
+    static const GbActorDescriptor mover112 = {
+        .x = 100, .y = 100, .actor_class = GB_ACTOR_NPC, .legs_color = 112, .turn = 1
+    };
+    one_actor(&system, &mover112);
+    system.npc_special_timer = 0;
+    player.x = 100; player.y = 92;
+    const s32 special_x = system.actors[0].fixed_x;
+    const s32 special_y = system.actors[0].fixed_y;
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(system.actors[0].special_mover_latched == 1);
+    assert(system.npc_special_timer == 4);
+    assert(gb_actor_system_take_pending_sfx(&system) == 9);
+    assert(gb_actor_system_take_pending_sfx(&system) == -1);
+    assert(system.actors[0].fixed_x == special_x + 300);
+    assert(system.actors[0].fixed_y == special_y - 250);
+    const s32 latched_x = system.actors[0].fixed_x;
+    const s32 latched_y = system.actors[0].fixed_y;
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(system.actors[0].fixed_x == latched_x + 300);
+    assert(system.actors[0].fixed_y == latched_y - 250);
+
     return 0;
 }
 """
@@ -795,6 +835,10 @@ typedef int32_t s32;
         self.assertNotIn('gb_audio_play_music(2)', graveblood)
         self.assertIn('gb_story_take_pending_sfx(&story)', graveblood)
         self.assertIn('gb_audio_play_sfx((u8)pending_sfx)', graveblood)
+        self.assertIn('gb_actor_system_take_pending_sfx(&actors)', graveblood)
+        self.assertIn('gb_audio_play_sfx((u8)actor_sfx)', graveblood)
+        self.assertLess(graveblood.index('gb_actor_system_take_pending_sfx(&actors)'),
+                        graveblood.index('gb_story_try_level10_gate(&story'))
         self.assertIn('gb_story_on_level_load(story, actors);', graveblood)
         self.assertIn('gb_story_handle_interaction(&story, &actors, &interaction);', graveblood)
         self.assertIn('gb_story_update(&story, &actors, &input);', graveblood)
@@ -1094,6 +1138,7 @@ int main(void)
     GbInput fresh_right = { KEY_RIGHT, KEY_RIGHT };
     GbInput fresh_down = { KEY_DOWN, KEY_DOWN };
     GbInput fresh_left = { KEY_LEFT, KEY_LEFT };
+    GbInput fresh_b = { KEY_B, KEY_B };
     GbInput none = { 0, 0 };
 
     gb_story_init(&story);
@@ -1241,6 +1286,12 @@ int main(void)
     gb_story_update(&story, &actors, &fresh_a);  /* confirm TALK submenu */
     assert(story.social.page_base == 4);
     assert(story.social.selected_quadrant == 0);
+    gb_story_update(&story, &actors, &fresh_b);  /* child-page B returns to root, no SFX */
+    assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
+    assert(story.social.page_base == 0);
+    assert(gb_story_take_pending_sfx(&story) == -1);
+    gb_story_update(&story, &actors, &fresh_a);  /* confirm TALK submenu again */
+    assert(story.social.page_base == 4);
     gb_story_update(&story, &actors, &fresh_a);  /* confirm SUBJECT */
     assert(story.social.state == GB_SOCIAL_SECONDARY);
     assert(story.social.topic_count == 9);
@@ -1254,8 +1305,19 @@ int main(void)
     assert(story.social.topic_index == 0);
     assert(gb_story_take_pending_sfx(&story) == 4);
     gb_story_update(&story, &actors, &fresh_a); /* sports, class 3 */
-    assert(story.social.state == GB_SOCIAL_RESPONSE);
+    assert(story.social.state == GB_SOCIAL_POST_DELAY);
+    assert(story.social.post_countdown == 150);
     assert(story.state.social_score_mirror == 0);
+    assert(story.state.social_profiles[0].score == 0);
+    assert(gb_story_social_response(&story) == 0);
+    for(int i = 0; i < 150; ++i)
+        gb_story_update(&story, &actors, &none);
+    assert(story.social.state == GB_SOCIAL_POST_DELAY);
+    assert(story.social.post_countdown == 0);
+    assert(story.state.social_profiles[0].score == 0);
+    gb_story_update(&story, &actors, &none); /* expiry dispatch */
+    assert(story.social.state == GB_SOCIAL_RESPONSE);
+    assert(story.state.social_score_mirror == 0); /* mirror is pre-delta */
     assert(story.state.social_profiles[0].score == 2);
     assert(gb_story_social_response(&story) != 0);
     /* The canonical response RNG starts at state 1; first SUBJECT draw is variant 1. */
@@ -1283,9 +1345,14 @@ int main(void)
     assert(story.social.state == GB_SOCIAL_SECONDARY);
     assert(story.social.topic_count == 5);
     gb_story_update(&story, &actors, &fresh_a);
+    assert(story.social.state == GB_SOCIAL_POST_DELAY);
+    assert(story.social.followup_armed == 0);
+    for(int i = 0; i < 150; ++i)
+        gb_story_update(&story, &actors, &none);
+    gb_story_update(&story, &actors, &none);
     assert(story.social.state == GB_SOCIAL_RESPONSE);
     assert(story.social.followup_armed == 1);
-    /* 0x080090F8 mirrors 10 * profile score before 0x08009200 branches. */
+    /* 0x080090F8 mirrors 10 * profile score before quadrant dispatch. */
     assert(story.state.social_score_mirror == 30);
     gb_story_update(&story, &actors, &fresh_a);
     assert(! gb_story_ui_active(&story));
@@ -1295,6 +1362,9 @@ int main(void)
     gb_story_update(&story, &actors, &fresh_a);     /* confirm TALK */
     gb_story_update(&story, &actors, &fresh_a);     /* confirm SUBJECT */
     gb_story_update(&story, &actors, &fresh_a);     /* sports, class 3 */
+    for(int i = 0; i < 150; ++i)
+        gb_story_update(&story, &actors, &none);
+    gb_story_update(&story, &actors, &none);
     assert(strcmp(gb_story_social_response(&story),
                   gb_story_lookup_social_response(0, 0, 3, 1)) == 0);
     gb_story_update(&story, &actors, &fresh_a);
@@ -1311,6 +1381,13 @@ int main(void)
     assert(story.social.state == GB_SOCIAL_SECONDARY);
     assert(story.social.topic_count == 9);
     gb_story_update(&story, &actors, &fresh_a);     /* sports, class 3 */
+    assert(story.social.state == GB_SOCIAL_POST_DELAY);
+    assert(story.state.social_profiles[0].score == 0);
+    for(int i = 0; i < 150; ++i)
+        gb_story_update(&story, &actors, &none);
+    gb_story_update(&story, &actors, &none);
+    assert(story.state.social_score_mirror == 0);
+    assert(story.state.social_profiles[0].score == -2);
     assert(strcmp(gb_story_social_response(&story),
                   gb_story_lookup_social_response(3, 0, 3, 1)) == 0);
     gb_story_update(&story, &actors, &fresh_a);
@@ -1328,7 +1405,10 @@ int main(void)
     gb_story_update(&story, &actors, &fresh_a);     /* confirm zero-count leaf */
     assert(story.social.state == GB_SOCIAL_SECONDARY);
     assert(story.social.topic_count == 0);
-    gb_story_update(&story, &actors, &(GbInput){ KEY_B, KEY_B });
+    gb_story_update(&story, &actors, &fresh_a); /* non-TALK leaf has no code-proven commit */
+    assert(story.social.state == GB_SOCIAL_SECONDARY);
+    assert(story.social.page_base == 8);
+    gb_story_update(&story, &actors, &fresh_b);
     assert(story.social.state == GB_SOCIAL_ROOT_SELECTOR);
     assert(story.social.page_base == 0);
     assert(story.social.selected_quadrant == 0);

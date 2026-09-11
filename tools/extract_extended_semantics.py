@@ -386,6 +386,11 @@ PLAYER_INTERACTION_ALIGN_LEFT_BRANCH = 0x08009552
 PLAYER_INTERACTION_STATE_OFFSET = 0x1EC
 PLAYER_DIALOGUE_INDEX_OFFSET = 0x388
 PLAYER_MOTION_SOLVER = 0x08004670
+PLAYER_COLLISION_STATUS_OFFSET = 0x4A
+PLAYER_COLLISION_WIDTH_OFFSET = 0x10
+PLAYER_COLLISION_HEIGHT_OFFSET = 0x14
+PLAYER_NORMAL_NEGATIVE_ONE_LITERAL = 0x08008580
+PLAYER_PDA_SOLVER_GATE_RAM = 0x03000618
 PLAYER_NORMAL_ANCHOR_RESET = 0x0800842A
 PLAYER_HORIZONTAL_DELTA_OFFSET = 0x18
 PLAYER_INTERACTION_SEPARATION_FIXED = 0x1300
@@ -442,6 +447,10 @@ NPC_INTERACTION_ACTOR_BIAS = -0x1000
 NPC_INPUT_CURRENT = 0x030006BC
 NPC_INPUT_PREVIOUS = 0x030006C0
 NPC_COLLECTION_SELECTOR = 0x03000620
+NPC_SPECIAL_TIMER = 0x03000800
+NPC_SPECIAL_TIMER_INIT_ROM = INIT_ROM_START + (NPC_SPECIAL_TIMER - INIT_RAM_START)
+NPC_SPECIAL_LEGSCOLOR_40 = 40
+NPC_SPECIAL_LEGSCOLOR_112 = 112
 
 ENDING_VRAM_EFFECT = 0x08004FE0
 ENDING_VRAM_LITERALS = 0x08005038
@@ -1370,30 +1379,54 @@ def extract_player_interaction_social_profile_topics(data: bytes) -> list[dict]:
 
 
 def extract_player_interaction_social_score_semantics(data: bytes) -> dict:
-    """Prove the centered topic-class update of profile+0x14."""
-    update_path = (
+    """Prove delayed SUBJECT/CRITICIZE relationship-score semantics."""
+    subject_path = (
         0x23F8, 0x005B, 0x58E3, 0x3306, 0x009B, 0x585B,
         0x3B02, 0x694A, 0x4694, 0x005B, 0x4463, 0x614B,
     )
-    if _unpack_halfwords(data, PLAYER_INTERACTION_PROFILE_SCORE_UPDATE, len(update_path)) != update_path:
-        raise ValueError("interaction profile+0x14 centered score update drifted")
+    if _unpack_halfwords(data, PLAYER_INTERACTION_PROFILE_SCORE_UPDATE, len(subject_path)) != subject_path:
+        raise ValueError("interaction SUBJECT profile+0x14 score update drifted")
+    criticize_setup = (0x23F8, 0x005B, 0x58E3, 0x3306, 0x009B, 0x585A, 0x2302, 0x1A9B)
+    if _unpack_halfwords(data, 0x080098A8, len(criticize_setup)) != criticize_setup:
+        raise ValueError("interaction CRITICIZE inverse-score setup drifted")
+    # E62B branches from the inverse setup back into the SUBJECT shared write
+    # tail beginning at 0x08009512.  Keep the two address ranges explicit.
+    branch_hw = struct.unpack_from("<H", data, 0x080098B8 - ROM_BASE)[0]
+    if _thumb_unconditional_b_target(0x080098B8, branch_hw) != 0x08009512:
+        raise ValueError("interaction CRITICIZE shared score-write tail branch drifted")
+
+    countdown_path = (0x4B4E, 0x5CE3, 0x2B00, 0xD08D, 0x22E1, 0x21F2,
+                      0x0092, 0x58A3, 0x0049, 0x5866, 0x2B00, 0xDC00,
+                      0xE21C, 0x3B01, 0x50A3)
+    if _unpack_halfwords(data, 0x08008CA4, len(countdown_path)) != countdown_path:
+        raise ValueError("interaction 150-update post-teardown countdown drifted")
+    teardown_seed = (0xF001, 0xF8D9, 0x23E1, 0x2296, 0x009B, 0x50E2)
+    if _unpack_halfwords(data, PLAYER_INTERACTION_STATE3_TEARDOWN, len(teardown_seed)) != teardown_seed:
+        raise ValueError("interaction state-3 countdown seed drifted")
+
     if struct.unpack_from("<I", data, 0x0800981C - ROM_BASE)[0] != PLAYER_INTERACTION_PROFILE_TABLE_RAM:
         raise ValueError("interaction score-update profile-table literal drifted")
     follower = extract_player_interaction_profile_target_step(data)
     real_profiles = extract_player_interaction_social_profile_topics(data)
-    initial_by_name = {}
-    for row in real_profiles:
-        initial_by_name[row["name"]] = row["profile_field_14_initial"]
+    initial_by_name = {row["name"]: row["profile_field_14_initial"] for row in real_profiles}
     return {
         "profile_field": "+0x14",
         "update_site": "0x08009504..0x0800951A",
+        "subject_update_site": "0x08009504..0x0800951A",
+        "criticize_setup_site": "0x080098A8..0x080098B8",
+        "criticize_shared_tail": "0x08009512..0x0800951A",
         "topic_class_source": "profile + 4*(Player+0x1F0 + 6)",
         "update_formula": "profile+0x14 += 2 * (topic_class - 2)",
         "topic_class_deltas": "0:-4|1:-2|2:0|3:+2|4:+4",
+        "criticize_update_formula": "profile+0x14 += 2 * (2 - topic_class)",
+        "criticize_topic_class_deltas": "0:+4|1:+2|2:0|3:-2|4:-4",
+        "timing": "after state-3 teardown and 150-update countdown expires",
+        "countdown_offset": "+0x384",
+        "countdown_seed": 150,
         "player_follower_offset": follower["player_offset"],
         "player_follower_target": "10 * profile+0x14",
         "direct_player_mirror_site": "0x080090F8",
-        "direct_player_mirror_formula": "Player+0x39C = 10 * profile+0x14",
+        "direct_player_mirror_formula": "Player+0x39C = 10 * profile+0x14 before score delta",
         "proper_profile_initial_values": "|".join(f"{name}:{initial_by_name[name]}" for name in ("Stas", "Julia")),
         "semantic_name": "relationship-like social score",
         "name_confidence": "medium-high",
@@ -1442,11 +1475,225 @@ def extract_player_interaction_profile_topic_layout_mismatch(data: bytes) -> lis
     return rows
 
 
+def extract_player_motion_collision_contract(data: bytes) -> list[dict]:
+    """Export ROM-guarded Player movement/collision facts used by clean-room runtime."""
+    ctor_dims = (0x2380, 0x015B, 0x6123, 0x6163)
+    if _unpack_halfwords(data, 0x080063A0, len(ctor_dims)) != ctor_dims:
+        raise ValueError("Player 16x16 fixed8 collision dimensions drifted")
+
+    if struct.unpack_from("<i", data, PLAYER_NORMAL_NEGATIVE_ONE_LITERAL - ROM_BASE)[0] != -0x100:
+        raise ValueError("normal Player -0x100 motion literal drifted")
+    right_write = (0x2280, 0x0052, 0x61A2)
+    down_write = (0x2280, 0x0052, 0x61E2)
+    if _unpack_halfwords(data, 0x08009B6C, len(right_write)) != right_write:
+        raise ValueError("normal RIGHT +0x100 fixed8 write drifted")
+    if _unpack_halfwords(data, 0x08009B88, len(down_write)) != down_write:
+        raise ValueError("normal DOWN +0x100 fixed8 write drifted")
+
+    right_status = (0x2300, 0x2407, 0x6183, 0x334A, 0x52C4)
+    left_status = (0x2300, 0x240B, 0x6183, 0x334A)
+    down_status = (0x2200, 0x214A, 0x2631, 0x61C2, 0x5A42, 0x4332, 0x5242)
+    up_status = (0x244A, 0x2200, 0x2651, 0x61C2, 0x5B02, 0x4332, 0x5302)
+    if _unpack_halfwords(data, 0x080046C2, len(right_status)) != right_status:
+        raise ValueError("right horizontal block/status path drifted")
+    if _unpack_halfwords(data, 0x08004A3A, len(left_status)) != left_status:
+        raise ValueError("left horizontal block/status path drifted")
+    if _unpack_halfwords(data, 0x08004772, len(down_status)) != down_status:
+        raise ValueError("downward center block/status path drifted")
+    if _unpack_halfwords(data, 0x08004908, len(up_status)) != up_status:
+        raise ValueError("upward center block/status path drifted")
+
+    slide_down = (0x3601, 0x36FF, 0x60C6)
+    slide_up = (0x3E01, 0x681B, 0x3EFF, 0x60C6)
+    diagonal_bypass = (0x2A00, 0xD000, 0xE09D)
+    if _unpack_halfwords(data, 0x08004826, len(slide_down)) != slide_down:
+        raise ValueError("horizontal top-corner +1px slide drifted")
+    if _unpack_halfwords(data, 0x08004716, len(slide_up)) != slide_up:
+        raise ValueError("horizontal bottom-corner -1px slide drifted")
+    if _unpack_halfwords(data, 0x08004820, len(diagonal_bypass)) != diagonal_bypass:
+        raise ValueError("diagonal corner bypass path drifted")
+
+    if struct.unpack_from("<I", data, 0x080049A0 - ROM_BASE)[0] != PLAYER_PDA_SOLVER_GATE_RAM:
+        raise ValueError("Player solver PDA gate literal drifted")
+
+    return [
+        {"fact":"position_format", "value":"24.8 fixed-point at Player+0x08/+0x0C", "evidence":"0x0800468E/0x0800469A + position commits", "confidence":"high"},
+        {"fact":"requested_motion", "value":"signed fixed8 at Player+0x18/+0x1C", "evidence":"0x0800467E/0x08004682; permitted components add directly to position", "confidence":"high"},
+        {"fact":"collision_dimensions", "value":"0x1000 x 0x1000 fixed8 = 16 x 16 pixels", "evidence":"Player constructor 0x080063A0..0x080063A6", "confidence":"high"},
+        {"fact":"collision_grid", "value":"8-pixel cells via arithmetic >> 11", "evidence":"0x08004698/0x080046A8 and mirrored probes", "confidence":"high"},
+        {"fact":"normal_left", "value":"-0x100 fixed8", "evidence":"KEY_LEFT path 0x080083F0..0x080083FA loads literal -256 from 0x08008580", "confidence":"high"},
+        {"fact":"normal_right", "value":"+0x100 fixed8", "evidence":"KEY_RIGHT long-branch block 0x08009B64..0x08009B7C", "confidence":"high"},
+        {"fact":"normal_up", "value":"-0x100 fixed8", "evidence":"KEY_UP path 0x08008414..0x0800841E uses same -256 literal", "confidence":"high"},
+        {"fact":"normal_down", "value":"+0x100 fixed8", "evidence":"KEY_DOWN long-branch block 0x08009B80..0x08009B98", "confidence":"high"},
+        {"fact":"horizontal_special_block", "value":"tile 14; status 7 right / 11 left", "evidence":"0x080047E8..0x08004812 + 0x080046C2..CA; mirror 0x08004A12..0x08004A42", "confidence":"high"},
+        {"fact":"vertical_center_block", "value":"status 0x31 down / 0x51 up", "evidence":"0x08004772..0x0800477E and 0x08004908..0x08004914", "confidence":"high"},
+        {"fact":"axis_corner_slide", "value":"exact 0x100 fixed8 = 1 pixel correction", "evidence":"0x08004826..0x0800482A, 0x08004716..0x0800471C, mirrored X corrections", "confidence":"high"},
+        {"fact":"diagonal_corner_rule", "value":"simultaneous X+Y carries X into Y resolution; no axis-only slide", "evidence":"0x08004820..0x08004962 branch routing", "confidence":"high"},
+        {"fact":"pda_solver_gate", "value":"0x03000618; PDA return-pending only, not normal gameplay physics", "evidence":"solver literal 0x080049A0 + PDA invalid-page/return reference inventory", "confidence":"high"},
+    ]
+
+
+def extract_npc_fixed_point_runtime(data: bytes) -> dict:
+    """Prove the NPC position scale, route-cell scale and shared mover timer.
+
+    Common actor property parsing converts parsed integer X/Y values with an
+    LSL #8 before storing object+0x08/+0x0C, so world positions are 24.8 fixed.
+    Interaction geometry separately ASRs fixed positions by 11, making one
+    interaction-grid cell 8 pixels.  Route waypoints are likewise compared in
+    that 8-pixel-cell coordinate system.  The legsColor==112 pre-dispatch uses
+    the 32-bit global at 0x03000800, whose initialized image value is 15.
+    """
+    x_parse = (0x0030, 0x2264, 0xF7FB, 0xFFB6, 0x0200, 0x60A8)
+    y_parse = (0x0030, 0x2264, 0xF7FB, 0xFFA4, 0x0200, 0x60E8)
+    if _unpack_halfwords(data, 0x08004410, len(x_parse)) != x_parse:
+        raise ValueError("actor X fixed8 property parse drifted")
+    if _unpack_halfwords(data, 0x08004434, len(y_parse)) != y_parse:
+        raise ValueError("actor Y fixed8 property parse drifted")
+
+    # NPC route-follow begins by ASR #11 when converting fixed positions to the
+    # same 8-pixel grid used by route-point coordinates.
+    route_grid = (0x688B, 0x4A64, 0x12DB, 0x6013, 0x68CB, 0x12DB, 0x6053)
+    if _unpack_halfwords(data, 0x08002B76, len(route_grid)) != route_grid:
+        raise ValueError("NPC route 8-pixel grid conversion drifted")
+
+    special_gate = (0x2B70, 0xD10C, 0x2452, 0x5F2B, 0x2B00, 0xD000, 0xE18A)
+    if _unpack_halfwords(data, 0x080029AE, len(special_gate)) != special_gate:
+        raise ValueError("legsColor 112 special pre-state gate drifted")
+    timer_literal = struct.unpack_from("<I", data, 0x08002D04 - ROM_BASE)[0]
+    if timer_literal + 4 != NPC_SPECIAL_TIMER:
+        raise ValueError(f"NPC special timer base drifted: {timer_literal:#x}")
+    timer_initial = struct.unpack_from("<I", data, NPC_SPECIAL_TIMER_INIT_ROM)[0]
+    if timer_initial != 15:
+        raise ValueError(f"NPC special timer initial value drifted: {timer_initial}")
+
+    return {
+        "position_fraction_bits": 8,
+        "one_pixel_fixed": "0x100",
+        "position_fields": "actor+0x08|actor+0x0C",
+        "property_parse_sites": "0x08004414|0x08004438",
+        "route_waypoint_units": "8-pixel cells",
+        "route_target_shift": 11,
+        "interaction_grid_shift": 11,
+        "interaction_grid_cell_pixels": 8,
+        "special_timer_address": f"0x{NPC_SPECIAL_TIMER:08X}",
+        "special_timer_storage": "32-bit",
+        "special_timer_initial": timer_initial,
+        "special_timer_reload": 5,
+        "confidence": "high",
+    }
+
+
+def _serialized_int(props: dict[str, str], key: str, default: int = 0) -> int:
+    raw = props.get(key, "")
+    return default if raw == "" else int(float(raw))
+
+
+def extract_npc_special_movers(data: bytes) -> list[dict]:
+    """Export every serialized NPC that enters the two pre-state mover paths."""
+    fixed = extract_npc_fixed_point_runtime(data)
+    if fixed["position_fraction_bits"] != 8:
+        raise AssertionError("special-mover export requires fixed8 actor positions")
+
+    if _unpack_halfwords(data, 0x08002C04, 3) != (0x68AB, 0x3B96, 0x60AB):
+        raise ValueError("legsColor 40 X-motion path drifted")
+    latched_motion = (0x234C, 0x5EEA, 0x0093, 0x189A, 0x0113, 0x1A9B,
+                      0x68AA, 0x4694, 0x00DB, 0x3B2D, 0x3BFF, 0x4463,
+                      0x60AB, 0x68EB, 0x3BFA, 0x60EB)
+    if _unpack_halfwords(data, 0x08002CD2, len(latched_motion)) != latched_motion:
+        raise ValueError("legsColor 112 latched movement path drifted")
+    activation = (0x2201, 0x2150, 0x2009, 0x61BB, 0xF7FE, 0xFC6C, 0x4643, 0x532B)
+    if _unpack_halfwords(data, 0x08003290, len(activation)) != activation:
+        raise ValueError("legsColor 112 SFX9/latch activation path drifted")
+
+    rows = []
+    for off, props in _scan_serialized_actors(data):
+        if props.get("spawnType") != "npc":
+            continue
+        legs = _serialized_int(props, "legsColor")
+        if legs not in (NPC_SPECIAL_LEGSCOLOR_40, NPC_SPECIAL_LEGSCOLOR_112):
+            continue
+        row = {
+            "actor_rom_addr": f"0x{ROM_BASE + off:08X}",
+            "legs_color": legs,
+            "x_serialized": props.get("x", ""),
+            "y_serialized": props.get("y", ""),
+            "x_truncated_px": _serialized_int(props, "x"),
+            "y_truncated_px": _serialized_int(props, "y"),
+            "turn": _serialized_int(props, "turn"),
+            "port_to": _serialized_int(props, "portTo"),
+            "timer_address": f"0x{NPC_SPECIAL_TIMER:08X}" if legs == 112 else "",
+            "timer_initial": 15 if legs == 112 else "",
+            "timer_reload": 5 if legs == 112 else "",
+            "proximity_radius_pixels": 32 if legs == 112 else "",
+            "activation_sfx": 9 if legs == 112 else "",
+            "movement": ("x -= 150 fixed8 units each update" if legs == 40
+                         else "x += 600*turn - 300; y -= 250"),
+            "confidence": "high",
+        }
+        rows.append(row)
+
+    if len([r for r in rows if r["legs_color"] == 40]) != 1:
+        raise ValueError("canonical legsColor 40 mover count drifted")
+    if len([r for r in rows if r["legs_color"] == 112]) != 22:
+        raise ValueError("canonical legsColor 112 mover count drifted")
+    if [r["actor_rom_addr"] for r in rows if r["legs_color"] == 40] != ["0x0841E218"]:
+        raise ValueError("canonical legsColor 40 mover identity drifted")
+    return rows
+
+
+def extract_actor_system_inventory(data: bytes) -> list[dict]:
+    """Classify every serialized actor family plus transient leaf particles."""
+    counts = {"npc": 0, "grass": 0, "fgtile": 0, "leaves": 0, "player": 0}
+    for _, props in _scan_serialized_actors(data):
+        key = props.get("spawnType") or props.get("type") or ""
+        if key in counts:
+            counts[key] += 1
+    expected = {"npc": 105, "grass": 94, "fgtile": 55, "leaves": 3, "player": 10}
+    if counts != expected:
+        raise ValueError(f"canonical actor-family inventory drifted: {counts}")
+
+    # The story-overlay loader has sixteen canonical NPC descriptors; the
+    # remaining serialized NPCs are normal physical level actors.
+    story_overlay_count = len(extract_story_entity_identities())
+    if story_overlay_count != 16:
+        raise ValueError(f"story-overlay actor count drifted: {story_overlay_count}")
+    physical_npc_count = counts["npc"] - story_overlay_count
+
+    common = {"confidence": "high"}
+    return [
+        {**common, "family": "NPC", "serialized_total": counts["npc"],
+         "physical_count": physical_npc_count, "story_overlay_count": story_overlay_count,
+         "factory": "0x08003A60", "constructor": "0x08003998", "update": "0x0800298C",
+         "draw": "0x0800274C", "vtable": "0x08018B00", "runtime_role": "interactive/moving NPC"},
+        {**common, "family": "Grass", "serialized_total": counts["grass"],
+         "physical_count": counts["grass"], "story_overlay_count": 0,
+         "factory": "0x08002914", "constructor": "", "update": "0x08002480",
+         "draw": "0x08002684", "vtable": "0x08018AD8", "runtime_role": "visible static foreground actor"},
+        {**common, "family": "Fgtile", "serialized_total": counts["fgtile"],
+         "physical_count": counts["fgtile"], "story_overlay_count": 0,
+         "factory": "0x08003AEC", "constructor": "", "update": "0x08003B98",
+         "draw": "0x08003AE8", "vtable": "0x08018E4C", "runtime_role": "invisible foreground interaction/controller"},
+        {**common, "family": "Leaves", "serialized_total": counts["leaves"],
+         "physical_count": counts["leaves"], "story_overlay_count": 0,
+         "factory": "0x08005EE0", "constructor": "", "update": "0x08005F80",
+         "draw": "0x08005EDC", "vtable": "", "runtime_role": "invisible leaf-particle emitter"},
+        {**common, "family": "Player", "serialized_total": counts["player"],
+         "physical_count": counts["player"], "story_overlay_count": 0,
+         "factory": "0x08006418", "constructor": "0x0800621C", "update": "0x080081B0",
+         "draw": "0x080065FC", "vtable": "0x08019694", "runtime_role": "player actor"},
+        {**common, "family": "LeafParticle", "serialized_total": 0,
+         "physical_count": 0, "story_overlay_count": 0,
+         "factory": "", "constructor": "0x0800B2BC", "update": "0x0800AB60",
+         "draw": "0x0800AC1C", "vtable": "", "runtime_role": "transient Leaves-emitted particle"},
+    ]
+
+
 def extract_npc_interaction_geometry(data: bytes) -> list[dict]:
     """Recover the state 1/2/4 proximity rectangles and fresh-A gates.
 
-    NPC coordinates are fixed-point with 11 fractional bits for the grid tests.
-    Each interaction branch subtracts 0x1000 (two grid cells) from actor X/Y
+    NPC coordinates use 24.8 fixed-point storage.  The interaction code shifts
+    them right by 11, converting directly to 8-pixel grid cells.  Each branch
+    subtracts 0x1000 (two grid cells in fixed8 space) from actor X/Y
     before scanning its rectangle against Player X/Y.  The rectangles differ:
     state 1 is fixed 5x5, state 2 is 4x4 only when actor+0x4E == 1 and 5x5
     otherwise, and state 4 is fixed 4x4.  All three activation paths require
@@ -2000,10 +2247,13 @@ def extract_player_interaction_state_transitions(data: bytes) -> list[dict]:
          "proven_behavior": "initializes the secondary leaf-action interaction state and stores state 2 regardless of +0x28 topic count; exact leaf payload semantics remain unresolved"},
         {**common, "transition": "secondary_b_return", "handler": "0x08009CB6", "from_state": 2, "to_state": 0,
          "input": "fresh B", "choice": "", "condition": "state == 2",
-         "proven_behavior": "runs UI cleanup, plays SFX7 volume 0x50, clears Player+0x1E8 page base and Player+0x1EC state to 0; cancel-versus-commit meaning is not statically proved"},
+         "proven_behavior": "runs UI cleanup, plays SFX7 volume 0x50, clears Player+0x1E8 page base and Player+0x1EC state to 0"},
+        {**common, "transition": "secondary_talk_a_commit", "handler": "0x0800960E", "from_state": 2, "to_state": 3,
+         "input": "fresh A", "choice": "selected TALK leaf", "condition": "depth > 0 and page_base == 4",
+         "proven_behavior": "only TALK page base 4 stores state 3; page bases 8/12/16 take the Player_update exit path without changing interaction state"},
         {**common, "transition": "teardown", "handler": "0x0800963E", "from_state": 3, "to_state": 0,
          "input": "state dispatch", "choice": "", "condition": "state == 3",
-         "proven_behavior": "resets Player+0x1E8 and interaction scratch/state, writes 0x03000610=0, restores scene graphics, and marks Player+0x381=1"},
+         "proven_behavior": "cleans UI, seeds Player+0x384=150, clears page/scratch/state, writes 0x03000610=0, restores scene graphics, and marks Player+0x381=1 before the delayed response dispatcher"},
     ]
 
 
@@ -2820,6 +3070,10 @@ def main():
     ]
     write_csv(args.out / "player_sprite_pipeline.csv", ["fact","value","evidence"], player_rows)
 
+    player_motion_rows = extract_player_motion_collision_contract(data)
+    write_csv(args.out / "player_motion_collision_contract.csv",
+              ["fact","value","evidence","confidence"], player_motion_rows)
+
     # Five pointer slots; state==3 uses route id, actor+0xF8 waypoint index,
     # and wraps after six (x,y) s32 pairs.
     route_rows = []
@@ -2848,6 +3102,20 @@ def main():
     state_rows = extract_npc_state_modes(data)
     write_csv(args.out / "npc_state_modes.csv",
               ["state","dispatch_address","working_name","proven_behavior","confidence"], state_rows)
+
+    fixed_row = extract_npc_fixed_point_runtime(data)
+    write_csv(args.out / "npc_fixed_point_runtime.csv", list(fixed_row), [fixed_row])
+
+    special_rows = extract_npc_special_movers(data)
+    write_csv(args.out / "npc_special_movers.csv",
+              ["actor_rom_addr","legs_color","x_serialized","y_serialized","x_truncated_px","y_truncated_px",
+               "turn","port_to","timer_address","timer_initial","timer_reload","proximity_radius_pixels",
+               "activation_sfx","movement","confidence"], special_rows)
+
+    inventory_rows = extract_actor_system_inventory(data)
+    write_csv(args.out / "actor_system_inventory.csv",
+              ["family","serialized_total","physical_count","story_overlay_count","factory","constructor",
+               "update","draw","vtable","runtime_role","confidence"], inventory_rows)
 
     field_rows = [
         {"property":"level","actor_offset":"+0x56","semantic":"level filter","proven_behavior":"if value != -1 and != current level (0x03000808), virtual method at vtable+0x18 is invoked","confidence":"high"},

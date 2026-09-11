@@ -7,6 +7,8 @@
   "unassigned_records": 0,
   "focused_strings": 72,
   "portal_edges": 33,
+  "direct_scene_transitions": 1,
+  "gameplay_progression_edges": 34,
   "dialogue_scripts": 7,
   "dialogue_records": 58
 }

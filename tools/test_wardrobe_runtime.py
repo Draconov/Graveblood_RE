@@ -218,7 +218,8 @@ class WardrobeGameIntegrationTests(unittest.TestCase):
         self.assertIn('gb_video_load_wardrobe();', game)
         self.assertIn('gb_wardrobe_update(&wardrobe, &input)', game)
         self.assertIn('gb_video_draw_wardrobe(wardrobe.selector);', game)
-        self.assertIn('gb_enter_level(&world, &player, &actors, &story, 7);', game)
+        self.assertIn('gb_scene_request_gameplay(&scene, 7, 10);', game)
+        self.assertNotIn('gb_enter_level(&world, &player, &actors, &story, 7);', game)
         self.assertNotIn('gb_audio_play_sfx(11)', game)
 
 

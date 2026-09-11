@@ -33,8 +33,8 @@
   </layer>
   <objectgroup id="2" name="Actors">
     <object id="1" name="Player spawn" type="player" x="147" y="125"/>
-    <object id="2" name="Portal to 8" type="fgtile" x="45" y="144" width="16" height="16"><properties><property name="portTo" type="int" value="8"/><property name="num" type="int" value="10"/></properties></object>
-    <object id="3" name="Portal to 8" type="fgtile" x="61" y="144" width="16" height="16"><properties><property name="portTo" type="int" value="8"/><property name="num" type="int" value="10"/></properties></object>
-    <object id="4" name="Portal to 6" type="fgtile" x="121" y="107" width="16" height="16"><properties><property name="portTo" type="int" value="6"/><property name="num" type="int" value="10"/></properties></object>
+    <object id="2" name="Portal to 8" type="fgtile" x="44" y="144" width="16" height="16"><properties><property name="portTo" type="int" value="8"/><property name="num" type="int" value="10"/></properties></object>
+    <object id="3" name="Portal to 8" type="fgtile" x="60" y="144" width="16" height="16"><properties><property name="portTo" type="int" value="8"/><property name="num" type="int" value="10"/></properties></object>
+    <object id="4" name="Portal to 6" type="fgtile" x="120" y="107" width="16" height="16"><properties><property name="portTo" type="int" value="6"/><property name="num" type="int" value="10"/></properties></object>
   </objectgroup>
 </map>

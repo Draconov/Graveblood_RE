@@ -18,8 +18,9 @@ typedef enum {
     GB_SOCIAL_INACTIVE = 0,
     GB_SOCIAL_ROOT_SELECTOR = 1,
     GB_SOCIAL_SECONDARY = 2,
-    GB_SOCIAL_RESPONSE = 3,
-    GB_SOCIAL_TEARDOWN = 4,
+    GB_SOCIAL_POST_DELAY = 3,
+    GB_SOCIAL_RESPONSE = 4,
+    GB_SOCIAL_TEARDOWN = 5,
 } GbSocialState;
 
 typedef struct {
@@ -57,6 +58,7 @@ typedef struct {
     u8 topic_index;
     u8 topic_count;
     u8 followup_armed;
+    u16 post_countdown;
     const char* response_text;
 } GbSocialRuntime;
 

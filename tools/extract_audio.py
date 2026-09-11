@@ -165,7 +165,7 @@ def build_call_sites(rom: bytes, repo_root: Path) -> list[CallSite]:
         0x0800B37E: ('effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4)', 'high'),
         0x08003802: ('final-sketch state4 -5 transition', 'high'),
         0x08003D5C: ('fresh-A generic Fgtile activation for turn != 4/5', 'high'),
-        0x08003298: ('legsColor 0x70 NPC special movement-state handoff', 'high'),
+        0x08003298: ('legsColor 0x70 NPC proximity latch activation', 'high'),
         0x080032AC: ('alternate state-2 interaction activation when 0x0300062C mode byte is nonzero', 'high'),
         0x080032D2: ('normal dialogue opcode -4 set story/progression stage', 'high'),
         0x080033A2: ('normal dialogue opcode -3 add auxiliary message stream', 'high'),
@@ -223,10 +223,13 @@ def build_call_sites(rom: bytes, repo_root: Path) -> list[CallSite]:
                 # be promoted into the semantic call-site schema.
                 play_mode = 'one-shot'
                 volume = format_imm(r1)
+            caller = nearest_symbol(symbols, address)
+            if address == 0x08003298:
+                caller = 'npc_special_proximity_latch'
             sites.append(CallSite(
                 address=address,
                 target=target,
-                caller=nearest_symbol(symbols, address),
+                caller=caller,
                 sound_id=format_imm(sound),
                 play_mode=play_mode,
                 volume=volume,

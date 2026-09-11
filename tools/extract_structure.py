@@ -663,6 +663,57 @@ def main():
         "source_level", "destination", "destination_kind", "actor_rom_offset", "x", "y", "num", "turn"
     ], portal_rows)
 
+    # Player_update contains one gameplay scene transition that does not pass
+    # through Fgtile metadata.  0x080081E6 compares Player X>>8 against the
+    # literal 0x9FB; 0x08008806 then requires mode global 0x03000624 == 0
+    # and current level global 0x03000808 == 9 before 0x08008828 requests
+    # GameplayScene level 10.  r3 still holds 10, so request_scene delay=10;
+    # the branch then stores mode 5.
+    direct_transition_rows = [{
+        "source_level": 9,
+        "destination": 10,
+        "x_condition": ">2555",
+        "required_mode": 0,
+        "mode_after_request": 5,
+        "delay_updates": 10,
+        "request_callsite": "0x08008828",
+        "mode_global": "0x03000624",
+        "level_global": "0x03000808",
+        "scene_object": "0x0300080C",
+        "evidence": "Player_update 0x080081E6..0x08008834; threshold literal 0x08008550=0x9FB",
+    }]
+    write_csv(args.out / "player_direct_scene_transitions.csv",
+              list(direct_transition_rows[0]), direct_transition_rows)
+
+    # Compose scene-changing gameplay edges only.  Special Level-10 collection
+    # gates and the Level-9 treetype=20 target are absent because portal_rows
+    # already excludes branches proven to perform Player movement rather than
+    # request_scene.
+    progression_rows = []
+    for row in portal_rows:
+        if row["destination_kind"] != "level":
+            continue
+        progression_rows.append({
+            "edge_class": "gameplay",
+            "source": row["source_level"],
+            "destination": row["destination"],
+            "transition_type": "fgtile_portal",
+            "delay_updates": 10,
+            "evidence_ref": row["actor_rom_offset"],
+        })
+    progression_rows.append({
+        "edge_class": "gameplay",
+        "source": 9,
+        "destination": 10,
+        "transition_type": "player_boundary",
+        "delay_updates": 10,
+        "evidence_ref": "0x08008828",
+    })
+    progression_rows.sort(key=lambda r: (int(r["source"]), int(r["destination"]), r["transition_type"], r["evidence_ref"]))
+    write_csv(args.out / "world_progression_graph.csv",
+              ["edge_class", "source", "destination", "transition_type", "delay_updates", "evidence_ref"],
+              progression_rows)
+
     # Dialogue scripts selected by actor.dial. The first pointer group at the
     # source table contains seven scripts. Every record is 0x90 bytes:
     # speaker[0x1B], text[0x6D], s32 opcode, s32 argument.
@@ -746,6 +797,8 @@ def main():
         "unassigned_records": sum(1 for r in actor_rows if r["classification"] == "unassigned"),
         "focused_strings": len(focus_rows),
         "portal_edges": len(portal_rows),
+        "direct_scene_transitions": len(direct_transition_rows),
+        "gameplay_progression_edges": len(progression_rows),
         "dialogue_scripts": len(dialogue_table_rows),
         "dialogue_records": len(dialogue_rows),
     }

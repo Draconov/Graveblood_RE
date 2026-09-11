@@ -2744,10 +2744,10 @@ const u16 gb_level08_bg0_ui_tiles[GB_BG0_UI_TILE_COUNT] = {
 };
 
 const GbPortal gb_level08_portals[4] = {
-    { 76, 281, 16, 16, 9, 10 },
+    { 75, 281, 16, 16, 9, 10 },
     { 92, 281, 16, 16, 9, 10 },
-    { 116, 104, 16, 16, 7, 150 },
-    { 132, 104, 16, 16, 7, 150 }
+    { 115, 103, 16, 16, 7, 150 },
+    { 131, 103, 16, 16, 7, 150 }
 };
 
 const GbLevelAssets gb_level08_assets = {

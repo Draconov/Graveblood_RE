@@ -1,0 +1,7 @@
+family,serialized_total,physical_count,story_overlay_count,factory,constructor,update,draw,vtable,runtime_role,confidence
+NPC,105,89,16,0x08003A60,0x08003998,0x0800298C,0x0800274C,0x08018B00,interactive/moving NPC,high
+Grass,94,94,0,0x08002914,,0x08002480,0x08002684,0x08018AD8,visible static foreground actor,high
+Fgtile,55,55,0,0x08003AEC,,0x08003B98,0x08003AE8,0x08018E4C,invisible foreground interaction/controller,high
+Leaves,3,3,0,0x08005EE0,,0x08005F80,0x08005EDC,,invisible leaf-particle emitter,high
+Player,10,10,0,0x08006418,0x0800621C,0x080081B0,0x080065FC,0x08019694,player actor,high
+LeafParticle,0,0,0,,0x0800B2BC,0x0800AB60,0x0800AC1C,,transient Leaves-emitted particle,high

@@ -1,0 +1,14 @@
+fact,value,evidence,confidence
+position_format,24.8 fixed-point at Player+0x08/+0x0C,0x0800468E/0x0800469A + position commits,high
+requested_motion,signed fixed8 at Player+0x18/+0x1C,0x0800467E/0x08004682; permitted components add directly to position,high
+collision_dimensions,0x1000 x 0x1000 fixed8 = 16 x 16 pixels,Player constructor 0x080063A0..0x080063A6,high
+collision_grid,8-pixel cells via arithmetic >> 11,0x08004698/0x080046A8 and mirrored probes,high
+normal_left,-0x100 fixed8,KEY_LEFT path 0x080083F0..0x080083FA loads literal -256 from 0x08008580,high
+normal_right,+0x100 fixed8,KEY_RIGHT long-branch block 0x08009B64..0x08009B7C,high
+normal_up,-0x100 fixed8,KEY_UP path 0x08008414..0x0800841E uses same -256 literal,high
+normal_down,+0x100 fixed8,KEY_DOWN long-branch block 0x08009B80..0x08009B98,high
+horizontal_special_block,tile 14; status 7 right / 11 left,0x080047E8..0x08004812 + 0x080046C2..CA; mirror 0x08004A12..0x08004A42,high
+vertical_center_block,status 0x31 down / 0x51 up,0x08004772..0x0800477E and 0x08004908..0x08004914,high
+axis_corner_slide,exact 0x100 fixed8 = 1 pixel correction,"0x08004826..0x0800482A, 0x08004716..0x0800471C, mirrored X corrections",high
+diagonal_corner_rule,simultaneous X+Y carries X into Y resolution; no axis-only slide,0x08004820..0x08004962 branch routing,high
+pda_solver_gate,"0x03000618; PDA return-pending only, not normal gameplay physics",solver literal 0x080049A0 + PDA invalid-page/return reference inventory,high

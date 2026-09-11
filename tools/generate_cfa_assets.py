@@ -402,10 +402,10 @@ def build_level_specs(root: Path) -> dict[int, LevelSpec]:
             if edge is None:
                 continue
             portals.append(PortalSpec(
-                x=round(float(actor['x'])),
-                y=round(float(actor['y'])),
-                width=round(float(actor['width'])),
-                height=round(float(actor['height'])),
+                x=_actor_number(actor, 'x'),
+                y=_actor_number(actor, 'y'),
+                width=_actor_number(actor, 'width'),
+                height=_actor_number(actor, 'height'),
                 target_level=int(edge['destination']),
                 num=int(edge['num']),
             ))
@@ -428,7 +428,7 @@ def build_level_specs(root: Path) -> dict[int, LevelSpec]:
 def _actor_number(row: dict[str, str], field: str, *, default: int = 0,
                   minimum: int = -32768, maximum: int = 65535) -> int:
     raw = row.get(field, '')
-    value = default if raw == '' else round(float(raw))
+    value = default if raw == '' else int(float(raw))
     if not minimum <= value <= maximum:
         raise ValueError(f'actor field {field}={value} outside [{minimum},{maximum}]')
     return value

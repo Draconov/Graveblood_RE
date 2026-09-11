@@ -35,6 +35,16 @@ class CfaAssetTests(unittest.TestCase):
         self.assertEqual((123, 115), specs[8].spawn)
         self.assertEqual([8, 8, 6], [p.target_level for p in specs[7].portals])
         self.assertEqual([9, 9, 7, 7], [p.target_level for p in specs[8].portals])
+        # Fgtile portal geometry passes through the same atoi-style property parser
+        # as actor descriptors: decimal source strings truncate before storage.
+        self.assertEqual((75, 281), (specs[8].portals[0].x, specs[8].portals[0].y))
+        self.assertTrue(any((p.x, p.y) == (511, 408) for p in specs[0].portals))
+
+    def test_actor_numeric_parser_matches_rom_atoi_truncation(self):
+        g = self._module()
+        self.assertEqual(1423, g._actor_number({'x': '1423.667'}, 'x'))
+        self.assertEqual(10, g._actor_number({'x': '10.999'}, 'x'))
+        self.assertEqual(-3, g._actor_number({'x': '-3.9'}, 'x'))
 
     def test_generator_exposes_all_levels_and_all_graphics_variants(self):
         g = self._module()
@@ -397,7 +407,7 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('0x0800904E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab next (fresh R; MESSAGES/STATUS/FRIENDS/BACKPACK),high', call_sites)
         self.assertIn('0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-2 interaction activation when 0x0300062C mode byte is nonzero,high', call_sites)
         self.assertIn('0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-4 interaction activation when 0x0300062C mode byte is nonzero,high', call_sites)
-        self.assertIn('0x08003298,0x08001B74,npc_state4_fresh_a_activation,9,one-shot,80,legsColor 0x70 NPC special movement-state handoff,high', call_sites)
+        self.assertIn('0x08003298,0x08001B74,npc_special_proximity_latch,9,one-shot,80,legsColor 0x70 NPC proximity latch activation,high', call_sites)
         self.assertIn('0x08009AA2,0x08001B74,Player_update,12,one-shot,80,FRIENDS DOWN-at-bottom boundary feedback,high', call_sites)
         self.assertIn('0x08009B58,0x08001B74,Player_update,12,one-shot,80,FRIENDS UP-at-top boundary feedback,high', call_sites)
         self.assertIn('0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R Player action/state-reset path,high', call_sites)

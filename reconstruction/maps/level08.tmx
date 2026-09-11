@@ -52,9 +52,9 @@
   </layer>
   <objectgroup id="2" name="Actors">
     <object id="1" name="Player spawn" type="player" x="123" y="115"/>
-    <object id="2" name="Portal to 9" type="fgtile" x="76" y="281" width="16" height="16"><properties><property name="portTo" type="int" value="9"/><property name="num" type="int" value="10"/></properties></object>
+    <object id="2" name="Portal to 9" type="fgtile" x="75" y="281" width="16" height="16"><properties><property name="portTo" type="int" value="9"/><property name="num" type="int" value="10"/></properties></object>
     <object id="3" name="Portal to 9" type="fgtile" x="92" y="281" width="16" height="16"><properties><property name="portTo" type="int" value="9"/><property name="num" type="int" value="10"/></properties></object>
-    <object id="4" name="Portal to 7" type="fgtile" x="116" y="104" width="16" height="16"><properties><property name="portTo" type="int" value="7"/><property name="num" type="int" value="150"/></properties></object>
-    <object id="5" name="Portal to 7" type="fgtile" x="132" y="104" width="16" height="16"><properties><property name="portTo" type="int" value="7"/><property name="num" type="int" value="150"/></properties></object>
+    <object id="4" name="Portal to 7" type="fgtile" x="115" y="103" width="16" height="16"><properties><property name="portTo" type="int" value="7"/><property name="num" type="int" value="150"/></properties></object>
+    <object id="5" name="Portal to 7" type="fgtile" x="131" y="103" width="16" height="16"><properties><property name="portTo" type="int" value="7"/><property name="num" type="int" value="150"/></properties></object>
   </objectgroup>
 </map>

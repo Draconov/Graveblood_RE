@@ -1,7 +1,7 @@
 call_address,target,caller,sound_id,play_mode,volume,recovered_action,confidence
 0x08002E22,0x08001B74,npc_state2_fresh_a_activation,3,one-shot,80,state-2 dialogue interaction activation,high
 0x08003078,0x08001B74,npc_state4_fresh_a_activation,3,one-shot,80,state-4 collection interaction activation,high
-0x08003298,0x08001B74,npc_state4_fresh_a_activation,9,one-shot,80,legsColor 0x70 NPC special movement-state handoff,high
+0x08003298,0x08001B74,npc_special_proximity_latch,9,one-shot,80,legsColor 0x70 NPC proximity latch activation,high
 0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-2 interaction activation when 0x0300062C mode byte is nonzero,high
 0x080032D2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -4 set story/progression stage,high
 0x080033A2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -3 add auxiliary message stream,high

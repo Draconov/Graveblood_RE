@@ -27,6 +27,7 @@ static void gb_story_clear_social(GbStoryRuntime* story)
     story->social.topic_index = 0;
     story->social.topic_count = 0;
     story->social.followup_armed = 0;
+    story->social.post_countdown = 0;
     story->social.response_text = 0;
 }
 
@@ -455,6 +456,7 @@ static void gb_story_social_dispatch(GbStoryRuntime* story)
     else
     {
         story->social.response_text = gb_story_lookup_social_response(3, topic, topic_class, variant);
+        profile->score = (s16)(profile->score + 2 * (2 - topic_class));
     }
     story->social.state = GB_SOCIAL_RESPONSE;
 }
@@ -465,6 +467,15 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
     {
         if(input->pressed & KEY_B)
         {
+            if(story->social.page_base != 0)
+            {
+                /* Child selector B backs out to the root four-way page.  The
+                   ROM's state-1 path does not play the state-2 B SFX here. */
+                story->social.page_base = 0;
+                story->social.selected_quadrant = 0;
+                story->social.action_index = 0;
+                return;
+            }
             gb_story_clear_social(story);
             return;
         }
@@ -552,8 +563,31 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
         }
         if(input->pressed & KEY_A)
         {
-            gb_story_social_dispatch(story);
+            /* 0x0800960E gates state-2 A by page base.  Only TALK (base 4)
+               reaches original interaction state 3; bases 8/12/16 return
+               from Player_update without committing any invented action. */
+            if(story->social.page_base == 4)
+            {
+                story->social.state = GB_SOCIAL_POST_DELAY;
+                story->social.post_countdown = 150;
+                story->social.followup_armed = 0;
+                story->social.response_text = 0;
+            }
         }
+        return;
+    }
+
+    if(story->social.state == GB_SOCIAL_POST_DELAY)
+    {
+        /* State-3 teardown seeds Player+0x384 with 0x96.  Subsequent Player
+           updates decrement while positive; the response/profile dispatcher
+           is entered only on the next update that observes zero. */
+        if(story->social.post_countdown > 0)
+        {
+            --story->social.post_countdown;
+            return;
+        }
+        gb_story_social_dispatch(story);
         return;
     }
 
