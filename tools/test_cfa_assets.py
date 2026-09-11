@@ -33,6 +33,8 @@ class CfaAssetTests(unittest.TestCase):
         self.assertEqual((37, 43), (specs[8].width, specs[8].height))
         self.assertEqual((147, 125), specs[7].spawn)
         self.assertEqual((123, 115), specs[8].spawn)
+        self.assertEqual([1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1],
+                         [specs[level].player_idle_selector for level in range(11)])
         self.assertEqual([8, 8, 6], [p.target_level for p in specs[7].portals])
         self.assertEqual([9, 9, 7, 7], [p.target_level for p in specs[8].portals])
         # Fgtile portal geometry passes through the same atoi-style property parser
@@ -94,7 +96,10 @@ class CfaAssetTests(unittest.TestCase):
         self.assertEqual(16, len(data.story))
         self.assertEqual(5, len(data.routes))
         self.assertTrue(all(len(route) == 6 for route in data.routes))
-        self.assertEqual(32, len(data.visuals))
+        self.assertEqual(34, len(data.visuals))
+        self.assertIn((200, 0), data.visuals)
+        self.assertIn((208, 0), data.visuals)
+        self.assertIn((216, 0), data.visuals)
 
         combined = []
         for level in range(11):
@@ -116,8 +121,8 @@ class CfaAssetTests(unittest.TestCase):
         data = g.build_actor_runtime_data(ROOT)
         packed = g.pack_actor_sprite_bank(rom_path.read_bytes(), data.visuals)
         self.assertEqual(256, len(packed.palette))
-        self.assertEqual(32, packed.frame_count)
-        self.assertEqual(32 * 512, len(packed.data))
+        self.assertEqual(34 * 8, packed.frame_count)
+        self.assertEqual(34 * 8 * 512, len(packed.data))
         self.assertLess(max(packed.data), 240, 'palette bank 15 must remain free for Player 4bpp colors')
 
         with tempfile.TemporaryDirectory() as td:
@@ -129,7 +134,8 @@ class CfaAssetTests(unittest.TestCase):
             header = (out / 'include' / 'graveblood' / 'assets.h').read_text(encoding='utf-8')
             self.assertIn('GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT = 241', header)
             self.assertIn('GB_ACTOR_STORY_DESCRIPTOR_COUNT = 16', header)
-            self.assertIn('GB_ACTOR_VISUAL_COUNT = 32', header)
+            self.assertIn('GB_ACTOR_VISUAL_COUNT = 34', header)
+            self.assertIn('GB_ACTOR_MAX_FRAMES = 8', header)
             self.assertIn('GB_ACTOR_ROUTE_COUNT = 5', header)
 
     def test_generator_packs_exact_grass_and_leaf_particle_tiles(self):
@@ -317,14 +323,14 @@ class CfaAssetTests(unittest.TestCase):
             self.assertLessEqual(len(packed.tiles), 256)
             self.assertLessEqual(len(packed.palette), 256)
 
-    def test_player_animation_is_16_frames_and_fits_one_4bpp_palette(self):
+    def test_player_animation_is_24_frames_and_fits_one_4bpp_palette(self):
         g = self._module()
         rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
         packed = g.pack_player_animation(rom)
         self.assertEqual((16, 32), packed.size)
-        self.assertEqual(16, packed.frame_count)
+        self.assertEqual(24, packed.frame_count)
         self.assertLessEqual(len(packed.palette), 16)
-        self.assertEqual(16 * 256, len(packed.data))
+        self.assertEqual(24 * 256, len(packed.data))
 
     def test_player_animation_pack_has_no_deprecation_warnings(self):
         g = self._module()
@@ -336,7 +342,7 @@ class CfaAssetTests(unittest.TestCase):
     def test_player_animation_checked_in_asset_declares_all_frames(self):
         assets_h = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')
         player_c = (ROOT / 'reconstruction/data/player_sprite.c').read_text(encoding='utf-8')
-        self.assertIn('GB_PLAYER_FRAME_COUNT = 16', assets_h)
+        self.assertIn('GB_PLAYER_FRAME_COUNT = 24', assets_h)
         self.assertIn('gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128]', assets_h)
         self.assertIn('gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128]', player_c)
 

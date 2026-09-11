@@ -42,6 +42,11 @@ NPC_DYNAMIC_UPLOAD_FUNCTION = 0x08004F04
 STORY_ENTITY_OVERLAY_SLOTS = (0x0300083C, 0x03000840)
 STORY_ENTITY_LIST_LOADER = 0x080010A4
 STORY_ENTITY_LEVEL_GATE = 0x080043AC
+LEVEL_RECORD_SOURCE_ROM = 0x08A8D9C0
+LEVEL_RECORD_COUNT = 11
+LEVEL_RECORD_SIZE = 0x40
+PLAYER_IDLE_SELECTOR_LOAD_ADDR = 0x08005CFC
+PLAYER_IDLE_SELECTOR_STORE_ADDR = 0x08005D06
 
 
 def sha256(data: bytes) -> str:
@@ -213,6 +218,30 @@ def extract_npc_sprite_pipeline(data: bytes) -> list[dict]:
     init_off = init_ram_to_rom_off(NPC_SOURCE_BIAS_RAM)
     value = struct.unpack_from("<I", data, init_off)[0]
     init_rom_addr = ROM_BASE + init_off
+
+    # Guard the draw-side animation facts with exact canonical instructions.
+    invisible_gate = (0x234E, 0xB5E0, 0x5EC5, 0xB085, 0x0004, 0x2D01, 0xD06B)
+    if _unpack_halfwords(data, 0x08002756, len(invisible_gate)) != invisible_gate:
+        raise ValueError("NPC draw invisibility gate drifted")
+    frame_counter = (0x2350, 0x5EE2, 0x6FA3, 0x0011, 0x4293, 0xDD01,
+                     0x2301, 0x67A3, 0x6FE3, 0x2B00, 0xDD6C)
+    if _unpack_halfwords(data, 0x08002770, len(frame_counter)) != frame_counter:
+        raise ValueError("NPC draw frame/countdown sequence drifted")
+    cadence_reload = (0x2350, 0x5EE1, 0x234E, 0x5EE5, 0x2008)
+    if _unpack_halfwords(data, 0x080028EE, len(cadence_reload)) != cadence_reload:
+        raise ValueError("NPC draw cadence reload sequence drifted")
+
+    # State 3 rewrites actor+0x4E from its constructor-copied base at +0xEC.
+    # The shared 0x08002BF2 tail commits base+8/6 frames; upward branches add
+    # another 8 before entering the same tail, yielding base+16/6.  Idle at
+    # 0x0800327A restores base/8.
+    moving_family = (0x3308, 0x224E, 0x52AB, 0x2350, 0x3A48, 0x52EA)
+    if _unpack_halfwords(data, 0x08002BF2, len(moving_family)) != moving_family:
+        raise ValueError("NPC state-3 moving-family sequence drifted")
+    idle_family = (0x2208, 0x21F4, 0x506A, 0x39A6, 0x526B, 0x2350, 0x52EA)
+    if _unpack_halfwords(data, 0x0800327A, len(idle_family)) != idle_family:
+        raise ValueError("NPC state-3 idle-family sequence drifted")
+
     return [
         {"fact":"draw", "value":f"0x{NPC_DRAW_FUNCTION:08X}",
          "evidence":"NPC vtable 0x08018B00 draw slot; stages four 16x8 rows and submits two 16x16 sprites"},
@@ -232,6 +261,20 @@ def extract_npc_sprite_pipeline(data: bytes) -> list[dict]:
          "evidence":"NPC draw destination math plus 0x08004F04 halfword-offset semantics"},
         {"fact":"dynamic_obj_upload", "value":f"0x{NPC_DYNAMIC_UPLOAD_FUNCTION:08X}",
          "evidence":"shared ROM-source -> OBJ-VRAM tile staging routine"},
+        {"fact":"invisible_legs_color", "value":"1",
+         "evidence":"0x08002756..0x08002762 branches to draw epilogue before frame/countdown mutation"},
+        {"fact":"frame_field", "value":"actor+0x78 (1-based)",
+         "evidence":"0x08002770..0x0800277E clamps to 1..actor+0x50; 0x08002860 advances before staging when countdown expires"},
+        {"fact":"countdown_field", "value":"actor+0x7C",
+         "evidence":"0x08002780..0x08002788 decrements positive countdown; zero/negative enters the advance/reload path"},
+        {"fact":"countdown_reload", "value":"5 * trunc(8 / actor+0x50)",
+         "evidence":"0x080028EE..0x08002900 loads frame count, divides 8 by it, then multiplies quotient by 5"},
+        {"fact":"state3_base_family_field", "value":"actor+0xEC",
+         "evidence":"NPC constructor copies serialized legsColor into the state-3 base-family field before route updates"},
+        {"fact":"state3_directional_families", "value":"base / base+8 / base+16",
+         "evidence":"8 / 6 / 6 frames: idle 0x0800327A restores base/8; horizontal/down 0x08002BF2 selects base+8/6; upward branches 0x08002D38..0x08002D94 select base+16/6"},
+        {"fact":"state3_movement_codes", "value":"down=0; down-right=1; right=2; up-right=3; up=4; up-left=5; left=6; down-left=7; idle=8",
+         "evidence":"actor+0xF4 writes across 0x08002BE4..0x08002D94 and 0x08003268..0x080032BE"},
         {"fact":"semantic_warning", "value":"runtime npc class is not synonymous with human NPC",
          "evidence":"standalone state=4 records with subtype=6 render paper/sketch-like graphics through the same class"},
     ]
@@ -1475,6 +1518,26 @@ def extract_player_interaction_profile_topic_layout_mismatch(data: bytes) -> lis
     return rows
 
 
+def extract_player_level_idle_selector(data: bytes) -> list[dict]:
+    rows = []
+    base = LEVEL_RECORD_SOURCE_ROM - ROM_BASE
+    for level in range(LEVEL_RECORD_COUNT):
+        record_off = base + level * LEVEL_RECORD_SIZE
+        selector = struct.unpack_from("<I", data, record_off + 0x3C)[0]
+        rows.append({
+            "level": level,
+            "record_rom_addr": f"0x{ROM_BASE + record_off:08X}",
+            "record_field": "+0x3C",
+            "idle_selector": selector,
+            "load_addr": f"0x{PLAYER_IDLE_SELECTOR_LOAD_ADDR:08X}",
+            "player_field": "+0x1E0",
+            "store_addr": f"0x{PLAYER_IDLE_SELECTOR_STORE_ADDR:08X}",
+            "evidence": "Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0",
+            "confidence": "high",
+        })
+    return rows
+
+
 def extract_player_motion_collision_contract(data: bytes) -> list[dict]:
     """Export ROM-guarded Player movement/collision facts used by clean-room runtime."""
     ctor_dims = (0x2380, 0x015B, 0x6123, 0x6163)
@@ -1827,7 +1890,7 @@ def extract_npc_state_modes(data: bytes) -> list[dict]:
          "proven_behavior":"4x4 when actor+0x4E == 1, otherwise 5x5; fresh-A dialogue path with conditional Player alignment",
          "confidence":geometry[2]["confidence"]},
         {"state":3,"dispatch_address":"0x08002B72","working_name":"route_follow",
-         "proven_behavior":"uses actor.route (+0x64), actor waypoint index (+0xF8), six (x,y) waypoints; loops index after 5","confidence":"high"},
+         "proven_behavior":"resolves prior queued fixed8 request through the shared collision solver before queuing the next +/-0x100 route step; uses six (x,y) waypoints via actor.route (+0x64)/index (+0xF8); direction selects base/base+8/base+16 sprite families with 8/6/6 frames","confidence":"high"},
         {"state":4,"dispatch_address":"0x08002C0C","working_name":"collection_interaction",
          "proven_behavior":"fixed 4x4 proximity; fresh-A collection selector dispatch via 0x03000620","confidence":geometry[4]["confidence"]},
     ]
@@ -3140,10 +3203,16 @@ def main():
         {"fact":"animation_state_block", "value":"0x03001254", "evidence":"Player_draw/Player_update state+frame block; old shared wardrobe/avatar label rejected by full xref trace"},
         {"fact":"live_graphics_bank", "value":"0x0300103C = 15 at startup", "evidence":"Player_draw source-bank multiplier; recovered Wardrobe path previews alternatives but does not mutate this live bank"},
         {"fact":"known_character_source_sample", "value":"source base 2198", "evidence":"valid 16x32 Vika-style frame reconstruction; not claimed as constructor/default outfit"},
-        {"fact":"normal_idle_branch", "value":"source base 3468 at bank 15 / idle phase 1", "evidence":"draw branch when player+0x1E0 == 0; reconstruction explicitly chooses selector-0 behavior"},
-        {"fact":"player_plus_1e0", "value":"constructor leaves field uninitialized", "evidence":"constructor skips +0x1E0 and malloc/new allocator is not zero-filling; draw/update read it"},
+        {"fact":"normal_idle_selector0", "value":"mirrored sources 3468,3470,3532,3534,3534,3532,3470,3468", "evidence":"Player_draw state-8 branch when Player+0x1E0 != 1"},
+        {"fact":"normal_idle_selector1", "value":"contiguous sources 3392,3394,3396,3398,3400,3402,3404,3406", "evidence":"Player_draw state-8 branch at 0x08006C06 when Player+0x1E0 == 1"},
+        {"fact":"player_plus_1e0", "value":"current LevelRecord+0x3C copied during scene activation", "evidence":"0x08005CFC loads record+0x3C; 0x08005D06 stores to Player+0x1E0"},
     ]
     write_csv(args.out / "player_sprite_pipeline.csv", ["fact","value","evidence"], player_rows)
+
+    player_idle_rows = extract_player_level_idle_selector(data)
+    write_csv(args.out / "player_level_idle_selector.csv",
+              ["level","record_rom_addr","record_field","idle_selector","load_addr",
+               "player_field","store_addr","evidence","confidence"], player_idle_rows)
 
     player_motion_rows = extract_player_motion_collision_contract(data)
     write_csv(args.out / "player_motion_collision_contract.csv",

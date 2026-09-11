@@ -57,19 +57,21 @@ static void gb_player_sync_pixel_anchor(GbPlayer* player)
     player->y = (s16)(player->y_fixed >> 8);
 }
 
-void gb_collision_apply_player_motion(const GbLevelAssets* level, GbPlayer* player)
+void gb_collision_apply_fixed_motion(const GbLevelAssets* level,
+                                     s32* x_fixed, s32* y_fixed,
+                                     s32* request_x_fixed, s32* request_y_fixed,
+                                     s32 width, s32 height,
+                                     u16* collision_status)
 {
-    if(! level || ! player || ! level->collision)
+    if(! level || ! level->collision || ! x_fixed || ! y_fixed ||
+       ! request_x_fixed || ! request_y_fixed || ! collision_status)
     {
         return;
     }
 
-    s32 dx = player->request_x_fixed;
-    s32 dy = player->request_y_fixed;
-    player->collision_status = 0;
-
-    const s32 width = player->collision_width_fixed;
-    const s32 height = player->collision_height_fixed;
+    s32 dx = *request_x_fixed;
+    s32 dy = *request_y_fixed;
+    *collision_status = 0;
 
     /* 0x08004684..0x08004A42 resolves X first.  A horizontal request is
        cancelled only by an out-of-range mid-body probe or collision value
@@ -79,34 +81,34 @@ void gb_collision_apply_player_motion(const GbLevelAssets* level, GbPlayer* play
     {
         const bool right = dx > 0;
         const s32 target_tx = right ?
-            (player->x_fixed + width - 1 + dx) >> 11 :
-            (player->x_fixed + dx) >> 11;
-        const s32 mid_ty = (player->y_fixed - (height >> 1) + 0x100) >> 11;
-        const s32 top_ty = (player->y_fixed - height + 1) >> 11;
-        const s32 bottom_ty = player->y_fixed >> 11;
+            (*x_fixed + width - 1 + dx) >> 11 :
+            (*x_fixed + dx) >> 11;
+        const s32 mid_ty = (*y_fixed - (height >> 1) + 0x100) >> 11;
+        const s32 top_ty = (*y_fixed - height + 1) >> 11;
+        const s32 bottom_ty = *y_fixed >> 11;
         s32 probe_tx = target_tx;
 
         if(! gb_collision_cell_in_bounds(level, target_tx, mid_ty) ||
            gb_collision_cell(level, target_tx, mid_ty) == 14)
         {
             dx = 0;
-            player->request_x_fixed = 0;
-            player->collision_status = right ? 7 : 11;
+            *request_x_fixed = 0;
+            *collision_status = right ? 7 : 11;
             probe_tx = right ?
-                (player->x_fixed + width - 1) >> 11 :
-                player->x_fixed >> 11;
+                (*x_fixed + width - 1) >> 11 :
+                *x_fixed >> 11;
         }
 
         if(gb_collision_cell_solid(level, probe_tx, top_ty))
         {
             if(dy == 0)
             {
-                player->y_fixed += 0x100;
-                const s32 validation_ty = player->y_fixed >> 11;
+                *y_fixed += 0x100;
+                const s32 validation_ty = *y_fixed >> 11;
                 if(! gb_collision_cell_in_bounds(level, probe_tx, validation_ty) ||
                    gb_collision_cell_solid(level, probe_tx, validation_ty))
                 {
-                    player->y_fixed -= 0x100;
+                    *y_fixed -= 0x100;
                 }
             }
         }
@@ -114,11 +116,11 @@ void gb_collision_apply_player_motion(const GbLevelAssets* level, GbPlayer* play
         {
             if(dy == 0)
             {
-                player->y_fixed -= 0x100;
+                *y_fixed -= 0x100;
             }
         }
 
-        player->x_fixed += dx;
+        *x_fixed += dx;
     }
 
     /* The Y phase always runs after X.  Even when the center probe blocks and
@@ -126,76 +128,89 @@ void gb_collision_apply_player_motion(const GbLevelAssets* level, GbPlayer* play
        correction phase before committing the (possibly zero) Y component. */
     if(dy > 0)
     {
-        const s32 target_ty = (player->y_fixed + dy) >> 11;
-        const s32 center_tx = (player->x_fixed + (width >> 1)) >> 11;
+        const s32 target_ty = (*y_fixed + dy) >> 11;
+        const s32 center_tx = (*x_fixed + (width >> 1)) >> 11;
         if(gb_collision_cell_solid(level, center_tx, target_ty))
         {
             dy = 0;
-            player->request_y_fixed = 0;
-            player->collision_status |= 0x31;
+            *request_y_fixed = 0;
+            *collision_status |= 0x31;
         }
 
-        const s32 corner_ty = player->y_fixed >> 11;
-        const s32 right_tx = (player->x_fixed + width - 1) >> 11;
-        const s32 left_tx = player->x_fixed >> 11;
+        const s32 corner_ty = *y_fixed >> 11;
+        const s32 right_tx = (*x_fixed + width - 1) >> 11;
+        const s32 left_tx = *x_fixed >> 11;
         if(gb_collision_cell_solid(level, right_tx, corner_ty))
         {
-            if(player->request_x_fixed == 0)
+            if(*request_x_fixed == 0)
             {
-                player->x_fixed -= 0x100;
-                const s32 validation_tx = player->x_fixed >> 11;
+                *x_fixed -= 0x100;
+                const s32 validation_tx = *x_fixed >> 11;
                 if(! gb_collision_cell_in_bounds(level, validation_tx, corner_ty) ||
                    gb_collision_cell_solid(level, validation_tx, corner_ty))
                 {
-                    player->x_fixed += 0x100;
+                    *x_fixed += 0x100;
                 }
             }
         }
         else if(gb_collision_cell_solid(level, left_tx, corner_ty) &&
-                player->request_x_fixed == 0)
+                *request_x_fixed == 0)
         {
-            player->x_fixed += 0x100;
+            *x_fixed += 0x100;
         }
 
-        player->y_fixed += dy;
+        *y_fixed += dy;
     }
     else if(dy < 0)
     {
         /* 0x080048C0..0x08004916: the destination center probe includes the
            request, while side-corner probes use the pre-motion top edge. */
-        const s32 target_ty = (player->y_fixed - height - dy - 0x1FF) >> 11;
-        const s32 center_tx = (player->x_fixed + (width >> 1)) >> 11;
+        const s32 target_ty = (*y_fixed - height - dy - 0x1FF) >> 11;
+        const s32 center_tx = (*x_fixed + (width >> 1)) >> 11;
         if(gb_collision_cell_solid(level, center_tx, target_ty))
         {
             dy = 0;
-            player->request_y_fixed = 0;
-            player->collision_status |= 0x51;
+            *request_y_fixed = 0;
+            *collision_status |= 0x51;
         }
 
-        const s32 corner_ty = (player->y_fixed - height - 0x1FF) >> 11;
-        const s32 right_tx = (player->x_fixed + width - 1) >> 11;
-        const s32 left_tx = player->x_fixed >> 11;
+        const s32 corner_ty = (*y_fixed - height - 0x1FF) >> 11;
+        const s32 right_tx = (*x_fixed + width - 1) >> 11;
+        const s32 left_tx = *x_fixed >> 11;
         if(gb_collision_cell_solid(level, right_tx, corner_ty))
         {
-            if(player->request_x_fixed == 0)
+            if(*request_x_fixed == 0)
             {
-                player->x_fixed -= 0x100;
-                const s32 validation_tx = player->x_fixed >> 11;
+                *x_fixed -= 0x100;
+                const s32 validation_tx = *x_fixed >> 11;
                 if(! gb_collision_cell_in_bounds(level, validation_tx, corner_ty) ||
                    gb_collision_cell_solid(level, validation_tx, corner_ty))
                 {
-                    player->x_fixed += 0x100;
+                    *x_fixed += 0x100;
                 }
             }
         }
         else if(gb_collision_cell_solid(level, left_tx, corner_ty) &&
-                player->request_x_fixed == 0)
+                *request_x_fixed == 0)
         {
-            player->x_fixed += 0x100;
+            *x_fixed += 0x100;
         }
 
-        player->y_fixed += dy;
+        *y_fixed += dy;
     }
+}
 
+void gb_collision_apply_player_motion(const GbLevelAssets* level, GbPlayer* player)
+{
+    if(! level || ! player || ! level->collision)
+    {
+        return;
+    }
+    gb_collision_apply_fixed_motion(level,
+                                    &player->x_fixed, &player->y_fixed,
+                                    &player->request_x_fixed, &player->request_y_fixed,
+                                    player->collision_width_fixed,
+                                    player->collision_height_fixed,
+                                    &player->collision_status);
     gb_player_sync_pixel_anchor(player);
 }

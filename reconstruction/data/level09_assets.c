@@ -16766,6 +16766,7 @@ const GbLevelAssets gb_level09_assets = {
     .fixed_height_tiles = 32,
     .spawn_x = 410,
     .spawn_y = 370,
+    .player_idle_selector = 1,
     .bg_tile_halfwords = 27648,
     .translation_count = 1279,
     .bg_palette = gb_level09_bg_palette,

@@ -86,6 +86,7 @@ class LevelSpec:
     collision_addr: int
     visual_b_addr: int
     fixed_map_addr: int
+    player_idle_selector: int
     portals: tuple[PortalSpec, ...]
 
 
@@ -420,6 +421,7 @@ def build_level_specs(root: Path) -> dict[int, LevelSpec]:
             collision_addr=int(row['collision_grid_addr'], 16),
             visual_b_addr=int(row['visual_layer_b_addr'], 16),
             fixed_map_addr=int(row['fixed_tilemap_addr'], 16),
+            player_idle_selector=int(row['record_flag_3c']),
             portals=tuple(portals),
         )
     return out
@@ -550,6 +552,24 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
         )
         story.append(StoryActorSpec(overlay_index=overlay_index, level=level, descriptor=descriptor))
 
+    # NPC_update state 3 rewrites actor+0x4E from the serialized base family to
+    # base+8 for horizontal/down motion and base+16 for upward motion.  These
+    # moving families are not separate serialized actors, so append their exact
+    # ROM source pairs after descriptor indexing is complete to keep every
+    # existing descriptor visual_index stable.
+    for item in story:
+        descriptor = item.descriptor
+        if descriptor.actor_class != ACTOR_CLASS_NPC or descriptor.state != 3:
+            continue
+        for legs_color in (descriptor.legs_color + 8, descriptor.legs_color + 16):
+            key = (legs_color, descriptor.subtype)
+            if key not in visual_index:
+                found = len(visual_list)
+                if found >= ACTOR_VISUAL_NONE:
+                    raise ValueError('too many actor visuals for u8 visual index')
+                visual_index[key] = found
+                visual_list.append(key)
+
     routes_by_id: dict[int, list[tuple[int, int]]] = {route: [] for route in range(5)}
     for row in route_rows:
         route = int(row['route_id'])
@@ -580,21 +600,22 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
 
 
 def pack_actor_sprite_bank(rom: bytes, visuals: tuple[tuple[int, int], ...]) -> PackedActorSpriteBank:
-    """Pack exact frame-1 NPC source rows into contiguous 16x32 8bpp frames."""
+    """Pack all eight ROM-addressable NPC frames for each recovered visual."""
     palette = _read_u16_array(rom, OBJ_PALETTE_SOURCE, 256)
     bias = npc_source_bias_from_rom(rom)
     source_base_off = OBJ_TILES_SOURCE - ROM_BASE
     out = bytearray()
     for legs_color, subtype in visuals:
-        base = npc_source_base(bias, legs_color, subtype, 1)
-        for row_base in npc_source_rows(base):
-            for source_tile in (row_base, row_base + 1):
-                off = source_base_off + source_tile * 64
-                blob = rom[off:off + 64]
-                if len(blob) != 64:
-                    raise ValueError(f'NPC source tile {source_tile} overruns ROM')
-                out.extend(blob)
-    return PackedActorSpriteBank(frame_count=len(visuals), palette=palette, data=bytes(out))
+        for frame in range(1, 9):
+            base = npc_source_base(bias, legs_color, subtype, frame)
+            for row_base in npc_source_rows(base):
+                for source_tile in (row_base, row_base + 1):
+                    off = source_base_off + source_tile * 64
+                    blob = rom[off:off + 64]
+                    if len(blob) != 64:
+                        raise ValueError(f'NPC source tile {source_tile} overruns ROM')
+                    out.extend(blob)
+    return PackedActorSpriteBank(frame_count=len(visuals) * 8, palette=palette, data=bytes(out))
 
 
 def pack_foreground_sprite_bank(rom: bytes) -> PackedForegroundSpriteBank:
@@ -740,7 +761,8 @@ def _pack_4bpp_image(image: Image.Image, index: dict[tuple[int, int, int], int])
 def pack_player_animation(rom: bytes) -> PackedSprite:
     init = player_animation_initializers_from_rom(rom)
     sources = player_animation_source_bases(init['bank'])
-    packed_sources = sources['regular_walk'] + sources['up_walk'] + sources['idle_unique']
+    packed_sources = (sources['regular_walk'] + sources['up_walk'] +
+                      sources['idle_unique'] + sources['idle_selector1'])
     images = [reconstruct_player_frame_from_source_rows(rom, source) for source in packed_sources]
     opaque = sorted({
         rgba[:3]
@@ -889,6 +911,7 @@ const GbLevelAssets {name}_assets = {{
     .fixed_height_tiles = {spec.fixed_height},
     .spawn_x = {spec.spawn[0]},
     .spawn_y = {spec.spawn[1]},
+    .player_idle_selector = {spec.player_idle_selector},
     .bg_tile_halfwords = {len(tile_words)},
     .translation_count = {len(runtime.translation)},
     .bg_palette = {name}_bg_palette,
@@ -983,7 +1006,7 @@ const u16 gb_actor_obj_palette[256] = {{
 {_c_values(sprites.palette, 10, 4)}
 }};
 
-const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS] = {{
+const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {{
 {_c_values(words, 12, 4)}
 }};
 
@@ -1088,7 +1111,7 @@ const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALF
 """
 
 
-def _assets_h(variants: dict[tuple[int, int], GraphicsVariantSpec]) -> str:
+def _assets_h(variants: dict[tuple[int, int], GraphicsVariantSpec], actor_visual_count: int) -> str:
     declarations = '\n'.join(
         f'extern const GbLevelAssets {_asset_symbol(level, variant)}_assets;'
         for level, variant in sorted(variants)
@@ -1221,6 +1244,7 @@ typedef struct {{
     u16 fixed_height_tiles;
     s16 spawn_x;
     s16 spawn_y;
+    u8 player_idle_selector;
     u16 bg_tile_halfwords;
     u16 translation_count;
     const u16* bg_palette;
@@ -1246,7 +1270,8 @@ enum {{
     GB_ACTOR_STORY_DESCRIPTOR_COUNT = 16,
     GB_ACTOR_ROUTE_COUNT = 5,
     GB_ACTOR_ROUTE_POINTS = 6,
-    GB_ACTOR_VISUAL_COUNT = 32,
+    GB_ACTOR_VISUAL_COUNT = {actor_visual_count},
+    GB_ACTOR_MAX_FRAMES = 8,
     GB_ACTOR_FRAME_HALFWORDS = 256,
     GB_GRASS_OBJ_HALFWORDS = 128,
     GB_LEAF_FRAME_COUNT = 4,
@@ -1301,7 +1326,7 @@ extern const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DE
 extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS];
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
 extern const u16 gb_actor_obj_palette[256];
-extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS];
+extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS];
 extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
 extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
 extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
@@ -1337,7 +1362,7 @@ extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
 extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];
 extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
-enum {{ GB_PLAYER_FRAME_COUNT = 16 }};
+enum {{ GB_PLAYER_FRAME_COUNT = 24 }};
 
 extern const u16 gb_player_obj_palette[16];
 extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];
@@ -1487,7 +1512,9 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     (out / 'data' / 'ending' / 'argument0_copy2.bin').write_bytes(ending_copy2)
     (out / 'data' / 'ending_effect.s').write_text(_ending_effect_s(), encoding='utf-8')
     (out / 'data' / 'level_registry.c').write_text(_registry_c(variants), encoding='utf-8')
-    (out / 'include' / 'graveblood' / 'assets.h').write_text(_assets_h(variants), encoding='utf-8')
+    (out / 'include' / 'graveblood' / 'assets.h').write_text(
+        _assets_h(variants, len(actor_data.visuals)), encoding='utf-8'
+    )
 
 
 def main() -> None:

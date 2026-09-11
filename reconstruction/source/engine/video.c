@@ -581,6 +581,23 @@ void gb_video_set_camera(s16 x, s16 y)
     BG_OFFSET[3].y = (u16)(y / 4);
 }
 
+static int gb_actor_npc_visual_index(const GbActor* actor)
+{
+    if(! actor || ! actor->descriptor)
+    {
+        return -1;
+    }
+    for(int i = 0; i < GB_ACTOR_VISUAL_COUNT; ++i)
+    {
+        if(gb_actor_visuals[i].legs_color == actor->visual_legs_color &&
+           gb_actor_visuals[i].subtype == actor->descriptor->subtype)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
 void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 camera_x, s16 camera_y)
 {
     volatile u16* oam = (volatile u16*)OAM;
@@ -599,7 +616,7 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
 
     for(u8 i = 0; i < system->count && visible < GB_ACTOR_OAM_COUNT; ++i)
     {
-        const GbActor* actor = &system->actors[i];
+        GbActor* actor = &system->actors[i];
         if(! actor->active || ! actor->descriptor)
         {
             continue;
@@ -609,19 +626,25 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
         volatile u16* slot = actor_vram + visible * GB_ACTOR_FRAME_HALFWORDS;
         if(actor->descriptor->actor_class == GB_ACTOR_NPC)
         {
-            if(actor->descriptor->visual_index >= GB_ACTOR_VISUAL_COUNT)
+            if(! gb_actor_npc_should_draw(actor))
             {
                 continue;
             }
+            const int visual = gb_actor_npc_visual_index(actor);
+            if(visual < 0)
+            {
+                continue;
+            }
+            const u8 frame = gb_actor_npc_frame_for_draw(actor);
             const s16 sx = (s16)(gb_actor_pixel_x(actor) - camera_x - 8);
             const s16 sy = (s16)(gb_actor_pixel_y(actor) - camera_y - 32);
             if(sx < -16 || sx >= 240 || sy < -32 || sy >= 160)
             {
                 continue;
             }
-            const u8 visual = actor->descriptor->visual_index;
+            const u32 frame_index = (u32)visual * GB_ACTOR_MAX_FRAMES + (frame - 1);
             gb_copy_u16(slot,
-                        gb_actor_obj_frames + visual * GB_ACTOR_FRAME_HALFWORDS,
+                        gb_actor_obj_frames + frame_index * GB_ACTOR_FRAME_HALFWORDS,
                         GB_ACTOR_FRAME_HALFWORDS);
             oam[oam_index * 4] = (u16)(sy & 0x00FF) | GB_OBJ_TALL | GB_OBJ_256_COLOR;
             oam[oam_index * 4 + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_2 |

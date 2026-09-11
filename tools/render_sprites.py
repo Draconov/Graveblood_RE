@@ -254,11 +254,16 @@ def player_animation_source_bases(bank: int) -> dict[str, tuple[int, ...]]:
         idle_unique[0], idle_unique[1], idle_unique[2], idle_unique[3],
         idle_unique[3], idle_unique[2], idle_unique[1], idle_unique[0],
     )
+    # Player_draw 0x080067D6 reads Player+0x1E0.  Selector 1 diverts
+    # state-8 idle to the contiguous source branch at 0x08006C06, whose
+    # row base is bank*192 + 0x200 + 2*(frame-1).
+    idle_selector1 = tuple(base + 0x200 + 2 * frame for frame in range(8))
     return {
         "regular_walk": regular,
         "up_walk": up,
         "idle_unique": idle_unique,
         "idle_sequence": idle_sequence,
+        "idle_selector1": idle_selector1,
     }
 
 

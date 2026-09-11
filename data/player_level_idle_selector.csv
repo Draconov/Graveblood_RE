@@ -1,0 +1,12 @@
+level,record_rom_addr,record_field,idle_selector,load_addr,player_field,store_addr,evidence,confidence
+0,0x08A8D9C0,+0x3C,1,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+1,0x08A8DA00,+0x3C,0,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+2,0x08A8DA40,+0x3C,1,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+3,0x08A8DA80,+0x3C,1,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+4,0x08A8DAC0,+0x3C,0,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+5,0x08A8DB00,+0x3C,0,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+6,0x08A8DB40,+0x3C,1,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+7,0x08A8DB80,+0x3C,0,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+8,0x08A8DBC0,+0x3C,0,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+9,0x08A8DC00,+0x3C,1,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high
+10,0x08A8DC40,+0x3C,1,0x08005CFC,+0x1E0,0x08005D06,Gameplay scene activation reads current LevelRecord+0x3C and stores it to Player+0x1E0,high

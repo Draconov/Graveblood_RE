@@ -1,4 +1,5 @@
 #include <graveblood/actors.h>
+#include <graveblood/collision.h>
 
 static const s16 gb_leaf_x_offsets[6] = { 350, 250, 170, 0, 340, 290 };
 static const s16 gb_leaf_y_offsets[6] = { 40, 60, 80, 30, 20, 50 };
@@ -23,6 +24,7 @@ static void gb_actor_clear_leaf_particles(GbActorSystem* system)
 void gb_actor_system_init(GbActorSystem* system)
 {
     system->count = 0;
+    system->level = 0;
     system->leaf_emitter_cooldown = 12;
     system->leaf_emitter_cycle = 0;
     system->npc_special_timer = 15;
@@ -50,9 +52,19 @@ static void gb_actor_init(GbActor* actor, const GbActorDescriptor* descriptor, u
     actor->descriptor = descriptor;
     actor->fixed_x = gb_actor_to_fixed(descriptor->x);
     actor->fixed_y = gb_actor_to_fixed(descriptor->y);
+    actor->request_x_fixed = 0;
+    actor->request_y_fixed = 0;
+    /* NPC constructor 0x08003A3E..0x08003A44 uses a 16x32 collision body. */
+    actor->collision_width_fixed = 0x1000;
+    actor->collision_height_fixed = 0x2000;
+    actor->collision_status = 0;
     actor->frame = 1;
+    actor->frame_countdown = 0;
+    actor->visual_legs_color = descriptor->legs_color;
+    actor->animation_frame_count = (u8)descriptor->num;
+    actor->movement_code = 8;
     actor->waypoint_index = 0;
-    actor->facing_right = 0;
+    actor->facing_right = descriptor->turn != 0;
     actor->active = 1;
     actor->story_overlay_index = overlay_index;
     actor->dialogue_step = -1;
@@ -74,6 +86,7 @@ static void gb_actor_append(GbActorSystem* system, const GbActorDescriptor* desc
 void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level)
 {
     system->count = 0;
+    system->level = level;
     gb_actor_clear_leaf_particles(system);
     if(! level || level->level_id >= 11)
     {
@@ -100,21 +113,6 @@ void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level)
     }
 }
 
-static s32 gb_actor_step_axis(s32 current, s32 target)
-{
-    if(current < target)
-    {
-        current += GB_ACTOR_ROUTE_SPEED_FIXED;
-        return current > target ? target : current;
-    }
-    if(current > target)
-    {
-        current -= GB_ACTOR_ROUTE_SPEED_FIXED;
-        return current < target ? target : current;
-    }
-    return current;
-}
-
 static void gb_actor_update_route(GbActor* actor)
 {
     const GbActorDescriptor* descriptor = actor->descriptor;
@@ -129,24 +127,75 @@ static void gb_actor_update_route(GbActor* actor)
     }
 
     const GbRoutePoint* target = &gb_actor_routes[descriptor->route][actor->waypoint_index];
-    /* Route coordinates are serialized in 8-pixel cells while actor positions
-       are 24.8 fixed point: cell << 3 pixels, then << 8 fixed = << 11. */
-    const s32 target_x = ((s32)target->x) << 11;
-    const s32 target_y = ((s32)target->y) << 11;
-    const s32 old_x = actor->fixed_x;
+    /* NPC_update state 3 compares actor positions as 8-pixel cells (>>11),
+       then queues +/- actor+0xF0 (0x100 fixed8) into +0x18/+0x1C. */
+    const s32 cell_x = actor->fixed_x >> 11;
+    const s32 cell_y = actor->fixed_y >> 11;
 
-    actor->fixed_x = gb_actor_step_axis(actor->fixed_x, target_x);
-    actor->fixed_y = gb_actor_step_axis(actor->fixed_y, target_y);
-    if(actor->fixed_x > old_x)
+    if(target->x > cell_x)
+    {
+        actor->request_x_fixed = GB_ACTOR_ROUTE_SPEED_FIXED;
+    }
+    else if(target->x < cell_x)
+    {
+        actor->request_x_fixed = -GB_ACTOR_ROUTE_SPEED_FIXED;
+    }
+    else
+    {
+        actor->request_x_fixed = 0;
+    }
+
+    if(target->y > cell_y)
+    {
+        actor->request_y_fixed = GB_ACTOR_ROUTE_SPEED_FIXED;
+    }
+    else if(target->y < cell_y)
+    {
+        actor->request_y_fixed = -GB_ACTOR_ROUTE_SPEED_FIXED;
+    }
+    else
+    {
+        actor->request_y_fixed = 0;
+    }
+
+    if(actor->request_y_fixed < 0)
+    {
+        actor->visual_legs_color = (u8)(descriptor->legs_color + 16);
+        actor->animation_frame_count = 6;
+        actor->movement_code = actor->request_x_fixed < 0 ? 5 :
+                               actor->request_x_fixed > 0 ? 3 : 4;
+    }
+    else if(actor->request_y_fixed > 0 || actor->request_x_fixed != 0)
+    {
+        actor->visual_legs_color = (u8)(descriptor->legs_color + 8);
+        actor->animation_frame_count = 6;
+        if(actor->request_y_fixed > 0)
+        {
+            actor->movement_code = actor->request_x_fixed < 0 ? 7 :
+                                   actor->request_x_fixed > 0 ? 1 : 0;
+        }
+        else
+        {
+            actor->movement_code = actor->request_x_fixed < 0 ? 6 : 2;
+        }
+    }
+    else
+    {
+        actor->visual_legs_color = descriptor->legs_color;
+        actor->animation_frame_count = 8;
+        actor->movement_code = 8;
+    }
+
+    if(actor->request_x_fixed > 0)
     {
         actor->facing_right = 1;
     }
-    else if(actor->fixed_x < old_x)
+    else if(actor->request_x_fixed < 0)
     {
         actor->facing_right = 0;
     }
 
-    if(actor->fixed_x == target_x && actor->fixed_y == target_y)
+    if(cell_x == target->x && cell_y == target->y)
     {
         actor->waypoint_index = (u8)((actor->waypoint_index + 1) % GB_ACTOR_ROUTE_POINTS);
     }
@@ -345,6 +394,50 @@ void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16
     system->leaf_emitter_cooldown = 23;
 }
 
+int gb_actor_npc_should_draw(const GbActor* actor)
+{
+    return actor && actor->active && actor->descriptor &&
+           actor->descriptor->actor_class == GB_ACTOR_NPC &&
+           actor->visual_legs_color != 1;
+}
+
+u8 gb_actor_npc_frame_for_draw(GbActor* actor)
+{
+    if(! gb_actor_npc_should_draw(actor))
+    {
+        return 0;
+    }
+
+    u8 count = actor->animation_frame_count;
+    if(count == 0)
+    {
+        count = (u8)actor->descriptor->num;
+    }
+    if(count < 1)
+    {
+        count = 1;
+    }
+    if(count > GB_ACTOR_MAX_FRAMES)
+    {
+        count = GB_ACTOR_MAX_FRAMES;
+    }
+    if(actor->frame < 1 || actor->frame > count)
+    {
+        actor->frame = 1;
+    }
+
+    if(actor->frame_countdown > 0)
+    {
+        --actor->frame_countdown;
+    }
+    else
+    {
+        actor->frame = actor->frame < count ? (u8)(actor->frame + 1) : 1;
+        actor->frame_countdown = (u8)(5 * (8 / count));
+    }
+    return actor->frame;
+}
+
 int gb_actor_grass_draw_state(const GbActor* actor, s16 player_y, GbGrassDrawState* out)
 {
     if(! actor || ! actor->active || ! actor->descriptor || ! out ||
@@ -400,6 +493,14 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
         }
         if(actor->descriptor->actor_class == GB_ACTOR_NPC)
         {
+            /* NPC_update 0x0800298C calls the shared 0x08004670 solver before
+               state dispatch, consuming the request queued on the prior frame. */
+            gb_collision_apply_fixed_motion(system->level,
+                                            &actor->fixed_x, &actor->fixed_y,
+                                            &actor->request_x_fixed, &actor->request_y_fixed,
+                                            actor->collision_width_fixed,
+                                            actor->collision_height_fixed,
+                                            &actor->collision_status);
             gb_actor_update_npc_special(system, actor, player);
         }
         if(actor->descriptor->state == 3)

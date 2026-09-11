@@ -7,4 +7,11 @@ source_base_formula,sourceBias + legsColor*8 + subtype + 2*(frame-1),0x0800286E.
 source_rows,"base + {0,16,32,48}","staging loop increments row selector 0,8,16,24 then doubles it"
 dynamic_destination_formula,"logical rows 0x60 + 2*(24*A4 + A8 + C8) + {0,0x10,0x20,0x30}",NPC draw destination math plus 0x08004F04 halfword-offset semantics
 dynamic_obj_upload,0x08004F04,shared ROM-source -> OBJ-VRAM tile staging routine
+invisible_legs_color,1,0x08002756..0x08002762 branches to draw epilogue before frame/countdown mutation
+frame_field,actor+0x78 (1-based),0x08002770..0x0800277E clamps to 1..actor+0x50; 0x08002860 advances before staging when countdown expires
+countdown_field,actor+0x7C,0x08002780..0x08002788 decrements positive countdown; zero/negative enters the advance/reload path
+countdown_reload,5 * trunc(8 / actor+0x50),"0x080028EE..0x08002900 loads frame count, divides 8 by it, then multiplies quotient by 5"
+state3_base_family_field,actor+0xEC,NPC constructor copies serialized legsColor into the state-3 base-family field before route updates
+state3_directional_families,base / base+8 / base+16,8 / 6 / 6 frames: idle 0x0800327A restores base/8; horizontal/down 0x08002BF2 selects base+8/6; upward branches 0x08002D38..0x08002D94 select base+16/6
+state3_movement_codes,down=0; down-right=1; right=2; up-right=3; up=4; up-left=5; left=6; down-left=7; idle=8,actor+0xF4 writes across 0x08002BE4..0x08002D94 and 0x08003268..0x080032BE
 semantic_warning,runtime npc class is not synonymous with human NPC,standalone state=4 records with subtype=6 render paper/sketch-like graphics through the same class

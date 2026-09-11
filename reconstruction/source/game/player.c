@@ -37,6 +37,10 @@ u8 gb_player_frame_index(const GbPlayer* player)
     }
     if(player->animation_state == GB_PLAYER_ANIM_IDLE)
     {
+        if(player->idle_selector == 1)
+        {
+            return (u8)(16 + ((frame - 1) % 8));
+        }
         static const u8 idle_frames[8] = { 12, 13, 14, 15, 15, 14, 13, 12 };
         return idle_frames[(frame - 1) % 8];
     }
@@ -61,6 +65,7 @@ void gb_player_spawn(GbPlayer* player, s16 x, s16 y)
     player->facing_x = 0;
     player->facing_y = 1;
     player->facing_right = 0;
+    player->idle_selector = 0;
     player->animation_state = GB_PLAYER_ANIM_IDLE;
     player->animation_frame = 1;
     player->animation_countdown = 5;

@@ -2,5 +2,5 @@ state,dispatch_address,working_name,proven_behavior,confidence
 0,default/return,default,no special state branch in 0x0800298C dispatch,high
 1,0x08002ACA,social_interaction,5x5 proximity; fresh-A social interaction bootstrap and Player/NPC alignment anchors,high
 2,0x08002A0C,dialogue_interaction,"4x4 when actor+0x4E == 1, otherwise 5x5; fresh-A dialogue path with conditional Player alignment",high
-3,0x08002B72,route_follow,"uses actor.route (+0x64), actor waypoint index (+0xF8), six (x,y) waypoints; loops index after 5",high
+3,0x08002B72,route_follow,"resolves prior queued fixed8 request through the shared collision solver before queuing the next +/-0x100 route step; uses six (x,y) waypoints via actor.route (+0x64)/index (+0xF8); direction selects base/base+8/base+16 sprite families with 8/6/6 frames",high
 4,0x08002C0C,collection_interaction,fixed 4x4 proximity; fresh-A collection selector dispatch via 0x03000620,high

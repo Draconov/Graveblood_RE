@@ -131,6 +131,7 @@ int main(void)
             cmd = [
                 cc, '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
                 str(actors_c), str(td / 'foreground_test.c'), '-o', str(exe),
             ]
             built = subprocess.run(cmd, text=True, capture_output=True)

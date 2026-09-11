@@ -50,7 +50,16 @@ typedef struct {
     const GbActorDescriptor* descriptor;
     s32 fixed_x;
     s32 fixed_y;
+    s32 request_x_fixed;
+    s32 request_y_fixed;
+    s32 collision_width_fixed;
+    s32 collision_height_fixed;
+    u16 collision_status;
     u8 frame;
+    u8 frame_countdown;
+    u8 visual_legs_color;
+    u8 animation_frame_count;
+    u8 movement_code;
     u8 waypoint_index;
     u8 facing_right;
     u8 active;
@@ -63,6 +72,7 @@ typedef struct {
 
 typedef struct {
     GbActor actors[GB_ACTOR_CAPACITY];
+    const GbLevelAssets* level;
     GbLeafParticle leaf_particles[GB_LEAF_PARTICLE_CAPACITY];
     u8 count;
     u8 leaf_emitter_cooldown;
@@ -76,6 +86,8 @@ void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level);
 void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
                             const GbInput* input, GbInteractionEvent* event);
 void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y);
+int gb_actor_npc_should_draw(const GbActor* actor);
+u8 gb_actor_npc_frame_for_draw(GbActor* actor);
 int gb_actor_grass_draw_state(const GbActor* actor, s16 player_y, GbGrassDrawState* out);
 u8 gb_leaf_particle_frame_for_draw(GbLeafParticle* particle);
 s16 gb_leaf_particle_pixel_x(const GbLeafParticle* particle);

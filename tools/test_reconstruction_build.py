@@ -347,7 +347,7 @@ typedef int32_t s32;
         self.assertIn('actor->descriptor->actor_class == GB_ACTOR_NPC', video)
         self.assertIn('actor->descriptor->actor_class == GB_ACTOR_GRASS', video)
         self.assertIn('GB_LEAF_PARTICLE_CAPACITY', video)
-        self.assertIn('actor->descriptor->visual_index >= GB_ACTOR_VISUAL_COUNT', video)
+        self.assertIn('gb_actor_npc_visual_index(actor)', video)
 
     def test_actor_video_compiles_with_host_gba_contract(self):
         gba_h = r"""
@@ -634,6 +634,381 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
             self.assertEqual(0, proc.returncode, proc.stderr)
             subprocess.run([str(exe)], check=True, cwd=ROOT)
 
+    def test_npc_state3_queued_motion_uses_shared_level9_collision_solver(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/actors.h>
+#include <graveblood/assets.h>
+
+int main(void)
+{
+    static const GbActorDescriptor route_desc = {
+        .actor_class = GB_ACTOR_NPC, .state = 3, .route = 0,
+        .legs_color = 24, .num = 1, .visual_index = 0
+    };
+    GbActorSystem system;
+    GbPlayer player = { 0 };
+    GbInput none = { 0 };
+    GbInteractionEvent event;
+    gb_actor_system_init(&system);
+    system.level = &gb_level09_assets;
+    system.count = 1;
+    GbActor* actor = &system.actors[0];
+    *actor = (GbActor){ 0 };
+    actor->descriptor = &route_desc;
+    actor->active = 1;
+    actor->frame = 1;
+    actor->fixed_x = 1680 << 8;
+    actor->fixed_y = 720 << 8;
+    actor->collision_width_fixed = 0x1000;
+    actor->collision_height_fixed = 0x2000;
+    actor->request_x_fixed = -0x100;
+    actor->request_y_fixed = -0x100;
+
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(actor->fixed_x == (1679 << 8));
+    assert(actor->fixed_y == (720 << 8));
+    assert(actor->collision_status == 0x51);
+    assert(actor->request_x_fixed == -0x100);
+    assert(actor->request_y_fixed == -0x100);
+    assert(actor->facing_right == 0);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'npc_route_collision_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'npc_route_collision_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(ROOT / 'reconstruction/data/actor_routes.c'),
+                str(ROOT / 'reconstruction/data/level09_assets.c'),
+                str(td / 'npc_route_collision_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_npc_state3_direction_selects_rom_visual_family_and_frame_count(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/actors.h>
+
+static const GbActorDescriptor route_desc = {
+    .actor_class = GB_ACTOR_NPC, .state = 3, .route = 0,
+    .legs_color = 200, .num = 8, .turn = 1, .visual_index = 0
+};
+
+static void prepare(GbActorSystem* system, s32 cell_x, s32 cell_y, u8 facing_right)
+{
+    GbActor* actor = &system->actors[0];
+    *actor = (GbActor){ 0 };
+    actor->descriptor = &route_desc;
+    actor->active = 1;
+    actor->fixed_x = cell_x << 11;
+    actor->fixed_y = cell_y << 11;
+    actor->collision_width_fixed = 0x1000;
+    actor->collision_height_fixed = 0x2000;
+    actor->visual_legs_color = route_desc.legs_color;
+    actor->animation_frame_count = route_desc.num;
+    actor->facing_right = facing_right;
+}
+
+static void update(GbActorSystem* system)
+{
+    GbPlayer player = { 0 };
+    GbInput none = { 0 };
+    GbInteractionEvent event;
+    gb_actor_system_update(system, &player, &none, &event);
+}
+
+int main(void)
+{
+    GbActorSystem system;
+    gb_actor_system_init(&system);
+    system.level = 0; /* no solver mutation: inspect only the newly queued route request */
+    system.count = 1;
+
+    /* Route 0 waypoint 0 is (112,61). */
+    prepare(&system, 112, 61, 1);
+    update(&system);
+    assert(system.actors[0].request_x_fixed == 0);
+    assert(system.actors[0].request_y_fixed == 0);
+    assert(system.actors[0].visual_legs_color == 200);
+    assert(system.actors[0].animation_frame_count == 8);
+    assert(system.actors[0].movement_code == 8);
+    assert(system.actors[0].facing_right == 1); /* idle preserves turn */
+
+    prepare(&system, 111, 61, 0); /* right */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 208);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 2);
+    assert(system.actors[0].facing_right == 1);
+
+    prepare(&system, 113, 61, 1); /* left */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 208);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 6);
+    assert(system.actors[0].facing_right == 0);
+
+    prepare(&system, 112, 60, 0); /* down */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 208);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 0);
+    assert(system.actors[0].facing_right == 0); /* pure vertical preserves turn */
+
+    prepare(&system, 112, 62, 1); /* up */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 216);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 4);
+    assert(system.actors[0].facing_right == 1); /* pure vertical preserves turn */
+
+    prepare(&system, 111, 60, 0); /* down-right */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 208);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 1);
+    assert(system.actors[0].facing_right == 1);
+
+    prepare(&system, 113, 60, 1); /* down-left */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 208);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 7);
+    assert(system.actors[0].facing_right == 0);
+
+    prepare(&system, 111, 62, 0); /* up-right */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 216);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 3);
+    assert(system.actors[0].facing_right == 1);
+
+    prepare(&system, 113, 62, 1); /* up-left */
+    update(&system);
+    assert(system.actors[0].visual_legs_color == 216);
+    assert(system.actors[0].animation_frame_count == 6);
+    assert(system.actors[0].movement_code == 5);
+    assert(system.actors[0].facing_right == 0);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'npc_route_direction_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'npc_route_direction_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(ROOT / 'reconstruction/data/actor_routes.c'),
+                str(td / 'npc_route_direction_test.c'),
+                '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_npc_draw_visibility_matches_legs_color_one_early_return(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/actors.h>
+
+int main(void)
+{
+    GbActorDescriptor visible_desc = { .actor_class = GB_ACTOR_NPC, .legs_color = 24 };
+    GbActorDescriptor hidden_desc = { .actor_class = GB_ACTOR_NPC, .legs_color = 1 };
+    GbActor actor = { 0 };
+    actor.active = 1;
+    actor.descriptor = &visible_desc;
+    actor.visual_legs_color = 24;
+    assert(gb_actor_npc_should_draw(&actor) == 1);
+    /* NPC_draw tests the mutable actor+0x4E family, not serialized base data. */
+    actor.visual_legs_color = 1;
+    assert(gb_actor_npc_should_draw(&actor) == 0);
+    actor.descriptor = &hidden_desc;
+    actor.visual_legs_color = 9;
+    assert(gb_actor_npc_should_draw(&actor) == 1);
+    actor.active = 0;
+    assert(gb_actor_npc_should_draw(&actor) == 0);
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        self.assertIn('gb_actor_npc_should_draw(actor)', video)
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'npc_visibility_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'npc_visibility_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(td / 'npc_visibility_test.c'), '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+    def test_npc_draw_animation_uses_rom_frame_countdown_cadence(self):
+        harness = r"""
+#include <assert.h>
+#include <graveblood/actors.h>
+
+int main(void)
+{
+    GbActorDescriptor desc = { .actor_class = GB_ACTOR_NPC, .legs_color = 24, .num = 6 };
+    GbActor actor = { 0 };
+    actor.active = 1;
+    actor.descriptor = &desc;
+    actor.frame = 1;
+    actor.frame_countdown = 0;
+
+    /* NPC_draw advances before staging when the countdown is already zero. */
+    assert(gb_actor_npc_frame_for_draw(&actor) == 2);
+    assert(actor.frame_countdown == 5); /* 5 * trunc(8 / 6) */
+    for(int i = 0; i < 5; ++i)
+        assert(gb_actor_npc_frame_for_draw(&actor) == 2);
+    assert(actor.frame_countdown == 0);
+    assert(gb_actor_npc_frame_for_draw(&actor) == 3);
+    assert(actor.frame_countdown == 5);
+
+    actor.frame = 6;
+    actor.frame_countdown = 0;
+    assert(gb_actor_npc_frame_for_draw(&actor) == 1);
+    assert(actor.frame_countdown == 5);
+
+    desc.num = 2;
+    actor.frame = 1;
+    actor.frame_countdown = 0;
+    assert(gb_actor_npc_frame_for_draw(&actor) == 2);
+    assert(actor.frame_countdown == 20); /* 5 * trunc(8 / 2) */
+
+    desc.num = 1;
+    actor.frame = 1;
+    actor.frame_countdown = 0;
+    assert(gb_actor_npc_frame_for_draw(&actor) == 1);
+    assert(actor.frame_countdown == 40);
+
+    /* Runtime actor+0x4E == 1 returns before draw-side counters mutate. */
+    desc.legs_color = 1;
+    actor.visual_legs_color = 1;
+    desc.num = 6;
+    actor.frame = 4;
+    actor.frame_countdown = 3;
+    assert(gb_actor_npc_frame_for_draw(&actor) == 0);
+    assert(actor.frame == 4);
+    assert(actor.frame_countdown == 3);
+
+    return 0;
+}
+"""
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8;
+typedef int8_t s8;
+typedef uint16_t u16;
+typedef int16_t s16;
+typedef uint32_t u32;
+typedef int32_t s32;
+#define KEY_A (1u << 0)
+#define KEY_B (1u << 1)
+#define KEY_RIGHT (1u << 4)
+#define KEY_LEFT (1u << 5)
+#define KEY_UP (1u << 6)
+#define KEY_DOWN (1u << 7)
+#endif
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'npc_animation_test.c').write_text(harness, encoding='utf-8')
+            exe = td / 'npc_animation_test'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(td / 'npc_animation_test.c'), '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            subprocess.run([str(exe)], check=True, cwd=ROOT)
+
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        self.assertIn('gb_actor_npc_frame_for_draw(actor)', video)
+        self.assertIn('GB_ACTOR_MAX_FRAMES', video)
+        self.assertIn('static int gb_actor_npc_visual_index', video)
+        self.assertIn('gb_actor_visuals[i].legs_color == actor->visual_legs_color', video)
+        self.assertIn('gb_actor_visuals[i].subtype == actor->descriptor->subtype', video)
+
     def test_actor_runtime_population_routes_and_interaction_events(self):
         harness = r"""
 #include <assert.h>
@@ -671,7 +1046,11 @@ static void one_actor(GbActorSystem* system, const GbActorDescriptor* desc)
 
 int main(void)
 {
-    GbLevelAssets level = { 0 };
+    static const u16 empty_collision[128 * 128] = { 0 };
+    GbLevelAssets level = {
+        .world_width_tiles = 128, .world_height_tiles = 128,
+        .collision = empty_collision
+    };
     GbActorSystem system;
     GbInteractionEvent event;
     GbInput none = { 0, 0 };
@@ -710,14 +1089,25 @@ int main(void)
     const s32 before_x = route_actor->fixed_x;
     const s32 before_y = route_actor->fixed_y;
     gb_actor_system_update(&system, &player, &none, &event);
-    assert(route_actor->fixed_x == before_x + GB_ACTOR_ROUTE_SPEED_FIXED);
-    assert(route_actor->fixed_y == before_y + GB_ACTOR_ROUTE_SPEED_FIXED);
+    /* State 3 is a one-frame pipeline: resolve the old request first, then
+       queue the route request used on the following update. */
+    assert(route_actor->fixed_x == before_x);
+    assert(route_actor->fixed_y == before_y);
+    assert(route_actor->request_x_fixed == GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->request_y_fixed == GB_ACTOR_ROUTE_SPEED_FIXED);
     assert(route_actor->facing_right == 1);
     assert(event.type == GB_INTERACTION_NONE);
+    gb_actor_system_update(&system, &player, &none, &event);
+    assert(route_actor->fixed_x == before_x + GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->fixed_y == before_y + GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->request_x_fixed == GB_ACTOR_ROUTE_SPEED_FIXED);
+    assert(route_actor->request_y_fixed == GB_ACTOR_ROUTE_SPEED_FIXED);
 
     route_actor->waypoint_index = 5;
     route_actor->fixed_x = ((s32)gb_actor_routes[0][5].x) << 11;
     route_actor->fixed_y = ((s32)gb_actor_routes[0][5].y) << 11;
+    route_actor->request_x_fixed = 0;
+    route_actor->request_y_fixed = 0;
     gb_actor_system_update(&system, &player, &none, &event);
     assert(route_actor->waypoint_index == 0);
 
@@ -817,6 +1207,7 @@ typedef int32_t s32;
                 'cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/game/actors.c'),
+                str(ROOT / 'reconstruction/source/engine/collision.c'),
                 str(ROOT / 'reconstruction/data/actor_data.c'),
                 str(ROOT / 'reconstruction/data/actor_routes.c'),
                 str(td / 'actor_runtime_test.c'), '-o', str(exe),
@@ -1653,6 +2044,16 @@ int main(void)
     const s16 blocked_x = player.x;
     gb_player_update(&player, &blocked, &right);
     assert(player.x == blocked_x);
+
+    /* Preserve the pre-refactor wrapper contract: an unavailable collision
+       level is a complete no-op, including the cached pixel anchor. */
+    player.x = 123;
+    player.y = 124;
+    player.x_fixed = 999 << 8;
+    player.y_fixed = 998 << 8;
+    gb_collision_apply_player_motion(0, &player);
+    assert(player.x == 123);
+    assert(player.y == 124);
     return 0;
 }
 """
@@ -1890,7 +2291,15 @@ int main(void)
     assert(player.animation_frame == 1);
     assert(player.animation_countdown == 5);
     assert(player.facing_right == 0);
+    assert(player.idle_selector == 0);
     assert(gb_player_frame_index(&player) == 12);
+    player.idle_selector = 1;
+    player.animation_frame = 1;
+    assert(gb_player_frame_index(&player) == 16);
+    player.animation_frame = 8;
+    assert(gb_player_frame_index(&player) == 23);
+    player.idle_selector = 0;
+    player.animation_frame = 1;
 
     GbInput right = { .held = KEY_RIGHT, .pressed = KEY_RIGHT };
     for(int i = 0; i < 6; ++i)

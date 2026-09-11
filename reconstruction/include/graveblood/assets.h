@@ -126,6 +126,7 @@ typedef struct {
     u16 fixed_height_tiles;
     s16 spawn_x;
     s16 spawn_y;
+    u8 player_idle_selector;
     u16 bg_tile_halfwords;
     u16 translation_count;
     const u16* bg_palette;
@@ -163,7 +164,8 @@ enum {
     GB_ACTOR_STORY_DESCRIPTOR_COUNT = 16,
     GB_ACTOR_ROUTE_COUNT = 5,
     GB_ACTOR_ROUTE_POINTS = 6,
-    GB_ACTOR_VISUAL_COUNT = 32,
+    GB_ACTOR_VISUAL_COUNT = 34,
+    GB_ACTOR_MAX_FRAMES = 8,
     GB_ACTOR_FRAME_HALFWORDS = 256,
     GB_GRASS_OBJ_HALFWORDS = 128,
     GB_LEAF_FRAME_COUNT = 4,
@@ -218,7 +220,7 @@ extern const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DE
 extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS];
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
 extern const u16 gb_actor_obj_palette[256];
-extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_FRAME_HALFWORDS];
+extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS];
 extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
 extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
 extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
@@ -254,7 +256,7 @@ extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
 extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];
 extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
-enum { GB_PLAYER_FRAME_COUNT = 16 };
+enum { GB_PLAYER_FRAME_COUNT = 24 };
 
 extern const u16 gb_player_obj_palette[16];
 extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];

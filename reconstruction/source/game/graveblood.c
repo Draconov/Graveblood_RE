@@ -28,6 +28,9 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
 
     gb_world_load(world, assets);
     gb_player_spawn(player, assets->spawn_x, assets->spawn_y);
+    /* GameplayScene's activation path (0x08005CFC..0x08005D06) copies
+       current LevelRecord+0x3C to Player+0x1E0 before active rendering. */
+    player->idle_selector = assets->player_idle_selector;
     if(level_id == 10 && saved_script_mode == 5)
     {
         player->script_mode = saved_script_mode;

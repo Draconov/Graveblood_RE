@@ -36,6 +36,9 @@ typedef struct {
     s8 facing_x;
     s8 facing_y;
     u8 facing_right;
+    /* Original Player+0x1E0. Gameplay-scene activation copies the current
+       LevelRecord+0x3C value here before the first active draw/update. */
+    u8 idle_selector;
     u8 animation_state;
     u8 animation_frame;
     u8 animation_countdown;

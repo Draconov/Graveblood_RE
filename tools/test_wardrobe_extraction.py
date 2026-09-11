@@ -140,6 +140,14 @@ class SpawnFactoryExtractionTests(unittest.TestCase):
         self.assertEqual(by_fact['source_bias_initialized_value']['value'], '0xE00')
         self.assertEqual(by_fact['draw']['value'], '0x0800274C')
         self.assertIn('legsColor*8', by_fact['source_base_formula']['value'])
+        self.assertEqual(by_fact['invisible_legs_color']['value'], '1')
+        self.assertIn('before frame/countdown mutation', by_fact['invisible_legs_color']['evidence'])
+        self.assertEqual(by_fact['frame_field']['value'], 'actor+0x78 (1-based)')
+        self.assertEqual(by_fact['countdown_field']['value'], 'actor+0x7C')
+        self.assertEqual(by_fact['countdown_reload']['value'], '5 * trunc(8 / actor+0x50)')
+        self.assertEqual(by_fact['state3_base_family_field']['value'], 'actor+0xEC')
+        self.assertEqual(by_fact['state3_directional_families']['value'], 'base / base+8 / base+16')
+        self.assertIn('8 / 6 / 6 frames', by_fact['state3_directional_families']['evidence'])
 
 
 class State4ProgressionExtractionTests(unittest.TestCase):
@@ -936,9 +944,14 @@ class NpcInteractionGeometryExtractionTests(unittest.TestCase):
         self.assertEqual(keyed[2]['working_name'], 'dialogue_interaction')
         self.assertIn('4x4', keyed[2]['proven_behavior'])
         self.assertIn('5x5', keyed[2]['proven_behavior'])
+        self.assertEqual(keyed[3]['working_name'], 'route_follow')
+        self.assertIn('queued', keyed[3]['proven_behavior'])
+        self.assertIn('shared collision', keyed[3]['proven_behavior'])
+        self.assertIn('base+8', keyed[3]['proven_behavior'])
+        self.assertIn('base+16', keyed[3]['proven_behavior'])
         self.assertEqual(keyed[4]['working_name'], 'collection_interaction')
         self.assertIn('4x4', keyed[4]['proven_behavior'])
-        self.assertTrue(all(keyed[state]['confidence'] == 'high' for state in (1, 2, 4)))
+        self.assertTrue(all(keyed[state]['confidence'] == 'high' for state in (1, 2, 3, 4)))
 
 
     def test_npc_fixed8_storage_route_cells_and_special_movers_are_code_backed(self):
@@ -968,6 +981,17 @@ class NpcInteractionGeometryExtractionTests(unittest.TestCase):
         self.assertTrue(all(r['proximity_radius_pixels'] == 32 for r in mover112))
         self.assertTrue(all(r['activation_sfx'] == 9 for r in mover112))
         self.assertTrue(all(r['movement'] == 'x += 600*turn - 300; y -= 250' for r in mover112))
+
+    def test_player_level_idle_selector_is_copied_from_level_record(self):
+        self.assertTrue(hasattr(mod, 'extract_player_level_idle_selector'))
+        rows = mod.extract_player_level_idle_selector(self.data)
+        self.assertEqual(list(range(11)), [row['level'] for row in rows])
+        self.assertEqual([1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1],
+                         [row['idle_selector'] for row in rows])
+        self.assertTrue(all(row['record_field'] == '+0x3C' for row in rows))
+        self.assertTrue(all(row['player_field'] == '+0x1E0' for row in rows))
+        self.assertTrue(all(row['store_addr'] == '0x08005D06' for row in rows))
+        self.assertTrue(all(row['confidence'] == 'high' for row in rows))
 
     def test_player_motion_collision_contract_is_code_backed(self):
         self.assertTrue(hasattr(mod, 'extract_player_motion_collision_contract'))

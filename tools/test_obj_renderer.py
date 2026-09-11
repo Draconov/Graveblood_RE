@@ -115,6 +115,10 @@ class ObjRendererTests(unittest.TestCase):
             sources['idle_sequence'],
             (3468, 3470, 3532, 3534, 3534, 3532, 3470, 3468),
         )
+        self.assertEqual(
+            sources['idle_selector1'],
+            (3392, 3394, 3396, 3398, 3400, 3402, 3404, 3406),
+        )
 
     def test_default_player_animation_has_sixteen_unique_packed_frames(self):
         sources = mod.player_animation_source_bases(15)
