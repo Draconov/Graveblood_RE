@@ -211,26 +211,35 @@ The same gate cross-compiles every checked-in reconstruction C unit plus both `.
 
 ## 7. GitHub Actions
 
-`.github/workflows/build-release-rom.yml` is intentionally release-only. It runs only for tags matching:
+`.github/workflows/build-release-rom.yml` validates ordinary development pushes again. A normal branch push or pull request runs the ROM-independent CI regression gate, builds the normal game cartridge with the pinned devkitARM image, and validates the resulting ROM header. These CI runs publish no downloadable artifact and cannot write GitHub Releases. The deeper ROM-backed parity suites still require the canonical reference demo via `GRAVEBLOOD_ROM` and therefore remain a local/reference-ROM gate rather than a clean-runner dependency.
+
+Development-release tags matching:
 
 ```text
 Graveblood_RE_v*-dev
 ```
 
-The workflow uses the pinned builder:
+run the same regression gate and normal-ROM build/validation, then publish the versioned cartridge to the GitHub Release. The workflow uses the pinned builder:
 
 ```text
 devkitpro/devkitarm:20260610
 ```
 
-and builds only the normal game cartridge:
+The common verification commands are:
 
 ```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+  tools.test_reconstruction_build \
+  tools.test_gba_rom_validation \
+  tools.test_device_selftest \
+  tools.test_hardware_address_runtime \
+  tools.test_mgba_selftest \
+  tools.test_mgba_smoke -v
 make -C reconstruction -j"$(nproc)"
 python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
 ```
 
-No Actions artifact, checksum asset, self-test cartridge, device-test cartridge, mGBA screenshot, or extra validation job is published by this workflow. The diagnostic test suites and optional self-test/device-test build paths remain in the repository for manual/local validation, but they are deliberately separate from the release publication path.
+No Actions artifact, checksum asset, self-test cartridge, device-test cartridge, mGBA screenshot, or extra published validation output is produced. The diagnostic self-test/device-test build paths remain in the repository for manual/local validation. Only the tag job receives `contents: write`; branch/PR verification stays read-only.
 
 ## 8. Development release tags
 

@@ -264,16 +264,33 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertNotIn('path: vendor/butano', text)
         self.assertNotIn('LIBBUTANO', text)
 
-    def test_workflow_releases_only_version_tags(self):
+    def test_workflow_builds_branch_pushes_and_prs_but_publishes_only_version_tags(self):
         text = (ROOT / '.github/workflows/build-release-rom.yml').read_text(encoding='utf-8')
+        self.assertIn('branches:', text)
+        self.assertIn("- '**'", text)
         self.assertIn("- 'Graveblood_RE_v*-dev'", text)
-        self.assertNotIn('pull_request:', text)
+        self.assertIn('pull_request:', text)
         self.assertNotIn('workflow_dispatch:', text)
+        self.assertIn('verify:', text)
+        self.assertIn('Build and validate ROM', text)
+        self.assertIn("!startsWith(github.ref, 'refs/tags/')", text)
+        self.assertIn("startsWith(github.ref, 'refs/tags/Graveblood_RE_v')", text)
+        for module in (
+            'tools.test_reconstruction_build',
+            'tools.test_gba_rom_validation',
+            'tools.test_device_selftest',
+            'tools.test_hardware_address_runtime',
+            'tools.test_mgba_selftest',
+            'tools.test_mgba_smoke',
+        ):
+            self.assertIn(module, text)
+        self.assertNotIn('unittest discover', text)
         self.assertIn('Graveblood_RE_v${VERSION}.gba', text)
         self.assertIn('contents: write', text)
         self.assertIn('gh release create', text)
         self.assertIn('gh release upload', text)
         self.assertIn('--clobber', text)
+        self.assertNotIn('actions/upload-artifact', text)
 
     def test_no_obsolete_butano_reference_in_active_build_files(self):
         active = [

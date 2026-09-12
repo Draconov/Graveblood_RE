@@ -127,10 +127,10 @@ void irqDisable(u32 irq);
 
 
 class HardwareValidationWiringTests(unittest.TestCase):
-    def test_release_workflow_does_not_publish_hardware_validation_artifacts(self):
+    def test_workflow_runs_hardware_validation_without_publishing_artifacts(self):
         workflow = (ROOT / ".github/workflows/build-release-rom.yml").read_text(encoding="utf-8")
+        self.assertIn("tools.test_hardware_address_runtime", workflow)
         self.assertNotIn("hardware-address-validation:", workflow)
-        self.assertNotIn("tools.test_hardware_address_runtime", workflow)
         self.assertNotIn("actions/upload-artifact", workflow)
         self.assertTrue((ROOT / "tools/test_hardware_address_runtime.py").is_file())
 

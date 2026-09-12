@@ -1,21 +1,73 @@
-name: Publish Graveblood_RE ROM
+name: Build and release Graveblood_RE ROM
 
 on:
   push:
+    branches:
+      - '**'
     tags:
       - 'Graveblood_RE_v*-dev'
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    name: Build and publish ROM
+  verify:
+    name: Build and validate ROM
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Graveblood_RE
         uses: actions/checkout@v4
+
+      - name: Run reconstruction tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+            tools.test_reconstruction_build \
+            tools.test_gba_rom_validation \
+            tools.test_device_selftest \
+            tools.test_hardware_address_runtime \
+            tools.test_mgba_selftest \
+            tools.test_mgba_smoke -v
+
+      - name: Build and validate ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            devkitpro/devkitarm:20260610 \
+            bash -lc 'make -C reconstruction -j"$(nproc)"'
+
+          test -s reconstruction/Graveblood_RE.gba
+          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
+
+  release:
+    name: Build, validate, and publish ROM
+    if: ${{ startsWith(github.ref, 'refs/tags/Graveblood_RE_v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Graveblood_RE
+        uses: actions/checkout@v4
+
+      - name: Run reconstruction tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+            tools.test_reconstruction_build \
+            tools.test_gba_rom_validation \
+            tools.test_device_selftest \
+            tools.test_hardware_address_runtime \
+            tools.test_mgba_selftest \
+            tools.test_mgba_smoke -v
 
       - name: Build release ROM
         shell: bash
