@@ -211,7 +211,7 @@ The same gate cross-compiles every checked-in reconstruction C unit plus both `.
 
 ## 7. GitHub Actions
 
-`.github/workflows/build-release-rom.yml` validates ordinary development pushes again. A normal branch push or pull request runs the ROM-independent CI regression gate, builds the normal game cartridge with the pinned devkitARM image, and validates the resulting ROM header. These CI runs publish no downloadable artifact and cannot write GitHub Releases. The deeper ROM-backed parity suites still require the canonical reference demo via `GRAVEBLOOD_ROM` and therefore remain a local/reference-ROM gate rather than a clean-runner dependency.
+`.github/workflows/build-release-rom.yml` validates ordinary development pushes and keeps the resulting game ROM available. A normal branch push or pull request runs the ROM-independent CI regression gate, builds the normal game cartridge with the pinned devkitARM image, validates the resulting ROM header, and uploads that validated `Graveblood_RE.gba` as the `Graveblood_RE-rom` Actions artifact for 7 days. Branch/PR CI remains read-only and cannot write GitHub Releases. The deeper ROM-backed parity suites still require the canonical reference demo via `GRAVEBLOOD_ROM` and therefore remain a local/reference-ROM gate rather than a clean-runner dependency.
 
 Development-release tags matching:
 
@@ -219,7 +219,7 @@ Development-release tags matching:
 Graveblood_RE_v*-dev
 ```
 
-run the same regression gate and normal-ROM build/validation, then publish the versioned cartridge to the GitHub Release. The workflow uses the pinned builder:
+use that same build job, then a second publish job downloads the exact validated `Graveblood_RE-rom` artifact and publishes that cartridge to the GitHub Release. The release job does not rebuild the game, so the released bytes are the bytes that passed validation. The workflow uses the pinned builder:
 
 ```text
 devkitpro/devkitarm:20260610
@@ -239,7 +239,7 @@ make -C reconstruction -j"$(nproc)"
 python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
 ```
 
-No Actions artifact, checksum asset, self-test cartridge, device-test cartridge, mGBA screenshot, or extra published validation output is produced. The diagnostic self-test/device-test build paths remain in the repository for manual/local validation. Only the tag job receives `contents: write`; branch/PR verification stays read-only.
+The only Actions artifact is the normal validated game ROM (`Graveblood_RE-rom`); no checksum artifact, self-test cartridge, device-test cartridge, mGBA screenshot, or other diagnostic artifact is uploaded. GitHub Releases still contain exactly one asset: the versioned normal `.gba`. The diagnostic self-test/device-test build paths remain in the repository for manual/local validation. Only the tag publish job receives `contents: write`; branch/PR build/validation stays read-only.
 
 ## 8. Development release tags
 

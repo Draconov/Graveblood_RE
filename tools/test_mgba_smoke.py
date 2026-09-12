@@ -111,7 +111,7 @@ class MgbaWorkflowWiringTests(unittest.TestCase):
         self.assertNotIn("mgba-sdl", workflow)
         self.assertNotIn("tools/run_mgba_smoke.py", workflow)
         self.assertNotIn("xvfb-run", workflow)
-        self.assertNotIn("actions/upload-artifact", workflow)
+        self.assertIn("path: reconstruction/Graveblood_RE.gba", workflow)
 
 
 if __name__ == "__main__":

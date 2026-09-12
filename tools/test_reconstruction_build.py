@@ -255,8 +255,9 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('make -C reconstruction -j"$(nproc)"', text)
         self.assertIn(ROM_NAME, text)
         self.assertIn('docker run --rm', text)
-        self.assertNotIn('actions/upload-artifact@v4', text)
-        self.assertNotIn('actions/download-artifact@v4', text)
+        self.assertIn('actions/upload-artifact@v4', text)
+        self.assertIn('actions/download-artifact@v4', text)
+        self.assertIn('path: reconstruction/Graveblood_RE.gba', text)
         self.assertNotIn('Graveblood_RE_selftest', text)
         self.assertNotIn('Graveblood_RE_device_test', text)
         self.assertNotIn('.sha256', text)
@@ -271,10 +272,14 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn("- 'Graveblood_RE_v*-dev'", text)
         self.assertIn('pull_request:', text)
         self.assertNotIn('workflow_dispatch:', text)
-        self.assertIn('verify:', text)
+        self.assertIn('build:', text)
         self.assertIn('Build and validate ROM', text)
-        self.assertIn("!startsWith(github.ref, 'refs/tags/')", text)
+        self.assertNotIn("!startsWith(github.ref, 'refs/tags/')", text)
         self.assertIn("startsWith(github.ref, 'refs/tags/Graveblood_RE_v')", text)
+        self.assertIn('needs: build', text)
+        self.assertIn('name: Graveblood_RE-rom', text)
+        self.assertIn('actions/upload-artifact@v4', text)
+        self.assertIn('actions/download-artifact@v4', text)
         for module in (
             'tools.test_reconstruction_build',
             'tools.test_gba_rom_validation',
@@ -290,7 +295,8 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('gh release create', text)
         self.assertIn('gh release upload', text)
         self.assertIn('--clobber', text)
-        self.assertNotIn('actions/upload-artifact', text)
+        self.assertEqual(1, text.count('actions/upload-artifact@v4'))
+        self.assertEqual(1, text.count('actions/download-artifact@v4'))
 
     def test_no_obsolete_butano_reference_in_active_build_files(self):
         active = [

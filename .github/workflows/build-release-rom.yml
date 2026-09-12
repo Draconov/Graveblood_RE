@@ -12,9 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  build:
     name: Build and validate ROM
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -46,41 +45,28 @@ jobs:
           test -s reconstruction/Graveblood_RE.gba
           python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
 
+      - name: Upload validated ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: Graveblood_RE-rom
+          path: reconstruction/Graveblood_RE.gba
+          if-no-files-found: error
+          retention-days: 7
+
   release:
-    name: Build, validate, and publish ROM
+    name: Publish validated ROM
+    needs: build
     if: ${{ startsWith(github.ref, 'refs/tags/Graveblood_RE_v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout Graveblood_RE
-        uses: actions/checkout@v4
-
-      - name: Run reconstruction tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
-            tools.test_reconstruction_build \
-            tools.test_gba_rom_validation \
-            tools.test_device_selftest \
-            tools.test_hardware_address_runtime \
-            tools.test_mgba_selftest \
-            tools.test_mgba_smoke -v
-
-      - name: Build release ROM
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace \
-            devkitpro/devkitarm:20260610 \
-            bash -lc 'make -C reconstruction -j"$(nproc)"'
-
-          test -s reconstruction/Graveblood_RE.gba
-          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
+      - name: Download validated ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: Graveblood_RE-rom
+          path: release-input
 
       - name: Publish ROM release
         shell: bash
@@ -96,9 +82,11 @@ jobs:
             exit 1
           fi
 
+          test -s release-input/Graveblood_RE.gba
+
           VERSION="${BASH_REMATCH[1]}"
           ROM_NAME="Graveblood_RE_v${VERSION}.gba"
-          cp reconstruction/Graveblood_RE.gba "$ROM_NAME"
+          cp release-input/Graveblood_RE.gba "$ROM_NAME"
 
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" \

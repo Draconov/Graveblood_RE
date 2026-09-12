@@ -131,7 +131,8 @@ class HardwareValidationWiringTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/build-release-rom.yml").read_text(encoding="utf-8")
         self.assertIn("tools.test_hardware_address_runtime", workflow)
         self.assertNotIn("hardware-address-validation:", workflow)
-        self.assertNotIn("actions/upload-artifact", workflow)
+        self.assertIn("actions/upload-artifact@v4", workflow)
+        self.assertIn("path: reconstruction/Graveblood_RE.gba", workflow)
         self.assertTrue((ROOT / "tools/test_hardware_address_runtime.py").is_file())
 
 

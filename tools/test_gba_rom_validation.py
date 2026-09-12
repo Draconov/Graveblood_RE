@@ -65,10 +65,12 @@ class GbaRomValidationTests(unittest.TestCase):
     def test_build_workflow_validates_rom_before_upload(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         validator_pos = workflow.find("tools/validate_gba_rom.py")
-        upload_pos = workflow.find("gh release upload")
+        artifact_pos = workflow.find("actions/upload-artifact@v4")
+        release_upload_pos = workflow.find("gh release upload")
         self.assertGreaterEqual(validator_pos, 0)
-        self.assertGreater(upload_pos, validator_pos)
-        self.assertNotIn("actions/upload-artifact", workflow)
+        self.assertGreater(artifact_pos, validator_pos)
+        self.assertGreater(release_upload_pos, artifact_pos)
+        self.assertIn("path: reconstruction/Graveblood_RE.gba", workflow)
 
 
 if __name__ == "__main__":

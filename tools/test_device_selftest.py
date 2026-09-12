@@ -86,7 +86,7 @@ class DeviceSelftestTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/build-release-rom.yml").read_text(encoding="utf-8")
         self.assertNotIn("Graveblood_RE_device_test", workflow)
         self.assertNotIn("GB_DEVICE_SELFTEST", workflow)
-        self.assertNotIn("actions/upload-artifact", workflow)
+        self.assertIn("path: reconstruction/Graveblood_RE.gba", workflow)
 
     def test_device_selftest_source_compiles_for_arm7tdmi_thumb(self):
         clang = shutil.which("clang")
