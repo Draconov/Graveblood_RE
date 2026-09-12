@@ -56,4 +56,4 @@ dial_index,step,record_addr,record_rom_offset,speaker,text,opcode,argument,opcod
 6,1,0x08011628,0x00011628,,,-4,6,normal context: set story/progression stage 0x030006AC to argument; state-4 pickup context overrides this opcode
 6,2,0x080116B8,0x000116B8,Vika,...,0,2,normal context: dialogue/content record; argument consumed by generic handler
 6,3,0x08011748,0x00011748,Vika,What in the world is this?,0,2,normal context: dialogue/content record; argument consumed by generic handler
-6,4,0x080117D8,0x000117D8,,,-5,6,normal context: generic record-action fallback calls 0x08005720(argument); state-4 pickup context overrides this opcode
+6,4,0x080117D8,0x000117D8,,,-5,6,"normal context: latent OBJ graphics-bank load via 0x08005720(argument), dormant from canonical state-2 selectors; state-4 pickup context overrides this opcode"

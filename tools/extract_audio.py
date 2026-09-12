@@ -53,6 +53,12 @@ DISASM_RANGES = (
     ('audio_interaction_confirm_08009C80.txt', 0x9C80, 0x90),
     ('audio_effect_sfx4_constructor_0800B250.txt', 0xB250, 0x70),
     ('audio_effect_sfx3_constructor_0800B31C.txt', 0xB31C, 0x90),
+    ('effect_object_sfx4_update_0800AEA8.txt', 0xAEA8, 0xD0),
+    ('effect_object_sfx4_draw_0800ABCC.txt', 0xABCC, 0x50),
+    ('effect_object_sfx3_update_0800ABBC.txt', 0xABBC, 0x10),
+    ('effect_object_sfx3_draw_0800AC88.txt', 0xAC88, 0x220),
+    ('effect_object_npc_hit_callback_080026E8.txt', 0x26E8, 0x60),
+    ('effect_object_player_hit_callback_080060C4.txt', 0x60C4, 0x60),
 )
 
 IWRAM_DATA_ROM = 0x08A8D738
@@ -93,6 +99,183 @@ def scan_calls(rom: bytes, target: int, limit: int | None = None) -> list[int]:
         if decode_bl_target(rom, off) == target:
             result.append(ROM_BASE + off)
     return result
+
+
+def decode_short_branch_target(rom: bytes, off: int) -> int | None:
+    """Decode Thumb-1 conditional/unconditional short branches."""
+    if off + 2 > len(rom):
+        return None
+    hw = struct.unpack_from('<H', rom, off)[0]
+    if (hw & 0xF800) == 0xE000:  # B imm11
+        raw = (hw & 0x07FF) << 1
+        if raw & 0x800:
+            raw -= 0x1000
+        return ROM_BASE + off + 4 + raw
+    if (hw & 0xF000) == 0xD000 and (hw & 0x0F00) < 0x0E00:  # B<cond> imm8
+        raw = (hw & 0x00FF) << 1
+        if raw & 0x100:
+            raw -= 0x200
+        return ROM_BASE + off + 4 + raw
+    return None
+
+
+def scan_direct_transfers(rom: bytes, target: int, limit: int = 0x200000) -> list[tuple[int, str]]:
+    result: list[tuple[int, str]] = []
+    stop = min(limit, len(rom) - 3)
+    for off in range(0, stop, 2):
+        if decode_bl_target(rom, off) == target:
+            result.append((ROM_BASE + off, 'BL'))
+            continue
+        if decode_short_branch_target(rom, off) == target:
+            result.append((ROM_BASE + off, 'B'))
+    return result
+
+
+def find_u32_pointer_refs(rom: bytes, values: tuple[int, ...], limit: int | None = None) -> list[int]:
+    stop = len(rom) if limit is None else min(limit, len(rom))
+    result: list[int] = []
+    needles = {struct.pack('<I', value) for value in values}
+    for off in range(0, stop - 3):
+        if rom[off:off + 4] in needles:
+            result.append(ROM_BASE + off)
+    return result
+
+
+def expect_halfwords(rom: bytes, address: int, values: tuple[int, ...], label: str) -> None:
+    off = address - ROM_BASE
+    actual = struct.unpack_from(f'<{len(values)}H', rom, off)
+    if actual != values:
+        raise SystemExit(
+            f'{label} ROM guard drifted at 0x{address:08X}: '
+            f'expected {[hex(v) for v in values]} got {[hex(v) for v in actual]}'
+        )
+
+
+def build_effect_object_rows(rom: bytes) -> tuple[list[list[object]], list[list[object]]]:
+    """Recover the two SFX3/SFX4 effect classes and close their static roots."""
+    # Vtable slots 3/4 are update/draw.  The pointers are Thumb-tagged.
+    for vtable, update, draw, label in (
+        (0x08A8C198, 0x0800AEA8, 0x0800ABCC, 'SFX4 projectile'),
+        (0x08A8C1E8, 0x0800ABBC, 0x0800AC88, 'SFX3 burst'),
+    ):
+        off = vtable - ROM_BASE
+        got_update = struct.unpack_from('<I', rom, off + 0x0C)[0] & ~1
+        got_draw = struct.unpack_from('<I', rom, off + 0x10)[0] & ~1
+        if (got_update, got_draw) != (update, draw):
+            raise SystemExit(
+                f'{label} vtable drifted: update=0x{got_update:08X} draw=0x{got_draw:08X}'
+            )
+
+    # Constructor/update/draw guards for the fields summarized below.
+    expect_halfwords(rom, 0x0800B296, (0x6125, 0x6165), 'SFX4 1x1 collision size')
+    expect_halfwords(rom, 0x0800B27A, (0x23A0,), 'SFX4 range seed')
+    expect_halfwords(rom, 0x0800B290, (0x01DB,), 'SFX4 range shift')
+    expect_halfwords(rom, 0x0800B29A, (0x60A1, 0x60E2), 'SFX4 input position stores')
+    expect_halfwords(rom, 0x0800B29E, (0x6523,), 'SFX4 range store')
+    expect_halfwords(rom, 0x0800B2A2, (0x2150, 0x2004), 'SFX4 audio args')
+    if decode_bl_target(rom, 0xB2A6) != 0x08001B74:
+        raise SystemExit('SFX4 constructor audio call drifted')
+    expect_halfwords(rom, 0x0800AED0, (0x428A, 0xDB1B), 'SFX4 max-axis budget compare')
+    expect_halfwords(rom, 0x0800AF68, (0x213C,), 'SFX4 hit argument')
+    expect_halfwords(rom, 0x0800AF00, (0x2301, 0x62E3), 'SFX4 object-hit immediate removal')
+    if decode_bl_target(rom, 0xAF6A) != 0x0800B3F0:
+        raise SystemExit('SFX4 hit virtual dispatch drifted')
+    expect_halfwords(rom, 0x0800AF5E, (0x3B01, 0x6503, 0x330A, 0xDBCC), 'SFX4 terminal countdown')
+    expect_halfwords(rom, 0x0800ABD8, (0x2293, 0x0052), 'SFX4 active tile')
+    expect_halfwords(rom, 0x0800AC0E, (0x2292, 0x0052), 'SFX4 terminal tile')
+    expect_halfwords(rom, 0x0800AC00, (0x2301, 0x9300), 'SFX4 draw priority')
+
+    expect_halfwords(rom, 0x0800B350, (0x2080, 0x0180, 0x6120, 0x6160), 'SFX3 32x32 size')
+    expect_halfwords(rom, 0x0800B358, (0x4823, 0x4684, 0x4461, 0x60A1), 'SFX3 -16X position store')
+    if struct.unpack_from('<I', rom, 0xB3E8)[0] != 0xFFFFF000:
+        raise SystemExit('SFX3 -0x1000 X offset literal drifted')
+    expect_halfwords(rom, 0x0800B36E, (0x2301, 0x4462, 0x425B, 0x60E2, 0x6223), 'SFX3 +16Y and counter -1')
+    expect_halfwords(rom, 0x0800B378, (0x2201, 0x2150, 0x2003), 'SFX3 audio args')
+    if decode_bl_target(rom, 0xB37E) != 0x08001B74:
+        raise SystemExit('SFX3 constructor audio call drifted')
+    expect_halfwords(rom, 0x0800B382, (0x9B0B, 0x2B00, 0xDD25), 'SFX3 optional propagation gate')
+    expect_halfwords(rom, 0x0800ABBC, (0x6A03, 0x3301, 0x6203, 0x2B1F, 0xDD01, 0x2301, 0x62C3, 0x4770), 'SFX3 lifetime')
+    expect_halfwords(rom, 0x0800AC8C, (0x2207, 0x6A03), 'SFX3 draw phase counter')
+    if [struct.unpack_from('<I', rom, a - ROM_BASE)[0] for a in (0x0800AE98, 0x0800AE9C, 0x0800AEA0, 0x0800AEA4)] != [0x527, 0x52C, 0x92C, 0xD2C]:
+        raise SystemExit('SFX3 mirrored draw constants drifted')
+
+    # Direct constructor roots.  The projectile has no direct control-transfer
+    # or literal pointer root in the executable public-demo image.
+    projectile_transfers = scan_direct_transfers(rom, 0x0800B250)
+    projectile_ptrs = find_u32_pointer_refs(rom, (0x0800B250, 0x0800B251), 0x200000)
+    if projectile_transfers or projectile_ptrs:
+        raise SystemExit(
+            'latent projectile unexpectedly gained a static root: '
+            f'transfers={projectile_transfers} ptrs={[hex(v) for v in projectile_ptrs]}'
+        )
+
+    burst_transfers = scan_direct_transfers(rom, 0x0800B31C)
+    if burst_transfers != [(0x0800272A, 'BL'), (0x080060FC, 'BL')]:
+        raise SystemExit(f'SFX3 burst constructor callers drifted: {burst_transfers!r}')
+    # Both callers pass arg5=1 at [sp] and arg6=0 at [sp,#4].
+    expect_halfwords(rom, 0x0800271A, (0x2300, 0x9301), 'NPC burst propagation arg6=0')
+    expect_halfwords(rom, 0x080060EC, (0x2300, 0x9301), 'Player burst propagation arg6=0')
+
+    npc_hit_ptrs = find_u32_pointer_refs(rom, (0x080026E9,), 0x200000)
+    player_hit_ptrs = find_u32_pointer_refs(rom, (0x080060C5,), 0x200000)
+    if npc_hit_ptrs != [0x08018B1C] or player_hit_ptrs != [0x080196A4]:
+        raise SystemExit(
+            'hit-callback vtable references drifted: '
+            f'NPC={[hex(v) for v in npc_hit_ptrs]} Player={[hex(v) for v in player_hit_ptrs]}'
+        )
+
+    trampoline_calls = scan_calls(rom, 0x0800B3F0, limit=0x200000)
+    slot_dispatch_calls: list[int] = []
+    for call in trampoline_calls:
+        off = call - ROM_BASE
+        # The two hit dispatch paths are the only trampoline callers with an
+        # LDR r3,[r3,#0x1C] in their preceding 0x80-byte control-flow window.
+        if any(struct.unpack_from('<H', rom, p)[0] == 0x69DB
+               for p in range(max(0, off - 0x80), off, 2)):
+            slot_dispatch_calls.append(call)
+    if slot_dispatch_calls != [0x0800AF6A, 0x0800B3C4]:
+        raise SystemExit(f'vtable+0x1C dispatch set drifted: {[hex(v) for v in slot_dispatch_calls]}')
+
+    semantics_rows = [
+        [
+            'latent_projectile', '0x0800B250', '0x08A8C198', '0x0800AEA8', '0x0800ABCC',
+            4, 80, 1, 1, 'x=input_x;y=input_y', '0x5000', '0x126 active;0x124 terminal', 1,
+            'vtable+0x1C', 60,
+            'x+=vx; y+=vy; budget-=max(abs(vx),abs(vy)); object hit calls slot+0x1C; nonzero/out-of-bounds map cell ends flight',
+            'object overlap removes immediately after optional hit callback; map/range termination sets budget=0, then decrement once/update and remove when budget < -10',
+            'high',
+            'constructor/update/draw/vtable instruction guards; exhaustive direct-root scan',
+        ],
+        [
+            'hit_death_burst', '0x0800B31C', '0x08A8C1E8', '0x0800ABBC', '0x0800AC88',
+            3, 80, '0x2000', '0x2000', 'x=input_center_x-0x1000;y=input_center_y+0x1000', -1, '0x127;0x128;0x12A;0x12C', 1,
+            'optional vtable+0x1C propagation', 'constructor arg6',
+            'counter increments once/update; four 8-update phases (0..7,8..15,16..23,24..31); optional overlap propagation only when arg6>0',
+            'remove when counter > 31',
+            'high',
+            'constructor/update/draw/vtable instruction guards; direct caller argument guards',
+        ],
+    ]
+    reachability_rows = [
+        [
+            'latent_projectile_constructor', 'none', 'none', 'none', 'n/a',
+            'no_static_root_in_public_demo',
+            'exhaustive Thumb BL/B/conditional-branch scan and 32-bit constructor/Thumb-pointer scan find no root for 0x0800B250',
+        ],
+        [
+            'hit_death_burst_constructor', '0x0800272A;0x080060FC', 'none',
+            'NPC_hit_callback;Player_hit_callback', 'arg6=0 at both direct call sites',
+            'no_external_root_in_public_demo',
+            'direct constructors exist only inside NPC/Player slot+0x1C hit callbacks; their only recovered dispatch roots are the unrooted projectile and burst optional propagation, while both direct burst spawns disable propagation',
+        ],
+        [
+            'vtable_slot_0x1C_dispatch', '0x0800AF6A;0x0800B3C4', 'n/a',
+            'latent_projectile_update;hit_death_burst_constructor', 'n/a',
+            'closed_static_dispatch_set',
+            'exhaustive calls to shared bx-r3 trampoline 0x0800B3F0: only 0x0800AF6A carries projectile hit slot+0x1C and 0x0800B3C4 carries burst optional propagation slot+0x1C; other callers load vtable+0x04 destructor callbacks',
+        ],
+    ]
+    return semantics_rows, reachability_rows
 
 
 def previous_mov_imm(rom: bytes, call_addr: int, reg: int) -> int | None:
@@ -145,8 +328,8 @@ def format_imm(value: int | None) -> str:
 def build_call_sites(rom: bytes, repo_root: Path) -> list[CallSite]:
     symbols = parse_symbols(repo_root)
     known_one_shot_actions = {
-        0x08002E22: ('state-2 dialogue interaction activation', 'high'),
-        0x08003078: ('state-4 collection interaction activation', 'high'),
+        0x08002E22: ('first state-2 text page when 0x0300062C latch is zero', 'high'),
+        0x08003078: ('first state-4 text page when 0x0300062C latch is zero', 'high'),
         0x0800368E: ('state4 dialogue opcode -2 terminal', 'high'),
         0x08003748: ('state4 dialogue opcode -1 terminal', 'high'),
         0x0800389A: ('state4 dialogue opcode -3 terminal', 'high'),
@@ -161,20 +344,20 @@ def build_call_sites(rom: bytes, repo_root: Path) -> list[CallSite]:
         0x08009904: ('PDA MESSAGES cursor previous (fresh LEFT; cursor 0..3)', 'high'),
         0x0800999E: ('PDA MESSAGES cursor next (fresh RIGHT; cursor 0..3)', 'high'),
         0x08009CCA: ('interaction state-2 return/back (fresh B)', 'high'),
-        0x0800B2A6: ('effect-object constructor 0x0800B250 (vtable 0x08A8C198)', 'high'),
-        0x0800B37E: ('effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4)', 'high'),
+        0x0800B2A6: ('latent projectile constructor; technical role recovered from update/draw (vtable 0x08A8C198)', 'high'),
+        0x0800B37E: ('hit/death burst constructor; technical role recovered from update/draw (vtable 0x08A8C1E8)', 'high'),
         0x08003802: ('final-sketch state4 -5 transition', 'high'),
         0x08003D5C: ('fresh-A generic Fgtile activation for turn != 4/5', 'high'),
         0x08003298: ('legsColor 0x70 NPC proximity latch activation', 'high'),
-        0x080032AC: ('alternate state-2 interaction activation when 0x0300062C mode byte is nonzero', 'high'),
+        0x080032AC: ('subsequent state-2 text page while 0x0300062C latch is nonzero', 'high'),
         0x080032D2: ('normal dialogue opcode -4 set story/progression stage', 'high'),
         0x080033A2: ('normal dialogue opcode -3 add auxiliary message stream', 'high'),
         0x08003462: ('normal dialogue opcode -2 set primary message stream', 'high'),
         0x08003516: ('normal dialogue opcode -1 set dialogue step', 'high'),
-        0x08003668: ('alternate state-4 interaction activation when 0x0300062C mode byte is nonzero', 'high'),
+        0x08003668: ('subsequent state-4 text page while 0x0300062C latch is nonzero', 'high'),
         0x08009AA2: ('FRIENDS DOWN-at-bottom boundary feedback', 'high'),
         0x08009B58: ('FRIENDS UP-at-top boundary feedback', 'high'),
-        0x08009C16: ('fresh R Player action/state-reset path', 'high'),
+        0x08009C16: ('fresh R bicycle action while shared ride mode 0x030005F4 == 2', 'high'),
     }
     sites: list[CallSite] = []
     for target, kind in ((0x08001B74, 'one-shot'), (0x08001BDC, 'loop')):
@@ -348,6 +531,20 @@ def extract(rom_path: Path, repo_root: Path) -> None:
         [[len(one_shot_sites), len(one_shot_high), len(one_shot_medium),
           ';'.join(str(v) for v in reachable_one_shot_ids), 'yes',
           'exhaustive full-ROM Thumb BL scan to 0x08001B74; every recovered call has code-bounded action semantics']],
+    )
+
+    effect_semantics, effect_reachability = build_effect_object_rows(rom)
+    write_csv(
+        repo_root / 'data' / 'effect_object_semantics.csv',
+        ['effect_role', 'constructor', 'vtable', 'update', 'draw', 'sfx_id', 'sfx_volume',
+         'width_fixed8', 'height_fixed8', 'position_init', 'initial_timer_or_budget', 'draw_tiles', 'obj_priority',
+         'hit_callback', 'hit_argument', 'update_contract', 'terminal_rule', 'confidence', 'evidence'],
+        effect_semantics,
+    )
+    write_csv(
+        repo_root / 'data' / 'effect_object_reachability.csv',
+        ['subject', 'direct_bl_callers', 'literal_pointer_references', 'roots', 'propagation', 'status', 'evidence'],
+        effect_reachability,
     )
 
     loop_calls = [s.address for s in sites if s.target == 0x08001BDC]

@@ -1,0 +1,3 @@
+target_name,target_address,exact_literal_occurrences,candidate_literal_load_roots,write_sites,non_player_update_write_sites,largest_proven_written_value_from_zero_seed,non_final_handler_write_sites,closure_result,confidence
+ending_effect_argument_state,0x03000674,0,56,0x080081D0;0x080088AA,none,0,,no seed above 1000 found,high
+ending_event_active_flag,0x03000678,1,57,0x0800380A,,,none,only final-sketch handler can set flag after boot,high

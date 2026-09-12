@@ -19,5 +19,8 @@ normal_screen_anchor,x=PlayerX-cameraX; y=PlayerY-cameraY-16/-32,0x080066B6..0x0
 normal_priority,2,0x080066D6 loads 2 and stores it to OAM priority argument for both normal Player cells
 alternate_idle_countdown_reset,5,0x08008382..0x08008392 overwrites state-8 reset with 5 when Player+0x1E0 != 0
 monster_priority,2,0x080068CA seeds priority 2 before the fifth-sketch monster OAM sequence
-level9_fixed_composite,"32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2",Player_draw Level 9 branch 0x08006C18 plus shared lower-row tail 0x08006BAA
-level10_fixed_composite,"32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2",Player_draw Level 10 branch 0x08006B6A..0x08006BDA
+bicycle_mode_global,0x030005F4; riding mode == 2,Player_draw 0x0800661C reads literal 0x08006960 and compares value to 2
+bicycle_frame_offsets,"0,4,8,0x50,0x54,0x58",six-word frame-offset table at 0x08019968 consumed by Player_draw riding path
+bicycle_riding_composite,six frames; five 16x16 8bpp sprites; priority 2,Player_draw riding path 0x08006736 onward performs five dynamic OBJ uploads/submits after the mode-2 gate
+level9_parked_bicycle_composite,"32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2; hidden while bicycle mode == 2",mode-2 gate at 0x0800661C skips Level-9 branch 0x08006C18; shared lower-row tail 0x08006BAA
+level10_parked_bicycle_composite,"32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2; hidden while bicycle mode == 2",mode-2 gate at 0x0800661C skips Level-10 branch 0x08006B6A..0x08006BDA

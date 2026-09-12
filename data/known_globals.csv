@@ -23,7 +23,7 @@ address,name,evidence
 0x03001044,leaf_emitter_x_offset_table,"six startup-initialized offsets 350,250,170,0,340,290"
 0x0300106C,leaf_emitter_y_offset_table,"six startup-initialized offsets 40,60,80,30,20,50"
 0x03001B4C,leaf_particle_frame_tile_table,"four startup-initialized logical OBJ tiles 0x4C,0x4D,0x5C,0x5D"
-0x03000674,ending_effect_argument_state_candidate,Player_update compares this state to 1000: <=1000 resets to 0; >1000 increments by 20; when 0x03000678==1 the resulting value is fed to 0x08004FE0
+0x03000674,ending_effect_argument_state,"startup zeroes this state; Player_update compares it to 1000: <=1000 resets to 0 and >1000 increments by 20, but exhaustive executable alias-write closure finds no seed above 1000, making that high branch unreachable from normal boot; while 0x03000678==1 the reachable resulting value 0 is fed to 0x08004FE0"
 0x03000678,ending_event_active_flag,set to 1 by state-4 final-sketch opcode -5 handler 0x080037F6; monitored by gameplay update
 0x030006AC,story_progression_stage,written by normal-context dialogue opcode -4; consumed as stage index by Messages UI; state-4 pickup -4 does not write it
 0x030006BC,keys_current,inverted KEYINPUT mask

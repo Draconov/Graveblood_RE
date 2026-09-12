@@ -31,6 +31,18 @@ static void gb_story_clear_social(GbStoryRuntime* story)
     story->social.response_text = 0;
 }
 
+static void gb_story_queue_sfx(GbStoryRuntime* story, s8 sound_id)
+{
+    if(story->pending_sfx_count >= GB_STORY_SFX_QUEUE_CAPACITY)
+    {
+        return;
+    }
+    const u8 tail = (u8)((story->pending_sfx_head + story->pending_sfx_count) %
+                         GB_STORY_SFX_QUEUE_CAPACITY);
+    story->pending_sfx[tail] = sound_id;
+    ++story->pending_sfx_count;
+}
+
 void gb_story_init(GbStoryRuntime* story)
 {
     story->state.collection_progress = 0;
@@ -58,7 +70,12 @@ void gb_story_init(GbStoryRuntime* story)
     gb_story_clear_social(story);
     story->generic_record_action_pending = 0;
     story->generic_record_action_argument = 0;
-    story->pending_sfx = -1;
+    for(u8 i = 0; i < GB_STORY_SFX_QUEUE_CAPACITY; ++i)
+    {
+        story->pending_sfx[i] = -1;
+    }
+    story->pending_sfx_head = 0;
+    story->pending_sfx_count = 0;
     story->response_rng_state = 1ULL;
 }
 
@@ -153,6 +170,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         {
             if(record->opcode == -1)
             {
+                gb_story_queue_sfx(story, 7);
                 if(story->dialogue.actor_index < actors->count)
                 {
                     actors->actors[story->dialogue.actor_index].dialogue_step = record->argument;
@@ -162,18 +180,21 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
             }
             if(record->opcode == -2)
             {
+                gb_story_queue_sfx(story, 7);
                 story->state.primary_message_stream = (s8)record->argument;
                 ++story->dialogue.step;
                 continue;
             }
             if(record->opcode == -3)
             {
+                gb_story_queue_sfx(story, 7);
                 gb_story_insert_auxiliary(story, record->argument);
                 ++story->dialogue.step;
                 continue;
             }
             if(record->opcode == -4)
             {
+                gb_story_queue_sfx(story, 7);
                 story->state.story_stage = record->argument;
                 ++story->dialogue.step;
                 continue;
@@ -195,7 +216,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
             {
                 actors->actors[story->dialogue.actor_index].dialogue_step = record->argument;
             }
-            story->pending_sfx = 7;
+            gb_story_queue_sfx(story, 7);
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
             gb_story_clear_dialogue(story);
@@ -204,7 +225,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         if(record->opcode == -2)
         {
             story->state.primary_message_stream = (s8)record->argument;
-            story->pending_sfx = 7;
+            gb_story_queue_sfx(story, 7);
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
             gb_story_clear_dialogue(story);
@@ -213,7 +234,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         if(record->opcode == -3)
         {
             gb_story_insert_auxiliary(story, record->argument);
-            story->pending_sfx = 7;
+            gb_story_queue_sfx(story, 7);
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
             gb_story_clear_dialogue(story);
@@ -227,7 +248,7 @@ static void gb_story_process_dialogue(GbStoryRuntime* story, GbActorSystem* acto
         }
         if(record->opcode == -5)
         {
-            story->pending_sfx = 13;
+            gb_story_queue_sfx(story, 13);
             story->state.final_effect_pending = 1;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, story->dialogue.actor_index);
@@ -288,7 +309,11 @@ void gb_story_handle_interaction(GbStoryRuntime* story, GbActorSystem* actors,
         if(gb_story_start_dialogue(story, actors, event->actor_index, event->dial,
                                    GB_DIALOGUE_CONTEXT_NORMAL, step))
         {
-            story->pending_sfx = 3;
+            const GbDialogueScript* script = &gb_dialogue_scripts[event->dial];
+            if(step >= 0 && step < (s16)script->count && script->records[step].opcode == 0)
+            {
+                gb_story_queue_sfx(story, 3);
+            }
         }
         return;
     }
@@ -301,7 +326,6 @@ void gb_story_handle_interaction(GbStoryRuntime* story, GbActorSystem* actors,
         const s8 selector = gb_collection_script_selector[story->state.collection_progress];
         if(selector < 0)
         {
-            story->pending_sfx = 3;
             ++story->state.collection_progress;
             gb_story_consume_actor(story, actors, event->actor_index);
             return;
@@ -309,7 +333,11 @@ void gb_story_handle_interaction(GbStoryRuntime* story, GbActorSystem* actors,
         if(gb_story_start_dialogue(story, actors, event->actor_index, selector,
                                    GB_DIALOGUE_CONTEXT_STATE4_PICKUP, 0))
         {
-            story->pending_sfx = 3;
+            const GbDialogueScript* script = &gb_dialogue_scripts[selector];
+            if(script->count > 0 && script->records[0].opcode == 0)
+            {
+                gb_story_queue_sfx(story, 3);
+            }
         }
         return;
     }
@@ -321,8 +349,14 @@ void gb_story_handle_interaction(GbStoryRuntime* story, GbActorSystem* actors,
 
 int gb_story_take_pending_sfx(GbStoryRuntime* story)
 {
-    const int pending = story->pending_sfx;
-    story->pending_sfx = -1;
+    if(story->pending_sfx_count == 0)
+    {
+        return -1;
+    }
+    const int pending = story->pending_sfx[story->pending_sfx_head];
+    story->pending_sfx[story->pending_sfx_head] = -1;
+    story->pending_sfx_head = (u8)((story->pending_sfx_head + 1) % GB_STORY_SFX_QUEUE_CAPACITY);
+    --story->pending_sfx_count;
     return pending;
 }
 
@@ -546,19 +580,19 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
             story->social.topic_count = 0;
             story->social.followup_armed = 0;
             story->social.response_text = 0;
-            story->pending_sfx = 7;
+            gb_story_queue_sfx(story, 7);
             return;
         }
         if((input->pressed & KEY_UP) && story->social.topic_index > 0)
         {
             --story->social.topic_index;
-            story->pending_sfx = 4;
+            gb_story_queue_sfx(story, 4);
             return;
         }
         if((input->pressed & KEY_DOWN) && story->social.topic_index + 1 < story->social.topic_count)
         {
             ++story->social.topic_index;
-            story->pending_sfx = 4;
+            gb_story_queue_sfx(story, 4);
             return;
         }
         if(input->pressed & KEY_A)
@@ -618,6 +652,11 @@ void gb_story_update(GbStoryRuntime* story, GbActorSystem* actors, const GbInput
         {
             story->dialogue.awaiting_advance = 0;
             ++story->dialogue.step;
+            const GbDialogueRecord* next = gb_story_dialogue_record_mutable(story);
+            if(next && next->opcode == 0)
+            {
+                gb_story_queue_sfx(story, 8);
+            }
             gb_story_process_dialogue(story, actors);
         }
         return;
@@ -702,16 +741,19 @@ GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* lev
         return GB_STORY_GATE_NONE;
     }
 
-    /* Canonical Level-9 Fgtile 0x08386FF0: treetype=20, x~=512.333,
-       y=456, 16x16.  Fgtile_update diverts this object at 0x0800417C
-       before the generic portTo handler; fresh A sends Player+0x394 to
-       0x00020000 (512 px) through 0x080080A4.  The compact clean-room
-       recovered helper queues targetY-currentY into the normal fixed8
-       collision path while preserving X. */
-    if(player->x >= 512 && player->x < 528 &&
-       player->y >= 456 && player->y < 472)
+    /* Canonical Level-9 Fgtile 0x08386FF0 is treetype 20 at x~=512.333,
+       y=456.  Its 0x080040F0 contact solver quantizes Player X from
+       (x_fixed-0x800)>>11 and Player Y from (y_fixed-0x1800)>>11, then
+       accepts the 2x2 grid rooted at actor cells (62,55).  Every accepted
+       orientation reaches fresh-A 0x080041BC, queues target Y=512 through
+       0x080080A4, and stores value 2 to shared ride state 0x030005F4. */
+    const s32 contact_x = (player->x_fixed - 0x800) >> 11;
+    const s32 contact_y = (player->y_fixed - 0x1800) >> 11;
+    if(contact_x >= 62 && contact_x <= 63 &&
+       contact_y >= 55 && contact_y <= 56)
     {
         gb_player_queue_vertical_target(player, 512);
+        player->bicycle_mode = 2;
         return GB_STORY_GATE_TRAVERSED;
     }
 

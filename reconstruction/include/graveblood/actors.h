@@ -85,6 +85,9 @@ void gb_actor_system_init(GbActorSystem* system);
 void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level);
 void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
                             const GbInput* input, GbInteractionEvent* event);
+void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* player,
+                                     const GbInput* input, GbInteractionEvent* event);
+void gb_actor_system_update_physical_npcs(GbActorSystem* system, const GbPlayer* player);
 void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y);
 int gb_actor_npc_should_draw(const GbActor* actor);
 u8 gb_actor_npc_frame_for_draw(GbActor* actor);

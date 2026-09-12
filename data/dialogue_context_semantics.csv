@@ -3,7 +3,7 @@ normal,-1,set dialogue step,actor+0x70,writes record argument to actor+0x70,0x08
 normal,-2,set primary message stream,0x03001814,writes record argument to primary message selector,0x0800345C,high
 normal,-3,add auxiliary message stream,0x03001810/0C/08,writes record argument to first free auxiliary message-selector slot,0x0800339C,high
 normal,-4,set story/progression stage,0x030006AC,writes record argument to story stage consumed by Messages indexing,0x080032C8,high
-normal,-5,generic record action fallback,0x08005720,not specially dispatched; falls through generic path which calls 0x08005720 with the record argument,0x08002F88,high
+normal,-5,latent OBJ graphics-bank load,0x08005720,latent generic path selects a 0x1800-byte ROM graphics bank by record argument and copies 0x1200+0x200 bytes into OBJ VRAM; dormant from canonical state-2 dialogue because the sole -5 record is script 6 and state-2 selectors are only 0..3,0x08002F88,high
 state4_pickup,-1,set dialogue step and consume interaction,actor+0x70,"writes record argument to actor+0x70, increments 0x03000620 and moves entity y to -100",0x08003742,high
 state4_pickup,-2,set primary message stream and consume interaction,0x03001814,"writes record argument to primary selector, increments 0x03000620 and moves entity y to -100",0x08003688,high
 state4_pickup,-3,add auxiliary message stream and consume interaction,0x03001810/0C/08,"uses first-free auxiliary selector policy, increments 0x03000620 and moves entity y to -100",0x08003894,high

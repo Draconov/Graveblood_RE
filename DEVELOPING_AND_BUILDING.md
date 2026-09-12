@@ -58,16 +58,72 @@ The current build is no longer a framebuffer/color smoke test. It boots into the
 - recovered four-background Mode 0 layout (BG0 UI, streamed BG1/BG2 world, quarter-speed BG3 parallax);
 - exact original BG graphics/palettes plus raw streamed world layers and translation tables for all **11 levels / 13 graphics variants**;
 - recovered player spawn points for every level;
-- recovered u16 8-pixel collision grids (`0 = walkable`, nonzero = blocked);
-- hardware OAM player sprite with the recovered 16-frame walk/idle animation set, retained horizontal facing, and right-facing H-flip;
-- 32x32 ring-buffer world streaming with incremental row/column updates as the camera crosses tile boundaries;
-- 33 generic scene-transition edges loadable on fresh A; the four Level-10 turn-4/5 records are handled separately by the rusty-key story gate, while the Level-9 treetype-20 record preserves `portTo=524` only as metadata and executes its recovered fresh-A vertical-target action to Y=512 instead of requesting scene 524; these vertical-target actions queue fixed8 motion through the collision solver rather than teleporting;
+- recovered u16 8-pixel collision grids (`0 = walkable`, nonzero = blocked); Level 6 intentionally reuses ROM array `0x08655CC4` for both LevelRecord `+0x0C` collision and `+0x10` visual-B source data, but the loader copies those fields to distinct globals (`0x03000550` / `0x03000564`) and the collision solver / BG streamer consume them independently;
+- hardware OAM Player sprite with the recovered 24-frame walk/idle animation set (including the level-authored alternate idle bank), retained horizontal facing, and right-facing H-flip;
+- ROM-accurate persistent camera globals with the Player body center held inside the recovered X=96..144 / Y=67..93 pixel dead-zone; camera state survives level loads, then clamps to the 30x20-tile viewport and drives the 32x32 ring-buffer stream with incremental row/column updates; active gameplay keeps tracking and publication as separate phases so the frame starts with camera publish/stream + object draw and only then runs object updates, with Player tracking becoming visible on the next frame; the global phase proof is in `data/gameplay_frame_order.csv`; `data/story_overlay_update_order.csv` proves overlay insertion before the physical list, `data/player_portal_update_order.csv` splits generic portals into 6 pre-Player / 27 post-Player controllers, and `data/player_fgtile_update_order.csv` records the special post-Player Fgtile ordinals;
+- 33 generic scene-transition edges loadable on fresh A; the four Level-10 turn-4/5 records are handled separately by the rusty-key story gate, while the Level-9 treetype-20 record preserves `portTo=524` only as metadata and executes its recovered fresh-A **bicycle mount** over Player anchor bounds x=504..519/y=464..479, queues the Y=512 fixed8 target, and stores shared ride mode `0x030005F4=2` instead of requesting scene 524; these special Fgtile controllers are evaluated **after Player update** because their canonical physical ordinals are post-Player (Level 9 Player index 2 -> treetype-20 index 11; Level 10 Player index 1 -> turn4/5 indices 13..16), so they observe same-frame Player movement and any queued vertical target resolves on the next Player update; Step 17 proves all 92 physical-NPC level references are post-Player and runs canonical physical-NPC motion/proximity after Player; Step 18 proves story overlays are loaded before the physical list and splits generic portal activation around Player according to the six pre-Player / 27 post-Player ROM ordinals;
+- shared Player state `0x030005F4` has dormant original-ROM value-1 draw/update consumers, but public-demo writer closure proves normal boot reaches only values 0 and 2: startup seeds 0, treetype-20 writes 2, scene entry preserves exactly 2 and clears every other value, and the Level-10 mode-5->6 handoff clears it; therefore the clean-room runtime intentionally does not invent a mode-1 entry path;
+- standalone fresh SELECT is code-proven to decrement private `Player+0x1BC` from constructor value 11 down to the guard floor 3 (eight accepted presses), then internally transfer back to the common Player-update continuation; it does not fall through into the neighboring state-12/vector block, and no separate consumer of that counter is proven, so the clean-room runtime intentionally leaves standalone SELECT inert;
 - generated canonical story content: 7 dialogue scripts / 58 records, six message records, Stas/Julia social tables, the original CFA proportional font, and five monster sprites;
+- ROM-proven object ordering around Player: the selected 16-record story-overlay list is loaded before the physical level list, all **92** canonical physical-NPC references are post-Player, and the **33** generic portals split into **6 pre-Player / 27 post-Player** controllers; guarded by `data/story_overlay_update_order.csv`, `data/player_npc_update_order.csv`, and `data/player_portal_update_order.csv`;
 - ROM-proven NPC pre-UI alignment: state-1 social interactions collision-resolve to NPC Y with the exact ±19-pixel side offset, while state-2 dialogue interactions with `legsColor != 1` use the vertical-target helper before dialogue UI opens;
-- a persistent clean-room story runtime that consumes state 1/2/4 interaction events, executes the six-step collection/key progression, persists consumed story pickups across level reloads, renders dialogue/social UI on BG0, keeps social D-pad selection separate from fresh-A confirmation, preserves zero-count leaf entry into state 2 plus the SFX7 fresh-B root return, reproduces the exact recovered shared SUBJECT/CRITICIZE response RNG and pre-dispatch score-mirror ordering, and reproduces the exact reachable argument-0 final VRAM blast (96,000 + 16,000 bytes) while refusing unproved/out-of-range larger arguments.
-- the original 14-entry signed 8-bit PCM bank, played by an eight-channel 16,384 Hz FIFO-A/DMA1 mixer; normal Levels 0–9 use code-proven music ID 0, Level 10 uses music ID 1, music ID 2 is code-proven unreachable/orphaned in the public demo, and the recovered loop lifecycle uses mode 2, volume `0x90`, a reserved channel, and the exact 75-word fade table. High-confidence SFX routing covers accepted state-2/state-4 interactions (3), actual secondary social-topic cursor movement (4), generic scene portals (5), the title START transition (6), state4 terminal dialogue branches (7), and the final-sketch boundary (13).
+- a persistent clean-room story runtime that consumes state 1/2/4 interaction events, executes the six-step collection/key progression, persists consumed story pickups across level reloads, renders dialogue/social UI on BG0, keeps social D-pad selection separate from fresh-A confirmation, preserves zero-count leaf entry into state 2 plus the SFX7 fresh-B root return, reproduces the exact recovered shared SUBJECT/CRITICIZE response RNG and pre-dispatch score-mirror ordering, reproduces the `0x0300062C` dialogue-page latch (first text page SFX3, later text page SFX8, control-record SFX7/13 routing, silent state-4 selector `-1`), preserves multiple same-frame one-shots through an eight-entry FIFO, and reproduces the exact reachable argument-0 final VRAM blast (96,000 + 16,000 bytes) while refusing unproved/out-of-range larger arguments. The normal-context opcode `-5` OBJ-bank loader at `0x08005720` is intentionally not exposed: the sole `-5` record is script 6 / step 4, canonical state-2 actors select only scripts 0–3, and state-4 progress 4 intercepts that record through the dedicated final-sketch handler.
+- the original 14-entry signed 8-bit PCM bank, played by an eight-channel 16,384 Hz FIFO-A/DMA1 mixer; normal Levels 0–9 use code-proven music ID 0, Level 10 uses music ID 1, music ID 2 is code-proven unreachable/orphaned in the public demo, and the recovered loop lifecycle uses mode 2, volume `0x90`, a reserved channel, and the exact 75-word fade table. High-confidence SFX routing now distinguishes first dialogue text pages (3), subsequent dialogue text pages (8), normal/state4 control records (7/13), actual secondary social-topic cursor movement (4), generic scene portals (5), and the title START transition (6).
 
-Open `reconstruction/Graveblood_RE.gba` in **mGBA** or another accurate emulator. Real-hardware testing on a flash cartridge is recommended as the renderer grows.
+Validate the built cartridge header before launching it:
+
+```sh
+python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
+```
+
+Then open `reconstruction/Graveblood_RE.gba` in **mGBA** or another accurate emulator. A bounded boot smoke is available when mGBA is installed:
+
+```sh
+python3 tools/run_mgba_smoke.py reconstruction/Graveblood_RE.gba --seconds 5
+```
+
+On a headless Linux host, run that command under Xvfb (and use dummy SDL audio), matching CI:
+
+```sh
+xvfb-run -a env SDL_AUDIODRIVER=dummy \
+  python3 tools/run_mgba_smoke.py reconstruction/Graveblood_RE.gba --seconds 5
+```
+
+The smoke gate treats an emulator that exits before the window as a failure; reaching the timeout means the Title loop remained alive. For deeper machine-readable emulator validation, build the compile-time self-test cartridge separately:
+
+```sh
+make -C reconstruction \
+  TARGET=Graveblood_RE_selftest \
+  BUILD=build-selftest \
+  EXTRA_CFLAGS=-DGB_EMULATOR_SELFTEST \
+  -j"$(nproc)"
+python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE_selftest.gba
+```
+
+With mGBA installed, the GDB-backed runner boots that cartridge, lets the ARM7TDMI execute, interrupts it through mGBA's remote debugger, and reads a fixed 96-byte report from EWRAM:
+
+```sh
+xvfb-run -a env SDL_AUDIODRIVER=dummy \
+  python3 tools/run_mgba_selftest.py reconstruction/Graveblood_RE_selftest.gba \
+    --seconds 2 --ppu-screenshot dist/mgba-selftest-ppu.png
+```
+
+The self-test ROM uses production Graveblood code to check seven emulator-side contracts: equal-priority Player/NPC OAM ordering and priority bits, two-phase VBlank timing, the Level-9 boundary plus delayed Level-10 scene handoff, the complete Level-10 scripted entrance on the real collision map, far-right Level-9 leaf emission, the ending-effect VRAM payload/bounds, and Timer1 audio cadence. The audio check now counts interrupts across 60 real VBlanks and requires 63–66 Timer1 IRQs, matching the recovered 64 Hz count-up timer rather than merely proving that one interrupt occurred.
+
+When `--ppu-screenshot` is supplied, the cartridge then leaves a controlled production-renderer overlap fixture on screen. The runner resumes mGBA, requests mGBA's own native F12 screenshot through `xdotool`, parses the resulting 240×160 core PNG, and checks two composited pixels: the equal-priority Player must win over the NPC at the lower Player OAM index, while the adjacent transparent Player pixel must reveal the NPC below. This is an eighth external PPU assertion layered on top of the seven EWRAM report bits. The normal release cartridge does not enter this path because it is compiled only when `GB_EMULATOR_SELFTEST` is defined. A flash cartridge is still recommended for analog speaker quality and device-specific timing that even an accurate emulator cannot prove.
+
+For real-hardware/flash-cart validation, build the separate device-test cartridge:
+
+```bash
+make -C reconstruction \
+  TARGET=Graveblood_RE_device_test \
+  BUILD=build-device-test \
+  EXTRA_CFLAGS=-DGB_DEVICE_SELFTEST \
+  -j"$(nproc)"
+python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE_device_test.gba
+```
+
+`Graveblood_RE_device_test.gba` runs the same seven production checks without needing GDB, then switches to a simple Mode-3 status screen designed to be unambiguous on a physical GBA. The top band is green only when all seven checks passed, otherwise red. The seven bars below it are, from top to bottom: **OAM ordering/priority**, **VBlank timing**, **Level-9→10 boundary/scene handoff**, **Level-10 scripted entrance**, **far-right Level-9 Leaves**, **ending-effect VRAM payload/bounds**, and **Timer1 audio cadence**. Each bar is green for pass and red for fail. After drawing the screen, the device cartridge restarts the production Direct Sound path and plays recovered **SFX6** once; hearing it provides the final human-observable check of the DAC/speaker path that mGBA cannot prove. The device-test ROM then remains on the status screen until reset/power-off. It is a validation artifact only and is never substituted for the normal release ROM.
 
 ## 4. Source layout
 
@@ -141,6 +197,18 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_*.py' -
 
 RE tests and the reconstruction build remain separate: tests prove recovered behavior/data; `reconstruction/` implements it.
 
+### Hardware-address / ARM validation gate
+
+A ROM-independent hardware-facing gate is also checked in:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools.test_hardware_address_runtime -v
+```
+
+On Linux, its host harnesses map the literal GBA regions used by production code (`0x04000000` MMIO, `0x05000000` palette RAM, `0x06000000` VRAM, and `0x07000000` OAM) into isolated test processes. The tests execute the real `input.c`, `audio.c`, `video.c`, `actors.c`, and ending-effect code against those addresses and verify active-low input, FIFO-A/DMA1/timer programming, Mode-0/OAM/OBJ uploads, Player/NPC/Grass/leaf submissions, the two-phase VBlank wait, and the argument-0 VRAM write boundary. This catches literal-address, register-width, OAM-slot, and VRAM-placement mistakes that array-backed unit fakes can hide.
+
+The same gate cross-compiles every checked-in reconstruction C unit plus both `.incbin` assembly units for **ARM7TDMI Thumb** and performs a relocatable ARM link. It uses `clang --target=arm-none-eabi` when available, otherwise `arm-none-eabi-gcc`. This is deliberately **not** presented as a substitute for the final devkitARM/libgba ROM link or an emulator/device run: mGBA/flash-cart validation remains the authority for actual PPU/audio/timing behavior.
+
 ## 7. GitHub Actions
 
 `.github/workflows/build-release-rom.yml` builds in:
@@ -149,13 +217,20 @@ RE tests and the reconstruction build remain separate: tests prove recovered beh
 devkitpro/devkitarm:20260610
 ```
 
-CI checks out only this repository, runs:
+CI first runs the ROM-independent hardware-address/ARM gate on `ubuntu-latest`:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools.test_hardware_address_runtime -v
+```
+
+The devkitPro build job depends on that gate, then runs:
 
 ```sh
 make -C reconstruction -j"$(nproc)"
+python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
 ```
 
-and uploads `Graveblood_RE.gba` plus its SHA-256 as the `Graveblood_RE-rom` artifact.
+The same build job also creates `Graveblood_RE_selftest.gba` with `GB_EMULATOR_SELFTEST` and `Graveblood_RE_device_test.gba` with `GB_DEVICE_SELFTEST` in isolated build directories; all three cartridges are header-validated and uploaded in the `Graveblood_RE-rom` artifact. A separate `ubuntu-24.04` job installs `mgba-sdl`, Xvfb, and `xdotool`, downloads that exact artifact, requires the normal ROM to survive a five-second mGBA boot smoke, then runs the self-test ROM through `tools/run_mgba_selftest.py`. The GDB report must mark all seven hardware/emulator checks as passed, the Timer1 report must land in the 63–66 IRQ cadence window over 60 VBlanks, and mGBA's native 240×160 screenshot must pass the two-pixel Player/NPC composition probe. The validated PNG is uploaded as a CI artifact. Tagged releases still publish only the normal ROM and now depend on the emulator job, so an early boot exit, failed scenario-level self-test, wrong audio cadence, or wrong composited PPU pixel blocks publication.
 
 ## 8. Development release tags
 

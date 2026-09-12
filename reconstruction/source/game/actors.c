@@ -535,3 +535,92 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
         return;
     }
 }
+
+void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* player,
+                                     const GbInput* input, GbInteractionEvent* event)
+{
+    event->type = GB_INTERACTION_NONE;
+    event->actor_index = 0;
+    event->state = 0;
+    event->dial = 0;
+    event->actor_x = 0;
+    event->actor_y = 0;
+
+    for(u8 i = 0; i < system->count; ++i)
+    {
+        GbActor* actor = &system->actors[i];
+        if(! actor->active || ! actor->descriptor ||
+           actor->story_overlay_index == GB_ACTOR_STORY_NONE)
+        {
+            continue;
+        }
+        if(actor->descriptor->actor_class == GB_ACTOR_NPC)
+        {
+            gb_collision_apply_fixed_motion(system->level,
+                                            &actor->fixed_x, &actor->fixed_y,
+                                            &actor->request_x_fixed, &actor->request_y_fixed,
+                                            actor->collision_width_fixed,
+                                            actor->collision_height_fixed,
+                                            &actor->collision_status);
+            gb_actor_update_npc_special(system, actor, player);
+        }
+        if(actor->descriptor->state == 3)
+        {
+            gb_actor_update_route(actor);
+        }
+    }
+
+    if(! (input->pressed & KEY_A))
+    {
+        return;
+    }
+
+    for(u8 i = 0; i < system->count; ++i)
+    {
+        const GbActor* actor = &system->actors[i];
+        if(! actor->active || ! actor->descriptor ||
+           actor->story_overlay_index == GB_ACTOR_STORY_NONE ||
+           ! gb_actor_player_in_interaction(actor, player))
+        {
+            continue;
+        }
+        const GbInteractionType type = gb_actor_interaction_type(actor->descriptor->state);
+        if(type == GB_INTERACTION_NONE)
+        {
+            continue;
+        }
+        event->type = type;
+        event->actor_index = i;
+        event->state = actor->descriptor->state;
+        event->dial = actor->descriptor->dial;
+        event->actor_x = gb_actor_pixel_x(actor);
+        event->actor_y = gb_actor_pixel_y(actor);
+        return;
+    }
+}
+
+void gb_actor_system_update_physical_npcs(GbActorSystem* system, const GbPlayer* player)
+{
+    for(u8 i = 0; i < system->count; ++i)
+    {
+        GbActor* actor = &system->actors[i];
+        if(! actor->active || ! actor->descriptor ||
+           actor->story_overlay_index != GB_ACTOR_STORY_NONE ||
+           actor->descriptor->actor_class != GB_ACTOR_NPC)
+        {
+            continue;
+        }
+        gb_collision_apply_fixed_motion(system->level,
+                                        &actor->fixed_x, &actor->fixed_y,
+                                        &actor->request_x_fixed, &actor->request_y_fixed,
+                                        actor->collision_width_fixed,
+                                        actor->collision_height_fixed,
+                                        &actor->collision_status);
+        gb_actor_update_npc_special(system, actor, player);
+        if(actor->descriptor->state == 3)
+        {
+            gb_actor_update_route(actor);
+        }
+    }
+}
+

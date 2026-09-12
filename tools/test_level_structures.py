@@ -51,6 +51,19 @@ class LevelStructureTests(unittest.TestCase):
         )
         self.assertEqual(mod.level_graphics_variant_ptrs(level1), [0x03000D18])
 
+    def test_level6_collision_visual_b_alias_is_intentional_and_runtime_separated(self):
+        row = mod.level6_collision_visual_alias_closure(self.data)
+        self.assertEqual(row['level_index'], 6)
+        self.assertEqual(row['shared_rom_addr'], '0x08655CC4')
+        self.assertEqual(row['collision_record_offset'], '+0x0C')
+        self.assertEqual(row['visual_b_record_offset'], '+0x10')
+        self.assertEqual(row['collision_runtime_global'], '0x03000550')
+        self.assertEqual(row['visual_b_runtime_global'], '0x03000564')
+        self.assertEqual(row['collision_consumer'], '0x08004670')
+        self.assertEqual(row['visual_b_consumer'], '0x0800A330')
+        self.assertEqual(row['runtime_roles_separated'], 'yes')
+        self.assertEqual(row['classification'], 'intentional source-data alias')
+
     def test_disasm_helper_normalizes_temporary_object_path(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / 'tools' / 'disasm_thumb_chunk.py'), str(ROM_PATH), '0xD870', '0x20'],

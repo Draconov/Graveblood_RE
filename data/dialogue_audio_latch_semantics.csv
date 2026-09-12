@@ -1,0 +1,12 @@
+phase,latch,value_before,trigger,sound,value_after,evidence,confidence
+constructor_clear,0x0300062C,any,Player construction,silent,0,0x080063CE..0x080063D6; literal 0x08006414,high
+state2_first_text,0x0300062C,0,accepted state-2 fresh A whose target record is text/nonnegative,SFX3@80,1,0x08002E10..0x08002E30,high
+state2_next_text,0x0300062C,1,accepted state-2 fresh A whose immediate target record is text/nonnegative,SFX8@80,1,0x08002E1A -> 0x080032AA -> 0x08002E26..0x08002E30,high
+normal_control_-1_to_-4,0x0300062C,1,normal dialogue immediate target is opcode -1/-2/-3/-4; chained controls stay in same update,SFX7@80 per record,0,0x080032D0;0x0800339C;0x08003460;0x08003514 plus latch clears,high
+state4_first_text,0x0300062C,0,accepted state-4 fresh A whose target record is text/nonnegative,SFX3@80,1,0x08003066..0x08003086,high
+state4_next_text,0x0300062C,1,accepted state-4 fresh A whose immediate target record is text/nonnegative,SFX8@80,1,0x08003070 -> 0x08003666 -> 0x0800307C..0x08003086,high
+state4_selector_minus1,0x0300062C,0,state-4 collection selector == -1 on fresh A,silent,0,0x080035C4..0x080035D4; literal 0x08003684,high
+state4_terminal_-1_to_-3,0x0300062C,1,state-4 immediate target opcode -1/-2/-3,SFX7@80,0,0x08003742;0x08003688;0x08003894 plus saved-latch clears,high
+state4_control_-4,0x0300062C,1,state-4 immediate target opcode -4,silent,1,0x080031E6 advances cursor into next record with no SFX call/latch clear,high
+state4_terminal_-5,0x0300062C,1,state-4 immediate target opcode -5,SFX13@80,terminal/final-effect path,0x080037F6..0x08003802,high
+mixer_multiplicity,n/a,n/a,multiple play_once calls before mixer update,8 independent one-shot slots,n/a,0x08001B7E..0x08001B92 scans 8 slots at 0x1C-byte stride,high

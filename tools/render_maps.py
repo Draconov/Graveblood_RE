@@ -5,10 +5,11 @@ The renderer follows the code-proven GBA path:
   source u16 tile id -> translation table -> 8bpp text-BG screen entry
   -> 64-byte 8x8 tile -> 256-entry BGR555 palette.
 
-It deliberately treats tile indices >= 864 as unresolved dynamic/overlap tiles.
-The game copies 0xD800 bytes of BG character data to charblock 0, so indices
-864+ alias the screenblock region beginning at 0x0600D800 and can depend on
-runtime tilemap contents. Those cells are left transparent in layer renders.
+The game copies 0xD800 bytes of BG character data to charblock 0, so 8bpp
+tile indices 864..1023 alias the screenblock region at 0x0600D800..0x0600FFFF.
+Those pixels depend on runtime tilemap contents rather than missing character
+data, so static layer renders leave them transparent. `runtime_alias_summary.csv`
+classifies every such alias by ROM lookup source, VRAM address, and screenblock.
 """
 from __future__ import annotations
 
@@ -109,6 +110,129 @@ def _translation_table(data: bytes, addr: int, count: int) -> tuple[int, ...]:
     return struct.unpack_from(f"<{count}H", data, off)
 
 
+BG_VRAM_BASE = 0x06000000
+BG_SCREENBLOCK_BYTES = 0x800
+BG_SCREENBLOCK_OWNERS = {
+    27: "BG0 text/UI",
+    28: "BG1 streamed world layer A",
+    29: "BG2 streamed world layer B",
+    30: "BG3 fixed backing map",
+    31: "unmapped screenblock 31 residue",
+}
+
+
+def runtime_alias_summary(data: bytes) -> list[dict]:
+    """Classify world cells whose 8bpp tile fetch aliases screenblock VRAM.
+
+    Graveblood uploads only 0xD800 bytes (864 8bpp tiles) to charblock 0.
+    Tile indices 864..1023 therefore address the same VRAM used by text-BG
+    screenblocks 27..31.  Their pixels are runtime screen-map bytes rather than
+    static character data, so static map renders leave them transparent but the
+    alias itself is fully classifiable.
+    """
+    dims = extract.reconstruct_level_dimensions(data)
+    rows: list[dict] = []
+    for level_index in range(extract.LEVEL_COUNT):
+        words = _level_words(data, level_index)
+        world_w, world_h, _, _ = dims[level_index]
+        variants = extract.level_graphics_variant_ptrs(words)
+        for variant_index in range(len(variants)):
+            desc = _variant_descriptor(data, level_index, variant_index)
+            palette_start = desc["bg_palette_source"]
+            palette_end = palette_start + 256 * 2
+            for layer, word_index in (("A", 0x08 // 4), ("B", 0x10 // 4)):
+                layer_off = gba_to_off(words[word_index], len(data))
+                source_ids = struct.unpack_from(
+                    f"<{world_w * world_h}H", data, layer_off
+                )
+                translation = _translation_table(
+                    data, desc["tile_translation_table"], max(source_ids, default=0) + 1
+                )
+                grouped: dict[tuple, list[tuple[int, int]]] = {}
+                for cell, source_id in enumerate(source_ids):
+                    entry = translation[source_id]
+                    tile_index = entry & 0x03FF
+                    if tile_index < BG_TILE_COUNT:
+                        continue
+
+                    lookup_address = desc["tile_translation_table"] + source_id * 2
+                    if palette_start <= lookup_address < palette_end:
+                        lookup_region = "bg_palette"
+                        palette_index = (lookup_address - palette_start) // 2
+                    elif lookup_address < palette_start:
+                        lookup_region = "translation_table"
+                        palette_index = None
+                    else:
+                        lookup_region = "adjacent_rom"
+                        palette_index = None
+
+                    vram_address = BG_VRAM_BASE + tile_index * BG_TILE_BYTES_8BPP
+                    screenblock = (vram_address - BG_VRAM_BASE) // BG_SCREENBLOCK_BYTES
+                    screenblock_offset = (vram_address - BG_VRAM_BASE) % BG_SCREENBLOCK_BYTES
+                    key = (
+                        level_index, variant_index, layer, source_id, entry, tile_index,
+                        lookup_address, lookup_region, palette_index, vram_address,
+                        screenblock, screenblock_offset,
+                    )
+                    grouped.setdefault(key, []).append(
+                        (cell % world_w, cell // world_w)
+                    )
+
+                for key, cells in grouped.items():
+                    (
+                        li, vi, lyr, source_id, entry, tile_index, lookup_address,
+                        lookup_region, palette_index, vram_address, screenblock,
+                        screenblock_offset,
+                    ) = key
+                    rows.append({
+                        "level_index": li,
+                        "variant_index": vi,
+                        "layer": lyr,
+                        "source_id": source_id,
+                        "lookup_address": lookup_address,
+                        "lookup_region": lookup_region,
+                        "palette_index": palette_index,
+                        "translation_entry": entry,
+                        "tile_index": tile_index,
+                        "vram_address": vram_address,
+                        "screenblock": screenblock,
+                        "screenblock_offset": screenblock_offset,
+                        "screenblock_owner": BG_SCREENBLOCK_OWNERS.get(
+                            screenblock, "unknown screenblock"
+                        ),
+                        "cell_count": len(cells),
+                        "world_cells": ";".join(f"{x}:{y}" for x, y in cells),
+                    })
+    rows.sort(key=lambda row: (
+        row["level_index"], row["variant_index"], row["layer"], row["source_id"]
+    ))
+    return rows
+
+
+def write_runtime_alias_summary(data: bytes, path: Path) -> None:
+    """Write a deterministic machine-readable summary of runtime VRAM aliases."""
+    rows = runtime_alias_summary(data)
+    fieldnames = [
+        "level_index", "variant_index", "layer", "source_id",
+        "lookup_address", "lookup_region", "palette_index",
+        "translation_entry", "tile_index", "vram_address",
+        "screenblock", "screenblock_offset", "screenblock_owner",
+        "cell_count", "world_cells",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for row in rows:
+            out = dict(row)
+            out["lookup_address"] = f"0x{row['lookup_address']:08X}"
+            out["translation_entry"] = f"0x{row['translation_entry']:04X}"
+            out["vram_address"] = f"0x{row['vram_address']:08X}"
+            out["screenblock_offset"] = f"0x{row['screenblock_offset']:03X}"
+            out["palette_index"] = "" if row["palette_index"] is None else row["palette_index"]
+            w.writerow(out)
+
+
 def _tile_cache(data: bytes, addr: int, palette: list[tuple[int, int, int]]):
     off = gba_to_off(addr, len(data))
     tiles = data[off : off + BG_TILE_COPY_BYTES]
@@ -147,7 +271,7 @@ def render_world_layer(
     variant_index: int,
     layer: str,
 ) -> tuple[Image.Image, int]:
-    """Render world layer A or B; return image and unresolved dynamic-cell count."""
+    """Render world layer A or B; return image and runtime screenblock-alias count."""
     layer = layer.upper()
     if layer not in {"A", "B"}:
         raise ValueError("layer must be A or B")
@@ -164,21 +288,21 @@ def render_world_layer(
         data, desc["tile_translation_table"], max(source_ids, default=0) + 1
     )
     out = Image.new("RGBA", (world_w * 8, world_h * 8), (0, 0, 0, 0))
-    unresolved = 0
+    runtime_aliases = 0
     for cell, source_id in enumerate(source_ids):
         if source_id >= len(translation):
-            unresolved += 1
+            runtime_aliases += 1
             continue
         entry = translation[source_id]
         tile_index = entry & 0x03FF
         tile = get_tile(tile_index, bool(entry & 0x0400), bool(entry & 0x0800))
         if tile is None:
-            unresolved += 1
+            runtime_aliases += 1
             continue
         x = (cell % world_w) * 8
         y = (cell // world_w) * 8
         out.alpha_composite(tile, (x, y))
-    return out, unresolved
+    return out, runtime_aliases
 
 
 def render_static_bg_layers(
@@ -260,7 +384,7 @@ def actor_overlay_label(row: dict[str, str], level_index: int) -> str:
     if kind != "fgtile":
         return kind
     if level_index == 9 and row.get("treetype") == "20" and row.get("portTo") == "524":
-        return "treetype20->Y512"
+        return "bicycle->Y512"
     if level_index == 10 and row.get("turn") in {"4", "5"} and row.get("portTo") == "8":
         return "forced-gate"
     if row.get("portTo"):
@@ -328,6 +452,7 @@ def render_all(rom_path: Path, out_dir: Path, actors_csv: Path | None = None) ->
         w = csv.DictWriter(f, fieldnames=list(summary_rows[0]))
         w.writeheader()
         w.writerows(summary_rows)
+    write_runtime_alias_summary(data, out_dir / "runtime_alias_summary.csv")
 
 
 def main() -> None:

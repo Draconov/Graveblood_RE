@@ -1,0 +1,5 @@
+fact,value,evidence,confidence
+active_scene_phase_order,camera clamp/publish -> world stream -> OAM begin -> object draw traversal -> OAM end -> object update traversal,"BL chain 0x08004B76,0x08004B80,0x08004BBE,0x08004BC6,0x08004BCA,0x08004BD0",high
+object_draw_slot,vtable +0x10,"0x08000BAC ldr r3,[r3,#0x10]; Player vtable 0x08019688 +0x10 = 0x080065FD Player_draw",high
+object_update_slot,vtable +0x0C,"0x0800160C ldr r3,[r3,#0x0C]; Player vtable 0x08019688 +0x0C = 0x080081B1 Player_update",high
+player_camera_tracking_phase,Player_update tracks after current-frame draw; publication is next active GameplayScene frame,"0x08008B7A BL 0x08006550 occurs in Player_update, while GameplayScene draw traversal precedes update traversal",high

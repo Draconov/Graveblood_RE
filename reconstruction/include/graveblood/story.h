@@ -62,13 +62,17 @@ typedef struct {
     const char* response_text;
 } GbSocialRuntime;
 
+#define GB_STORY_SFX_QUEUE_CAPACITY 8
+
 typedef struct {
     GbStoryState state;
     GbDialogueRuntime dialogue;
     GbSocialRuntime social;
     u8 generic_record_action_pending;
     s16 generic_record_action_argument;
-    s8 pending_sfx;
+    s8 pending_sfx[GB_STORY_SFX_QUEUE_CAPACITY];
+    u8 pending_sfx_head;
+    u8 pending_sfx_count;
     unsigned long long response_rng_state;
 } GbStoryRuntime;
 

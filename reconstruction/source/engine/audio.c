@@ -19,6 +19,9 @@
 
 static s8 gb_audio_buffers[2][GB_AUDIO_BUFFER_SAMPLES] __attribute__((aligned(4)));
 static u8 gb_audio_dma_buffer;
+#if defined(GB_EMULATOR_SELFTEST) || defined(GB_DEVICE_SELFTEST)
+volatile u32 gb_audio_selftest_irq_count;
+#endif
 #endif
 
 
@@ -48,6 +51,9 @@ static void gb_audio_dma_start(u8 buffer_index)
 
 static void gb_audio_timer1_irq(void)
 {
+#if defined(GB_EMULATOR_SELFTEST) || defined(GB_DEVICE_SELFTEST)
+    ++gb_audio_selftest_irq_count;
+#endif
     const u8 consumed = gb_audio_dma_buffer;
     const u8 next = (u8)(consumed ^ 1u);
 
@@ -165,6 +171,9 @@ static int gb_audio_start_sample(u8 sound_id, u8 required_role, u8 mode, u16 vol
 
 void gb_audio_init(void)
 {
+#if defined(GB_EMULATOR_SELFTEST) || defined(GB_DEVICE_SELFTEST)
+    gb_audio_selftest_irq_count = 0;
+#endif
     for(int channel = 0; channel < GB_AUDIO_CHANNEL_COUNT; ++channel) {
         gb_audio_clear_channel(channel);
     }
@@ -185,14 +194,19 @@ void gb_audio_shutdown(void)
     gb_audio_music_channel = -1;
 }
 
-int gb_audio_play_sfx(u8 sound_id)
+int gb_audio_play_sfx_volume(u8 sound_id, u16 volume)
 {
     return gb_audio_start_sample(
         sound_id,
         GB_AUDIO_ROLE_SFX,
         1,
-        GB_AUDIO_DEFAULT_SFX_VOLUME,
+        volume,
         0);
+}
+
+int gb_audio_play_sfx(u8 sound_id)
+{
+    return gb_audio_play_sfx_volume(sound_id, GB_AUDIO_DEFAULT_SFX_VOLUME);
 }
 
 int gb_audio_play_music(u8 sound_id)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+import csv
 import importlib.util
 import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -58,8 +60,63 @@ class MapRendererTests(unittest.TestCase):
         # Level 2 legitimately contains source IDs above 2047. 0x0800A330
         # performs an unchecked halfword lookup, so the static renderer must
         # model the same address arithmetic instead of inventing a 2048-entry cap.
-        _image, unresolved = mod.render_world_layer(self.data, 2, 0, "A")
-        self.assertEqual(unresolved, 4)
+        _image, runtime_aliases = mod.render_world_layer(self.data, 2, 0, "A")
+        self.assertEqual(runtime_aliases, 4)
+
+    def test_level2_layer_a_runtime_alias_is_palette_overrun_into_bg1(self):
+        classify = getattr(mod, "runtime_alias_summary", None)
+        if classify is None:
+            self.fail("runtime alias classification is not implemented")
+
+        rows = classify(self.data)
+        match = [
+            row for row in rows
+            if row["level_index"] == 2
+            and row["variant_index"] == 0
+            and row["layer"] == "A"
+            and row["source_id"] == 2260
+        ]
+        self.assertEqual(len(match), 1)
+        row = match[0]
+        self.assertEqual(row["cell_count"], 4)
+        self.assertEqual(row["world_cells"], "109:85;119:85;109:96;119:96")
+        self.assertEqual(row["lookup_region"], "bg_palette")
+        self.assertEqual(row["palette_index"], 210)
+        self.assertEqual(row["translation_entry"], 0x7F9D)
+        self.assertEqual(row["tile_index"], 925)
+        self.assertEqual(row["vram_address"], 0x0600E740)
+        self.assertEqual(row["screenblock"], 28)
+        self.assertEqual(row["screenblock_offset"], 0x740)
+        self.assertEqual(row["screenblock_owner"], "BG1 streamed world layer A")
+
+    def test_runtime_alias_report_is_reproducible_and_complete(self):
+        writer = getattr(mod, "write_runtime_alias_summary", None)
+        if writer is None:
+            self.fail("runtime alias report writer is not implemented")
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "runtime_alias_summary.csv"
+            writer(self.data, path)
+            with path.open(newline="", encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+
+        self.assertEqual(len(rows), 81)
+        self.assertEqual(sum(int(row["cell_count"]) for row in rows), 1689)
+        self.assertEqual(
+            sum(int(row["cell_count"]) for row in rows if row["lookup_region"] == "bg_palette"),
+            158,
+        )
+        row = next(
+            row for row in rows
+            if row["level_index"] == "2"
+            and row["variant_index"] == "0"
+            and row["layer"] == "A"
+            and row["source_id"] == "2260"
+        )
+        self.assertEqual(row["lookup_address"], "0x085E2B3C")
+        self.assertEqual(row["translation_entry"], "0x7F9D")
+        self.assertEqual(row["vram_address"], "0x0600E740")
+        self.assertEqual(row["screenblock_offset"], "0x740")
 
     def test_actor_overlay_labels_only_code_proven_generic_portals_as_portals(self):
         level9_special = {
@@ -71,7 +128,7 @@ class MapRendererTests(unittest.TestCase):
         normal = {
             'type': 'fgtile', 'portTo': '8', 'treetype': '', 'turn': '',
         }
-        self.assertEqual('treetype20->Y512', mod.actor_overlay_label(level9_special, 9))
+        self.assertEqual('bicycle->Y512', mod.actor_overlay_label(level9_special, 9))
         self.assertEqual('forced-gate', mod.actor_overlay_label(level10_gate, 10))
         self.assertEqual('portal->8', mod.actor_overlay_label(normal, 9))
 

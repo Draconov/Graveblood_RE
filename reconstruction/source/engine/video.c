@@ -43,6 +43,7 @@ static const GbLevelAssets* gb_video_level;
 static u8 gb_story_ui_pixels[GB_STORY_UI_WIDTH * GB_STORY_UI_HEIGHT];
 static u8 gb_pda_text_pixels[GB_PDA_TEXT_WIDTH * GB_PDA_TEXT_HEIGHT];
 static u8 gb_monster_animation_counter;
+static u8 gb_player_bicycle_staged;
 
 static void gb_story_ui_begin(void);
 static void gb_story_ui_text(const char* text, int* x, int* y);
@@ -162,6 +163,7 @@ static void gb_video_restore_gameplay_obj_assets(void)
                     GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS,
                 gb_level_static_obj_tiles,
                 GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS);
+    gb_player_bicycle_staged = 0;
 }
 
 void gb_video_wait_vblank(void)
@@ -1088,6 +1090,59 @@ static void gb_video_draw_monster(const GbPlayer* player, s16 camera_x)
     }
 }
 
+static void gb_video_restore_player_frames_after_bicycle(void)
+{
+    if(! gb_player_bicycle_staged)
+    {
+        return;
+    }
+    gb_copy_u16((volatile u16*)SPR_VRAM(0), gb_player_obj_tiles,
+                GB_PLAYER_BICYCLE_FRAME_HALFWORDS);
+    gb_player_bicycle_staged = 0;
+}
+
+static void gb_video_draw_player_bicycle(const GbPlayer* player, s16 camera_x, s16 camera_y)
+{
+    volatile u16* oam = (volatile u16*)OAM;
+    u8 frame = player->animation_frame;
+    if(frame < 1 || frame > GB_PLAYER_BICYCLE_FRAME_COUNT)
+    {
+        frame = 1;
+    }
+
+    gb_copy_u16((volatile u16*)SPR_VRAM(0),
+                gb_player_bicycle_obj_frames +
+                    (u32)(frame - 1) * GB_PLAYER_BICYCLE_FRAME_HALFWORDS,
+                GB_PLAYER_BICYCLE_FRAME_HALFWORDS);
+    gb_player_bicycle_staged = 1;
+
+    const s16 center_x = (s16)(player->x - camera_x);
+    const s16 base_y = (s16)(player->y - camera_y - 16);
+    const s16 xs[GB_PLAYER_BICYCLE_SPRITE_COUNT] = {
+        center_x, (s16)(center_x - 8), (s16)(center_x + 8),
+        (s16)(center_x - 8), (s16)(center_x + 8),
+    };
+    const s16 ys[GB_PLAYER_BICYCLE_SPRITE_COUNT] = {
+        (s16)(base_y - 20), (s16)(base_y - 4), (s16)(base_y - 4),
+        (s16)(base_y + 12), (s16)(base_y + 12),
+    };
+
+    for(int i = 0; i < GB_PLAYER_BICYCLE_SPRITE_COUNT; ++i)
+    {
+        if(gb_video_sprite_visible_16(xs[i], ys[i]))
+        {
+            oam[i * 4] = (u16)(ys[i] & 0x00FF) | GB_OBJ_256_COLOR;
+            oam[i * 4 + 1] = (u16)(xs[i] & 0x01FF) | GB_OBJ_SIZE_1;
+            oam[i * 4 + 2] = (u16)(i * 8) | (2u << 10);
+            oam[i * 4 + 3] = 0;
+        }
+        else
+        {
+            gb_video_hide_oam_entry(oam, i);
+        }
+    }
+}
+
 static int gb_video_draw_level_static_composite(s16 camera_x, s16 camera_y, int first_oam)
 {
     if(! gb_video_level || (gb_video_level->level_id != 9 && gb_video_level->level_id != 10))
@@ -1135,6 +1190,12 @@ void gb_video_draw_player_state(const GbPlayer* player, const GbStoryRuntime* st
         return;
     }
     gb_monster_animation_counter = 0;
+    if(player && player->bicycle_mode == 2)
+    {
+        gb_video_draw_player_bicycle(player, camera_x, camera_y);
+        return;
+    }
+    gb_video_restore_player_frames_after_bicycle();
     const int player_oam = gb_video_draw_level_static_composite(camera_x, camera_y, 0);
     gb_video_draw_player_oam(player, camera_x, camera_y, player_oam);
 }

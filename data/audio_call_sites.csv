@@ -1,13 +1,13 @@
 call_address,target,caller,sound_id,play_mode,volume,recovered_action,confidence
-0x08002E22,0x08001B74,npc_state2_fresh_a_activation,3,one-shot,80,state-2 dialogue interaction activation,high
-0x08003078,0x08001B74,npc_state4_fresh_a_activation,3,one-shot,80,state-4 collection interaction activation,high
+0x08002E22,0x08001B74,npc_state2_fresh_a_activation,3,one-shot,80,first state-2 text page when 0x0300062C latch is zero,high
+0x08003078,0x08001B74,npc_state4_fresh_a_activation,3,one-shot,80,first state-4 text page when 0x0300062C latch is zero,high
 0x08003298,0x08001B74,npc_special_proximity_latch,9,one-shot,80,legsColor 0x70 NPC proximity latch activation,high
-0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-2 interaction activation when 0x0300062C mode byte is nonzero,high
+0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,subsequent state-2 text page while 0x0300062C latch is nonzero,high
 0x080032D2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -4 set story/progression stage,high
 0x080033A2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -3 add auxiliary message stream,high
 0x08003462,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -2 set primary message stream,high
 0x08003516,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -1 set dialogue step,high
-0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-4 interaction activation when 0x0300062C mode byte is nonzero,high
+0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,subsequent state-4 text page while 0x0300062C latch is nonzero,high
 0x0800368E,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -2 terminal,high
 0x08003748,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,state4 dialogue opcode -1 terminal,high
 0x08003802,0x08001B74,state4_final_collection_handler,13,one-shot,80,final-sketch state4 -5 transition,high
@@ -36,7 +36,7 @@ call_address,target,caller,sound_id,play_mode,volume,recovered_action,confidence
 0x0800999E,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor next (fresh RIGHT; cursor 0..3),high
 0x08009AA2,0x08001B74,Player_update,12,one-shot,80,FRIENDS DOWN-at-bottom boundary feedback,high
 0x08009B58,0x08001B74,Player_update,12,one-shot,80,FRIENDS UP-at-top boundary feedback,high
-0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R Player action/state-reset path,high
+0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R bicycle action while shared ride mode 0x030005F4 == 2,high
 0x08009CCA,0x08001B74,Player_update,7,one-shot,80,interaction state-2 return/back (fresh B),high
-0x0800B2A6,0x08001B74,effect_object_sfx4_constructor_candidate,4,one-shot,80,effect-object constructor 0x0800B250 (vtable 0x08A8C198),high
-0x0800B37E,0x08001B74,effect_object_sfx3_constructor_candidate,3,one-shot,80,effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4),high
+0x0800B2A6,0x08001B74,latent_projectile_constructor,4,one-shot,80,latent projectile constructor; technical role recovered from update/draw (vtable 0x08A8C198),high
+0x0800B37E,0x08001B74,hit_death_burst_constructor,3,one-shot,80,hit/death burst constructor; technical role recovered from update/draw (vtable 0x08A8C1E8),high

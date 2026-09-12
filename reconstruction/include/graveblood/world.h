@@ -13,6 +13,8 @@ typedef struct {
 } GbWorld;
 
 void gb_world_load(GbWorld* world, const GbLevelAssets* assets);
+void gb_world_track_camera(GbWorld* world, s16 focus_x, s16 focus_y);
+void gb_world_publish_camera(GbWorld* world);
 void gb_world_update_camera(GbWorld* world, s16 focus_x, s16 focus_y);
 
 #endif

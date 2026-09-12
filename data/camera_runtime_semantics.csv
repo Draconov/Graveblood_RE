@@ -1,0 +1,9 @@
+fact,value,evidence,confidence
+camera_globals,"X=0x03000570,Y=0x0300056C",tracker literals 0x080065A0/0x080065A4; clamp literals 0x0800A31C/0x0800A320,high
+player_camera_center,X=(+0x08+(+0x10/2))>>8;Y=(+0x0C-(+0x14/2))>>8,0x08006550..0x0800657E fixed8 body-center arithmetic,high
+horizontal_deadzone,96..144 px,0x08006564 subtracts 0x90; 0x0800656E subtracts 0x60,high
+vertical_deadzone,67..93 px,0x08006586 subtracts 0x5D; 0x08006590 subtracts 0x43,high
+camera_clamp_viewport,30x20 tiles,0x0800A2EA subtracts 0x1E; 0x0800A2FC subtracts 0x14; both multiplied by 8,high
+stream_origin,"camera_x>>3,camera_y>>3",0x0800A30C..0x0800A312 writes to 0x030006C4/+4,high
+scene_transition_camera,preserved,0x08005A48 loads level resources then 0x08005A50 calls tracker and 0x08005A54 calls clamp; 0x08005950 loader has no camera-global reference,high
+direct_writer_closure,tracker 0x08006550 + clamp 0x0800A2D4,"conservative literal refs guarded: X=21,Y=22; non-writer refs are draw/cull/stream consumers",high

@@ -12,8 +12,6 @@
 #include <graveblood/wardrobe.h>
 #include <graveblood/world.h>
 
-void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInput* input);
-
 static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* actors,
                            GbStoryRuntime* story, int level_id)
 {
@@ -25,6 +23,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
 
     const u8 saved_script_mode = player->script_mode;
     const u32 saved_script_counter = player->script_counter;
+    const u8 saved_bicycle_mode = player->bicycle_mode;
 
     gb_world_load(world, assets);
     gb_player_spawn(player, assets->spawn_x, assets->spawn_y);
@@ -35,6 +34,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
     {
         player->script_mode = saved_script_mode;
         player->script_counter = saved_script_counter;
+        player->bicycle_mode = saved_bicycle_mode;
     }
     gb_actor_system_load(actors, assets);
     gb_story_on_level_load(story, actors);
@@ -47,7 +47,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
 
 void gb_game_run(void)
 {
-    GbWorld world;
+    GbWorld world = {0};
     GbPlayer player = {0};
     GbActorSystem actors;
     GbStoryRuntime story;
@@ -145,6 +145,15 @@ void gb_game_run(void)
             continue;
         }
 
+        /* GameplayScene_update publishes/streams the camera and completes the
+           object draw traversal before the generic object-update traversal.
+           Player_update may then track a new dead-zone camera position, but
+           that pending position is not published until the next gameplay frame. */
+        gb_world_publish_camera(&world);
+        gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);
+        gb_video_draw_player_state(&player, &story, world.camera_x, world.camera_y);
+        gb_video_draw_story_ui(&story);
+
         if(! story.state.final_effect_pending &&
            ! gb_story_ui_active(&story) &&
            (input.pressed & KEY_START))
@@ -173,10 +182,10 @@ void gb_game_run(void)
 
         if(story.state.final_effect_pending)
         {
-            /* Static RE proves normal zero-seeded execution repeatedly uses
-               argument 0.  That exact 96,000 + 16,000 byte blast stays
-               inside the GBA's 96 KiB VRAM; larger latent arguments remain
-               intentionally unsupported. */
+            /* Static closure proves startup seeds the ending argument to 0
+               and no executable writer can seed the >1000 branch.  Therefore
+               public-demo reachable execution repeatedly uses argument 0.
+               That exact 96,000 + 16,000 byte blast stays inside VRAM. */
             gb_video_apply_final_effect();
         }
         else if(gb_story_ui_active(&story))
@@ -185,28 +194,17 @@ void gb_game_run(void)
         }
         else
         {
-            gb_actor_system_update(&actors, &player, &input, &interaction);
-            /* legsColor==112 proximity activation is an NPC-update event, not
-               a story UI event.  Consume it before gates/portals can continue
-               the frame so SFX9 cannot be lost on a same-frame traversal. */
-            const int actor_sfx = gb_actor_system_take_pending_sfx(&actors);
-            if(actor_sfx >= 0)
+            /* load_level_record_resources inserts the selected story-overlay
+               list before LevelRecord+0x38 physical actors, so overlay NPC
+               updates precede the physical Player exactly as they do here. */
+            gb_actor_system_update_overlays(&actors, &player, &input, &interaction);
+            const int overlay_sfx = gb_actor_system_take_pending_sfx(&actors);
+            if(overlay_sfx >= 0)
             {
-                gb_audio_play_sfx((u8)actor_sfx);
+                gb_audio_play_sfx((u8)overlay_sfx);
             }
-            GbStoryGateResult gate =
-                gb_story_try_level10_gate(&story, world.assets, &player, &input);
-            if(gate == GB_STORY_GATE_NONE)
+            if(interaction.type != GB_INTERACTION_NONE)
             {
-                gate = gb_story_try_level9_treetype20_action(world.assets, &player, &input);
-            }
-
-            if(gate == GB_STORY_GATE_NONE)
-            {
-                /* The original NPC fresh-A paths align Player through the
-                   common collision solver before handing control to social or
-                   dialogue UI.  State 1 uses full X/Y alignment with a 19px
-                   side gap; state 2 aligns only Y when legsColor != 1. */
                 if(interaction.type == GB_INTERACTION_SOCIAL)
                 {
                     gb_player_queue_social_alignment(&player, interaction.actor_x, interaction.actor_y);
@@ -223,18 +221,60 @@ void gb_game_run(void)
                 gb_story_handle_interaction(&story, &actors, &interaction);
             }
 
-            if(! gb_story_ui_active(&story) && gate != GB_STORY_GATE_TRAVERSED)
+            GbStoryGateResult gate = GB_STORY_GATE_NONE;
+
+            if(! gb_story_ui_active(&story))
             {
+                /* Generic portal Fgtiles that are serialized before Player
+                   must test the pre-movement Player position.  Requesting a
+                   scene does not abort the original object-update traversal,
+                   so Player and later objects still update this frame. */
+                const int pre_portal_target = gb_portal_try_activate_phase(
+                    world.assets, &player, &input, GB_PORTAL_PHASE_PRE_PLAYER);
+                if(gb_level_default_assets(pre_portal_target))
+                {
+                    gb_scene_request_gameplay(&scene, (u8)pre_portal_target, 10);
+                }
+
                 if(gb_player_try_level10_boundary(&player, world.assets->level_id))
                 {
                     gb_scene_request_gameplay(&scene, 10, 10);
                 }
                 gb_player_update(&player, world.assets, &input);
+                gb_world_track_camera(&world, player.x, player.y);
+                u16 player_sfx_volume = 0;
+                const int player_sfx = gb_player_take_pending_sfx(&player, &player_sfx_volume);
+                if(player_sfx >= 0)
+                {
+                    gb_audio_play_sfx_volume((u8)player_sfx, player_sfx_volume);
+                }
+
+                /* All 92 canonical physical-NPC level references are
+                   serialized after Player.  Their motion/proximity pass sees
+                   this frame's post-Player position. */
+                gb_actor_system_update_physical_npcs(&actors, &player);
+                const int actor_sfx = gb_actor_system_take_pending_sfx(&actors);
+                if(actor_sfx >= 0)
+                {
+                    gb_audio_play_sfx((u8)actor_sfx);
+                }
+
+                /* These physical Fgtile controllers occur after Player in their
+                   canonical level actor tables: Level-9 treetype20 is index 11
+                   after Player index 2; Level-10 turn4/5 are indices 13..16
+                   after Player index 1.  Their fresh-A geometry therefore sees
+                   the Player position produced by this frame's Player_update. */
+                gate = gb_story_try_level10_gate(&story, world.assets, &player, &input);
+                if(gate == GB_STORY_GATE_NONE)
+                {
+                    gate = gb_story_try_level9_treetype20_action(world.assets, &player, &input);
+                }
             }
 
             if(! gb_story_ui_active(&story) && gate == GB_STORY_GATE_NONE)
             {
-                const int portal_target = gb_portal_try_activate(world.assets, &player, &input);
+                const int portal_target = gb_portal_try_activate_phase(
+                    world.assets, &player, &input, GB_PORTAL_PHASE_POST_PLAYER);
                 if(gb_level_default_assets(portal_target))
                 {
                     gb_scene_request_gameplay(&scene, (u8)portal_target, 10);
@@ -243,15 +283,15 @@ void gb_game_run(void)
             }
         }
 
-        const int pending_sfx = gb_story_take_pending_sfx(&story);
-        if(pending_sfx >= 0)
+        for(;;)
         {
+            const int pending_sfx = gb_story_take_pending_sfx(&story);
+            if(pending_sfx < 0)
+            {
+                break;
+            }
             gb_audio_play_sfx((u8)pending_sfx);
         }
 
-        gb_world_update_camera(&world, player.x, player.y);
-        gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);
-        gb_video_draw_player_state(&player, &story, world.camera_x, world.camera_y);
-        gb_video_draw_story_ui(&story);
     }
 }

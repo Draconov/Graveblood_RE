@@ -1,0 +1,2 @@
+level_index,shared_rom_addr,collision_record_offset,visual_b_record_offset,collision_runtime_global,visual_b_runtime_global,collision_consumer,visual_b_consumer,cells,zero_cells,nonzero_cells,runtime_roles_separated,classification,confidence
+6,0x08655CC4,+0x0C,+0x10,0x03000550,0x03000564,0x08004670,0x0800A330,600,495,105,yes,intentional source-data alias,high

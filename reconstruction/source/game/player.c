@@ -4,7 +4,8 @@
 
 static void gb_player_animation_tick(GbPlayer* player)
 {
-    const u8 max_frame = player->animation_state == GB_PLAYER_ANIM_IDLE ? 8 : 6;
+    const u8 max_frame = player->bicycle_mode == 2 ? 6 :
+        (player->animation_state == GB_PLAYER_ANIM_IDLE ? 8 : 6);
     if(player->animation_frame < 1 || player->animation_frame > max_frame)
     {
         player->animation_frame = 1;
@@ -63,6 +64,9 @@ void gb_player_spawn(GbPlayer* player, s16 x, s16 y)
     player->motion_reset_y = 1;
     player->script_mode = 0;
     player->script_counter = 0;
+    player->bicycle_mode = 0;
+    player->pending_sfx_id = -1;
+    player->pending_sfx_volume = 0;
     player->facing_x = 0;
     player->facing_y = 1;
     player->facing_right = 0;
@@ -195,6 +199,7 @@ void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInpu
                 player->y_fixed = 870 << 8;
                 player->y = 870;
                 player->request_x_fixed = 0;
+                player->bicycle_mode = 0;
                 player->script_mode = 6;
             }
             gb_collision_apply_player_motion(level, player);
@@ -216,6 +221,16 @@ void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInpu
             }
         }
         return;
+    }
+
+    /* The shared ride state at 0x030005F4 is checked only on the normal
+       controller path.  Value 2 gates a fresh-R one-shot at 0x08009C10:
+       sound 10, volume 0x1E.  Scripted modes returned above, matching the
+       ROM gate that requires controller mode 0. */
+    if(player->bicycle_mode == 2 && (input->pressed & GB_INPUT_KEY_R))
+    {
+        player->pending_sfx_id = 10;
+        player->pending_sfx_volume = 30;
     }
 
     /* Normal Player mode at 0x080083A8 clears stale per-axis requests, then
@@ -269,3 +284,19 @@ void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInpu
     gb_collision_apply_player_motion(level, player);
 }
 
+
+int gb_player_take_pending_sfx(GbPlayer* player, u16* volume)
+{
+    if(! player || player->pending_sfx_id < 0)
+    {
+        return -1;
+    }
+    const int sound_id = player->pending_sfx_id;
+    if(volume)
+    {
+        *volume = player->pending_sfx_volume;
+    }
+    player->pending_sfx_id = -1;
+    player->pending_sfx_volume = 0;
+    return sound_id;
+}

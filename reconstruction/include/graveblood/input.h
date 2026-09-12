@@ -3,6 +3,10 @@
 
 #include <gba.h>
 
+enum {
+    GB_INPUT_KEY_R = 1u << 8,
+};
+
 typedef struct {
     u16 held;
     u16 pressed;

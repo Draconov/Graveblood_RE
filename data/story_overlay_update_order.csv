@@ -1,0 +1,4 @@
+phase,call_site,loader,list_source,relative_order,runtime_consequence,confidence
+story_overlay_list,0x08005996,0x080010A4,selected 0x0300083C + sceneSelector*4 slot,first,all loaded story-overlay objects are inserted before the physical level actor list,high
+physical_level_actor_list,0x080059AE,0x080010A4,LevelRecord+0x38,second,Player and all other physical level objects update after story overlays,high
+clean_room_overlay_phase,n/a,n/a,ROM insertion-order consequence,before Player,gb_actor_system_update_overlays must remain before gb_player_update,high

@@ -1,4 +1,4 @@
-phase,handler,condition,argument_state,argument_update,event_flag,event_flag_required,effect_function,effect_call,argument_before_call,confidence
-final_opcode_entry,0x080037F6,state-4 opcode -5,0x03000674,none,0x03000678,1,0x08004FE0,0x080037F8,0,high
-player_update_le_1000,0x080088A8,argument_state <= 1000,0x03000674,argument_state = 0,0x03000678,1,0x08004FE0,0x080088B6 when event_flag == 1,0,high
-player_update_gt_1000,0x080081CE,argument_state > 1000,0x03000674,argument_state += 20,0x03000678,1,0x08004FE0,0x080088B6 when event_flag == 1,updated argument_state,high
+phase,handler,condition,argument_state,argument_update,event_flag,event_flag_required,effect_function,effect_call,argument_before_call,reachable_from_normal_boot,unreachable_reason,confidence
+final_opcode_entry,0x080037F6,state-4 opcode -5,0x03000674,none,0x03000678,1,0x08004FE0,0x080037F8,0,yes,,high
+player_update_le_1000,0x080088A8,argument_state <= 1000,0x03000674,argument_state = 0,0x03000678,1,0x08004FE0,0x080088B6 when event_flag == 1,0,yes,,high
+player_update_gt_1000,0x080081CE,argument_state > 1000,0x03000674,argument_state += 20,0x03000678,1,0x08004FE0,0x080088B6 when event_flag == 1,updated argument_state,no,no executable writer can seed argument_state above 1000 from boot value 0,high

@@ -22,24 +22,54 @@ static int gb_abs_int(int value)
 void gb_world_load(GbWorld* world, const GbLevelAssets* assets)
 {
     world->assets = assets;
-    world->camera_x = 0;
-    world->camera_y = 0;
     world->stream_tile_x = 0;
     world->stream_tile_y = 0;
     world->stream_valid = 0;
     gb_video_load_level(assets);
-    gb_video_set_camera(0, 0);
+    gb_video_set_camera(world->camera_x, world->camera_y);
 }
 
-void gb_world_update_camera(GbWorld* world, s16 focus_x, s16 focus_y)
+void gb_world_track_camera(GbWorld* world, s16 focus_x, s16 focus_y)
+{
+    /* Player+0x08/+0x10 and +0x0C/+0x14 form the ROM's body-center
+       camera target.  The public-demo Player body is 16x16, so the
+       integer anchor maps to center=(x+8,y-8).  0x08006550 keeps that
+       center inside a 48x26 dead-zone instead of recentering every frame. */
+    const int center_x = (int)focus_x + 8;
+    const int center_y = (int)focus_y - 8;
+    int camera_x = world->camera_x;
+    int camera_y = world->camera_y;
+
+    if(camera_x < center_x - 144)
+    {
+        camera_x = center_x - 144;
+    }
+    if(camera_x > center_x - 96)
+    {
+        camera_x = center_x - 96;
+    }
+    if(camera_y < center_y - 93)
+    {
+        camera_y = center_y - 93;
+    }
+    if(camera_y > center_y - 67)
+    {
+        camera_y = center_y - 67;
+    }
+
+    world->camera_x = (s16)camera_x;
+    world->camera_y = (s16)camera_y;
+}
+
+void gb_world_publish_camera(GbWorld* world)
 {
     const int world_width_pixels = (int)world->assets->world_width_tiles * 8;
     const int world_height_pixels = (int)world->assets->world_height_tiles * 8;
     const s16 max_x = world_width_pixels > 240 ? (s16)(world_width_pixels - 240) : 0;
     const s16 max_y = world_height_pixels > 160 ? (s16)(world_height_pixels - 160) : 0;
 
-    world->camera_x = gb_clamp_s16((s16)(focus_x - 120), 0, max_x);
-    world->camera_y = gb_clamp_s16((s16)(focus_y - 88), 0, max_y);
+    world->camera_x = gb_clamp_s16(world->camera_x, 0, max_x);
+    world->camera_y = gb_clamp_s16(world->camera_y, 0, max_y);
 
     const s16 tile_x = (s16)(world->camera_x >> 3);
     const s16 tile_y = (s16)(world->camera_y >> 3);
@@ -81,4 +111,10 @@ void gb_world_update_camera(GbWorld* world, s16 focus_x, s16 focus_y)
     world->stream_tile_y = tile_y;
     world->stream_valid = 1;
     gb_video_set_camera(world->camera_x, world->camera_y);
+}
+
+void gb_world_update_camera(GbWorld* world, s16 focus_x, s16 focus_y)
+{
+    gb_world_track_camera(world, focus_x, focus_y);
+    gb_world_publish_camera(world);
 }

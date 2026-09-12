@@ -796,6 +796,53 @@ def pack_player_animation(rom: bytes) -> PackedSprite:
     return PackedSprite((16, 32), len(images), tuple(palette), data)
 
 
+def pack_player_bicycle_animation(rom: bytes) -> bytes:
+    """Materialize Player_draw's six-frame, five-sprite bicycle composition.
+
+    The original remains in 2D OBJ mode and dynamically stages five source
+    ranges into logical tiles 0x151/0x160/0x170/0x180/0x190.  The clean-room
+    game uses 1D OBJ mapping, so each of the five submitted 16x16 roots is
+    repacked into contiguous 1D tile order while preserving exact 8bpp palette
+    indices.  The six source offsets are the ROM table at 0x08019968.
+    """
+    frame_offsets = struct.unpack_from('<6I', rom, 0x08019968 - ROM_BASE)
+    if frame_offsets != (0, 4, 8, 0x50, 0x54, 0x58):
+        raise ValueError(f'unexpected bicycle frame offsets: {frame_offsets!r}')
+
+    source_off = OBJ_TILES_SOURCE - ROM_BASE
+    initial = bytearray(rom[source_off:source_off + 0x8000])
+    if len(initial) != 0x8000:
+        raise ValueError('initial OBJ bank truncated while packing bicycle frames')
+
+    out = bytearray()
+    for frame_offset in frame_offsets:
+        vram = bytearray(initial)
+        uploads = (
+            (0x151, frame_offset + 0x1501, 2),
+            (0x160, frame_offset + 0x1510, 4),
+            (0x170, frame_offset + 0x1520, 4),
+            (0x180, frame_offset + 0x1530, 4),
+            (0x190, frame_offset + 0x1540, 4),
+        )
+        for dst_tile, src_tile, count in uploads:
+            src = source_off + src_tile * 64
+            blob = rom[src:src + count * 64]
+            if len(blob) != count * 64:
+                raise ValueError(f'bicycle source tile 0x{src_tile:X} overruns ROM')
+            dst = dst_tile * 64
+            vram[dst:dst + count * 64] = blob
+
+        for root_tile in (0x151, 0x170, 0x172, 0x190, 0x192):
+            for tile_y in range(2):
+                for tile_x in range(2):
+                    tile = root_tile + tile_x + tile_y * 16
+                    out.extend(vram[tile * 64:(tile + 1) * 64])
+
+    if len(out) != 6 * 5 * 4 * 64:
+        raise ValueError('unexpected bicycle packed size')
+    return bytes(out)
+
+
 def _find_rom(root: Path, explicit: Path | None = None) -> Path:
     candidates = []
     if explicit:
@@ -950,6 +997,15 @@ const GbLevelAssets {name}_assets = {{
 def _player_c(sprite: PackedSprite) -> str:
     palette = [_bgr555(c) for c in sprite.palette] + [0] * (16 - len(sprite.palette))
     return f'''#include <graveblood/assets.h>\n\nconst u16 gb_player_obj_palette[16] = {{\n{_c_values(palette, 8, 4)}\n}};\n\nconst u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {{\n{_c_values(_bytes_to_u16(sprite.data), 12, 4)}\n}};\n'''
+
+
+def _player_bicycle_c(data: bytes) -> str:
+    return f"""#include <graveblood/assets.h>
+
+const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(data), 12, 4)}
+}};
+"""
 
 
 def _actor_descriptor_c(d: ActorDescriptorSpec) -> str:
@@ -1387,10 +1443,17 @@ extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
 extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];
 extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
-enum {{ GB_PLAYER_FRAME_COUNT = 24 }};
+enum {{
+    GB_PLAYER_FRAME_COUNT = 24,
+    GB_PLAYER_BICYCLE_FRAME_COUNT = 6,
+    GB_PLAYER_BICYCLE_SPRITE_COUNT = 5,
+    GB_PLAYER_BICYCLE_SPRITE_HALFWORDS = 128,
+    GB_PLAYER_BICYCLE_FRAME_HALFWORDS = GB_PLAYER_BICYCLE_SPRITE_COUNT * GB_PLAYER_BICYCLE_SPRITE_HALFWORDS,
+}};
 
 extern const u16 gb_player_obj_palette[16];
 extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];
+extern const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS];
 
 #endif
 """
@@ -1527,7 +1590,9 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
         (out / 'maps' / f'level{level:02d}.tmx').write_text(_tmx(level, spec, bg), encoding='utf-8')
 
     sprite = pack_player_animation(rom)
+    bicycle = pack_player_bicycle_animation(rom)
     (out / 'data' / 'player_sprite.c').write_text(_player_c(sprite), encoding='utf-8')
+    (out / 'data' / 'player_bicycle_sprite.c').write_text(_player_bicycle_c(bicycle), encoding='utf-8')
     (out / 'data' / 'actor_data.c').write_text(_actor_data_c(actor_data), encoding='utf-8')
     (out / 'data' / 'actor_routes.c').write_text(_actor_routes_c(actor_data), encoding='utf-8')
     (out / 'data' / 'actor_sprite_data.c').write_text(_actor_sprite_c(actor_data, actor_sprites, foreground_sprites), encoding='utf-8')

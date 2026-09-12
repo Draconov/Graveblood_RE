@@ -58,6 +58,27 @@ class ObjRendererTests(unittest.TestCase):
             self.assertIn('sprite_summary.json', names)
             self.assertTrue(all(p.exists() for p in outputs))
 
+    def test_reference_summary_uses_proven_level_idle_selector_for_source_3468(self):
+        import json
+        with tempfile.TemporaryDirectory() as td:
+            outputs = mod.write_reference_sprite_artifacts(self.data, Path(td))
+            summary_path = next(path for path in outputs if path.name == 'sprite_summary.json')
+            summary = json.loads(summary_path.read_text(encoding='utf-8'))
+            note = summary['player_branch_candidate_3468_note']
+            self.assertNotIn('unproven', note.lower())
+            self.assertIn('selector-0 idle', note)
+            self.assertIn('Levels 1, 4, 5, 7, and 8', note)
+            self.assertIn('LevelRecord+0x3C', note)
+            self.assertIn('Player+0x1E0', note)
+
+    def test_checked_in_reference_summary_matches_proven_selector0_note(self):
+        import json
+        summary = json.loads((ROOT / 'renders' / 'sprites' / 'sprite_summary.json').read_text(encoding='utf-8'))
+        note = summary['player_branch_candidate_3468_note']
+        self.assertNotIn('unproven', note.lower())
+        self.assertIn('selector-0 idle', note)
+        self.assertIn('Levels 1, 4, 5, 7, and 8', note)
+
     def test_reference_summary_classifies_grass_and_leaf_tiles_separately(self):
         import json
         with tempfile.TemporaryDirectory() as td:

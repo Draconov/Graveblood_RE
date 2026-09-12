@@ -16,8 +16,9 @@ DATA :=
 GRAPHICS :=
 
 ARCH := -mthumb -mthumb-interwork
+EXTRA_CFLAGS ?=
 CFLAGS := -g -O2 -Wall -Wextra -std=gnu11 -mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer $(ARCH)
-CFLAGS += $(INCLUDE)
+CFLAGS += $(INCLUDE) $(EXTRA_CFLAGS)
 ASFLAGS := -g $(ARCH)
 LDFLAGS := -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 

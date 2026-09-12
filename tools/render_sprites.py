@@ -470,7 +470,7 @@ def write_reference_sprite_artifacts(data: bytes, out_dir: Path) -> list[Path]:
         "complete_source_tiles_before_palette": obj_source_tile_capacity(),
         "source_bytes_remainder_before_palette": source_bytes % OBJ_TILE_BYTES_8BPP,
         "character_source_2198_note": "Known-valid Vika-style 16x32 frame sample; not claimed as constructor/default outfit.",
-        "player_branch_candidate_3468_note": "Derived from initialized globals and the 0x08006B3A branch assuming player+0x1E0 == 0; that default remains unproven.",
+        "player_branch_candidate_3468_note": "Proven selector-0 idle reference: source 3468 is the first frame of the selector-0 idle sequence used on Levels 1, 4, 5, 7, and 8; scene activation copies LevelRecord+0x3C to Player+0x1E0 before the first active update.",
         "grass_tile_note": "Grass_draw 0x08002684 submits logical tile 0x48 as a 16x16 sprite; 2D OBJ rows use 0x48/0x49 and 0x58/0x59.",
         "leaf_particle_frame_tiles": ["0x4C", "0x4D", "0x5C", "0x5D"],
         "leaf_particle_note": "Leaves actor draw is a no-op; Leaves_update 0x08005F80 emits transient 0x0800B2BC particles whose draw method 0x0800AC1C cycles these four 8x8 initial-OBJ tiles.",

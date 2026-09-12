@@ -9,8 +9,24 @@ permissions:
   contents: read
 
 jobs:
+  hardware-address-validation:
+    name: Validate hardware-address runtime
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Graveblood_RE
+        uses: actions/checkout@v4
+
+      - name: Run literal-address and ARM validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 \
+            python3 -m unittest tools.test_hardware_address_runtime -v
+
   build:
     name: Build GBA ROM
+    needs: hardware-address-validation
     runs-on: ubuntu-latest
     container:
       image: devkitpro/devkitarm:20260610
@@ -26,8 +42,29 @@ jobs:
           set -euo pipefail
           make -C reconstruction -j"$(nproc)"
           test -s reconstruction/Graveblood_RE.gba
+          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
           sha256sum reconstruction/Graveblood_RE.gba \
             > reconstruction/Graveblood_RE.gba.sha256
+
+          make -C reconstruction \
+            TARGET=Graveblood_RE_selftest \
+            BUILD=build-selftest \
+            EXTRA_CFLAGS=-DGB_EMULATOR_SELFTEST \
+            -j"$(nproc)"
+          test -s reconstruction/Graveblood_RE_selftest.gba
+          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE_selftest.gba
+          sha256sum reconstruction/Graveblood_RE_selftest.gba \
+            > reconstruction/Graveblood_RE_selftest.gba.sha256
+
+          make -C reconstruction \
+            TARGET=Graveblood_RE_device_test \
+            BUILD=build-device-test \
+            EXTRA_CFLAGS=-DGB_DEVICE_SELFTEST \
+            -j"$(nproc)"
+          test -s reconstruction/Graveblood_RE_device_test.gba
+          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE_device_test.gba
+          sha256sum reconstruction/Graveblood_RE_device_test.gba \
+            > reconstruction/Graveblood_RE_device_test.gba.sha256
 
       - name: Upload ROM artifact
         uses: actions/upload-artifact@v4
@@ -36,13 +73,61 @@ jobs:
           path: |
             reconstruction/Graveblood_RE.gba
             reconstruction/Graveblood_RE.gba.sha256
+            reconstruction/Graveblood_RE_selftest.gba
+            reconstruction/Graveblood_RE_selftest.gba.sha256
+            reconstruction/Graveblood_RE_device_test.gba
+            reconstruction/Graveblood_RE_device_test.gba.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+  emulator-smoke:
+    name: Boot ROM in mGBA
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Graveblood_RE
+        uses: actions/checkout@v4
+
+      - name: Download built ROM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Graveblood_RE-rom
+          path: dist
+
+      - name: Install mGBA SDL frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mgba-sdl xvfb xdotool
+
+      - name: Boot ROM under mGBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/Graveblood_RE.gba
+          xvfb-run -a env SDL_AUDIODRIVER=dummy \
+            python3 tools/run_mgba_smoke.py dist/Graveblood_RE.gba --seconds 5
+          test -s dist/Graveblood_RE_selftest.gba
+          xvfb-run -a env SDL_AUDIODRIVER=dummy \
+            python3 tools/run_mgba_selftest.py \
+              dist/Graveblood_RE_selftest.gba \
+              --seconds 2 \
+              --ppu-screenshot dist/mgba-selftest-ppu.png
+
+      - name: Upload mGBA PPU validation screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: Graveblood_RE-mgba-ppu
+          path: dist/mgba-selftest-ppu.png
           if-no-files-found: error
           compression-level: 0
 
   release:
     name: Publish tagged ROM release
     if: startsWith(github.ref, 'refs/tags/Graveblood_RE_v') && endsWith(github.ref, '-dev')
-    needs: build
+    needs: [build, emulator-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write

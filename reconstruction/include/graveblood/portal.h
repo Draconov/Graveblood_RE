@@ -5,6 +5,13 @@
 #include <graveblood/assets.h>
 #include <graveblood/input.h>
 
+typedef enum {
+    GB_PORTAL_PHASE_PRE_PLAYER = 0,
+    GB_PORTAL_PHASE_POST_PLAYER = 1,
+} GbPortalPhase;
+
 int gb_portal_try_activate(const GbLevelAssets* level, const GbPlayer* player, const GbInput* input);
+int gb_portal_try_activate_phase(const GbLevelAssets* level, const GbPlayer* player,
+                                 const GbInput* input, GbPortalPhase phase);
 
 #endif

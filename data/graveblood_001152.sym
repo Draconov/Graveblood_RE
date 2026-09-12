@@ -6,6 +6,7 @@
 08002268 irq_handler_candidate
 08002480 Grass_update
 08002684 Grass_draw
+080026E8 NPC_hit_callback
 0800274C NPC_draw
 08002914 grass_factory
 0800298C npc_dialogue_actor_update_candidate
@@ -26,14 +27,14 @@
 08004670 apply_actor_motion_with_tile_collision_candidate
 08004A74 TitleScene_exit
 08004F04 dynamic_obj_tile_upload
-08004FE0 ending_vram_effect_candidate
+08004FE0 ending_vram_effect
 08004A78 TitleScene_update
 08004B74 GameplayScene_update
 08004C10 GameplayScene_exit
 08005914 TitleScene_enter
 0800575C upload_level_graphics_resources
 080057DC upload_fixed_tilemap
-08005720 normal_dialogue_record_action_candidate
+08005720 indexed_obj_graphics_bank_loader
 08005950 load_level_record_resources
 08005A2C GameplayScene_enter
 08005BEC set_level_graphics_variant
@@ -47,6 +48,7 @@
 08005EE0 Leaves_factory
 08005F80 Leaves_update
 08005ED8 bx_r3_trampoline
+080060C4 Player_hit_callback
 0800621C Player_constructor
 08006418 Player_factory
 08006430 Wardrobe_draw_selected_label
@@ -61,9 +63,13 @@
 0800A8F0 submit_obj_oam
 0800AB60 LeafParticle_update
 0800AC1C LeafParticle_draw
-0800B250 effect_object_sfx4_constructor_candidate
+0800AEA8 latent_projectile_update
+0800ABBC hit_death_burst_update
+0800ABCC latent_projectile_draw
+0800AC88 hit_death_burst_draw
+0800B250 latent_projectile_constructor
 0800B2BC LeafParticle_constructor
-0800B31C effect_object_sfx3_constructor_candidate
+0800B31C hit_death_burst_constructor
 0800D968 register_spawn_factories_npc_grass
 0800DBB4 register_spawn_factory_fgtile
 0800DFB0 register_spawn_factory_leaves
@@ -93,7 +99,7 @@
 03001044 leaf_emitter_x_offset_table
 0300106C leaf_emitter_y_offset_table
 03001B4C leaf_particle_frame_tile_table
-03000674 ending_effect_argument_state_candidate
+03000674 ending_effect_argument_state
 03000678 ending_event_active_flag
 030006AC story_progression_stage
 030006BC keys_current

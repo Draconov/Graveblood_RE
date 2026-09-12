@@ -1,0 +1,6 @@
+level,player_index,controller_index,controller_rom_addr,controller_kind,metadata,relative_order,runtime_consequence,confidence
+9,2,11,0x08386FF0,treetype20_bicycle,treetype=20;portTo=524,after Player,fresh-A contact sees same-frame post-Player position; queued vertical target applies on the next Player update,high
+10,1,13,0x08367380,turn4_rusty_key_gate,turn=4;portTo=8,after Player,fresh-A gate geometry sees same-frame post-Player position; forced vertical target is queued for the next Player update,high
+10,1,14,0x083673CC,turn4_rusty_key_gate,turn=4;portTo=8,after Player,fresh-A gate geometry sees same-frame post-Player position; forced vertical target is queued for the next Player update,high
+10,1,15,0x08367418,turn5_rusty_key_gate,turn=5;portTo=8,after Player,fresh-A gate geometry sees same-frame post-Player position; forced vertical target is queued for the next Player update,high
+10,1,16,0x08367464,turn5_rusty_key_gate,turn=5;portTo=8,after Player,fresh-A gate geometry sees same-frame post-Player position; forced vertical target is queued for the next Player update,high

@@ -1,0 +1,12 @@
+level,player_index,player_rom_addr,physical_npc_count,first_npc_index,last_npc_index,all_npcs_after_player,runtime_consequence,confidence
+0,8,0x0853B274,3,44,48,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+1,2,0x08533BF8,9,4,15,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+2,0,0x084E761C,9,7,15,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+3,0,0x084A9578,1,1,1,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+4,0,0x0847C354,5,1,5,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+5,0,0x0841D9F4,28,7,38,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+6,8,0x0853B274,3,44,48,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+7,0,0x0841C880,0,,,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+8,4,0x0841A220,2,5,6,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+9,2,0x08386D4C,21,7,29,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high
+10,1,0x08366F50,11,2,12,1,physical NPC update/motion/proximity consumes same-frame post-Player state,high

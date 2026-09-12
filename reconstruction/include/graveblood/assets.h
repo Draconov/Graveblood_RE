@@ -259,9 +259,16 @@ extern const GbAudioSample gb_audio_samples[GB_AUDIO_SAMPLE_COUNT];
 extern const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES];
 extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
-enum { GB_PLAYER_FRAME_COUNT = 24 };
+enum {
+    GB_PLAYER_FRAME_COUNT = 24,
+    GB_PLAYER_BICYCLE_FRAME_COUNT = 6,
+    GB_PLAYER_BICYCLE_SPRITE_COUNT = 5,
+    GB_PLAYER_BICYCLE_SPRITE_HALFWORDS = 128,
+    GB_PLAYER_BICYCLE_FRAME_HALFWORDS = GB_PLAYER_BICYCLE_SPRITE_COUNT * GB_PLAYER_BICYCLE_SPRITE_HALFWORDS,
+};
 
 extern const u16 gb_player_obj_palette[16];
 extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];
+extern const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS];
 
 #endif

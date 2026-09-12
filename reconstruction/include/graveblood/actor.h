@@ -3,6 +3,7 @@
 
 #include <gba.h>
 #include <graveblood/assets.h>
+#include <graveblood/input.h>
 
 enum {
     GB_PLAYER_ANIM_WALK_REGULAR = 2,
@@ -33,6 +34,14 @@ typedef struct {
        mode/counter used by the Level-9 -> Level-10 entrance sequence. */
     u8 script_mode;
     u32 script_counter;
+    /* Shared ROM state 0x030005F4. Value 2 is the recovered bicycle-riding
+       mode entered by the Level-9 treetype-20 interaction. The ROM also
+       retains dormant value-1 draw/update consumers, but static writer
+       closure proves no normal public-demo boot can create value 1. This
+       state is separate from script_mode and value 2 survives the 9->10 load. */
+    u8 bicycle_mode;
+    s8 pending_sfx_id;
+    u16 pending_sfx_volume;
     s8 facing_x;
     s8 facing_y;
     u8 facing_right;
@@ -49,6 +58,8 @@ void gb_player_queue_vertical_target(GbPlayer* player, s16 target_y);
 void gb_player_queue_social_alignment(GbPlayer* player, s16 anchor_x, s16 anchor_y);
 void gb_player_resolve_queued_motion(GbPlayer* player, const GbLevelAssets* level);
 u8 gb_player_try_level10_boundary(GbPlayer* player, u8 current_level);
+void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInput* input);
+int gb_player_take_pending_sfx(GbPlayer* player, u16* volume);
 u8 gb_player_frame_index(const GbPlayer* player);
 
 #endif

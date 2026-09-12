@@ -4,4 +4,4 @@ opcode,semantic,proven_behavior,confidence
 -2,set primary message stream,writes record argument to primary message selector,high
 -3,add auxiliary message stream,writes record argument to first free auxiliary message-selector slot,high
 -4,set story/progression stage,writes record argument to story stage consumed by Messages indexing,high
--5,generic record action fallback,not specially dispatched; falls through generic path which calls 0x08005720 with the record argument,high
+-5,latent OBJ graphics-bank load,latent generic path selects a 0x1800-byte ROM graphics bank by record argument and copies 0x1200+0x200 bytes into OBJ VRAM; dormant from canonical state-2 dialogue because the sole -5 record is script 6 and state-2 selectors are only 0..3,high

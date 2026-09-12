@@ -55,6 +55,7 @@ KNOWN_FUNCTIONS = [
     (0x08002268, "irq_handler_candidate", "installed at 0x03007FFC; VBlank/IRQ dispatch candidate"),
     (0x08002480, "Grass_update", "grass vtable update method; literal no-op bx lr"),
     (0x08002684, "Grass_draw", "grass vtable draw method; submits 16x16 logical tile 0x48 with turn-controlled HFLIP and player-depth priority"),
+    (0x080026E8, "NPC_hit_callback", "NPC vtable slot +0x1C; marks actor for removal and spawns hit/death burst with propagation arg 0"),
     (0x0800274C, "NPC_draw", "vtable 0x08018B00 draw method; stages four dynamic 16x8 source rows and submits two 16x16 OAM sprites"),
     (0x08002914, "grass_factory", "spawnType=grass registry target; allocates 0x6C-byte Grass object"),
     (0x0800298C, "npc_dialogue_actor_update_candidate", "dispatches actor state modes and consumes dial-indexed 0x90-byte dialogue records"),
@@ -69,20 +70,20 @@ KNOWN_FUNCTIONS = [
     (0x08003AE8, "Fgtile_draw", "Fgtile vtable draw method; literal no-op bx lr"),
     (0x08003AEC, "fgtile_factory", "spawnType=fgtile registry target; allocates 0x90-byte foreground-tile object"),
     (0x080037F6, "state4_final_collection_handler", "state-4 opcode -5 handler; calls 0x08004FE0, plays SFX 13, sets 0x03000678=1, increments collection index, consumes pickup and clears dialogue"),
-    (0x08003B98, "Fgtile_update", "foreground-tile update; turn=4/5 switches after collection index 3->4 to a fresh-A forced vertical gate action; treetype=20 diverts through 0x0800417C to Player vertical-target helper without consuming portTo; generic portTo -> request_scene block remains separate at 0x08004258"),
+    (0x08003B98, "Fgtile_update", "foreground-tile update; turn=4/5 switches after collection index 3->4 to a fresh-A forced vertical gate action; treetype=20 diverts through 0x0800417C to the bicycle-mount path (Player vertical target Y=512 plus shared ride mode 0x030005F4=2) without consuming portTo; generic portTo -> request_scene block remains separate at 0x08004258"),
     (0x080043AC, "actor_level_global_policy_candidate", "level mismatch invokes actor virtual method; setglobal==0 sets inherited actor+0x31 culling-bypass flag"),
     (0x080043F8, "actor_common_property_parse_candidate", "maps named actor properties into runtime object fields"),
     (0x08004670, "apply_actor_motion_with_tile_collision_candidate", "reads actor +0x18/+0x1C requested displacement, collision-tests the world tile grid, and applies permitted components to +0x08/+0x0C"),
     (0x08004A74, "TitleScene_exit", "no-op exit (bx lr)"),
     (0x08004F04, "dynamic_obj_tile_upload", "copies ROM-side 8bpp animation tiles into hardware-visible OBJ VRAM working slots"),
-    (0x08004FE0, "ending_vram_effect_candidate", "called with arg 0 by state-4 final-sketch opcode -5; Player_update repeats it when 0x03000678==1 after applying the 0x03000674 <=1000 reset / >1000 +20 gate; copies 1500*(arg+64) bytes to 0x06000000 and 250*(arg+64) bytes to 0x06010000"),
+    (0x08004FE0, "ending_vram_effect", "called with argument 0 by state-4 final-sketch opcode -5; startup zeroes 0x03000674 and static alias-write closure finds no executable seed above 1000, so the >1000 high branch unreachable from normal boot is statically closed; Player_update therefore repeats argument 0 while 0x03000678==1; copies 1500*(arg+64) bytes to 0x06000000 and 250*(arg+64) bytes to 0x06010000"),
     (0x08004A78, "TitleScene_update", "PRESS START input and delayed scene transition"),
     (0x08004B74, "GameplayScene_update", "active gameplay scene update"),
     (0x08004C10, "GameplayScene_exit", "gameplay scene exit"),
     (0x08005914, "TitleScene_enter", "title scene enter/init"),
     (0x0800575C, "upload_level_graphics_resources", "level+0x24 graphics descriptor: BG/OBJ tile uploads, palettes, translation-table pointer"),
     (0x080057DC, "upload_fixed_tilemap", "translates level+0x1C tile IDs through 0x03000560 into BG screenblocks"),
-    (0x08005720, "normal_dialogue_record_action_candidate", "normal dialogue generic record-action fallback calls this with record argument; state-4 -5 uses separate handler"),
+    (0x08005720, "indexed_obj_graphics_bank_loader", "argument-indexed 0x1800-byte ROM graphics bank loader; copies 0x1200 bytes to OBJ VRAM 0x06010000 and 0x200 bytes from bank+0x1400 to 0x06011400; normal-dialogue -5 call is dormant from canonical state-2 selectors"),
     (0x08005950, "load_level_record_resources", "consumes selected 0x40-byte runtime level record and loads graphics, fixed map, streaming layers and actors"),
     (0x08005A2C, "GameplayScene_enter", "loads level id; selects record at 0x03000A10 + id*0x40"),
     (0x08005BEC, "set_level_graphics_variant", "stores selector at scene-manager+0x1C, loads descriptor from current level record +0x24+selector*4, then reloads graphics/fixed/streamed layers"),
@@ -96,6 +97,7 @@ KNOWN_FUNCTIONS = [
     (0x08005EE0, "Leaves_factory", "type=leaves registry target; allocates 0x74-byte global leaf emitter object"),
     (0x08005F80, "Leaves_update", "global leaf emitter update; shared cooldown/cycle, camera-x >2000 gate, and transient particle spawn via 0x0800B2BC"),
     (0x08005ED8, "bx_r3_trampoline", "interworking/indirect-call trampoline"),
+    (0x080060C4, "Player_hit_callback", "Player vtable slot +0x1C; marks Player for removal, spawns hit/death burst with propagation arg 0, then queues scene request"),
     (0x0800621C, "Player_constructor", "player factory constructor; initializes sprite stride and copies 10x20-byte wardrobe label table to object+0x2B4"),
     (0x08006418, "Player_factory", "registered player actor factory; allocates/constructs Player object"),
     (0x08006430, "Wardrobe_draw_selected_label", "standalone helper used by Player_update Wardrobe path; draws label at Player+0x2B4 + Player+0x240*20"),
@@ -110,9 +112,13 @@ KNOWN_FUNCTIONS = [
     (0x0800A8F0, "submit_obj_oam", "writes OAM entry from screen position, logical 8bpp tile, Graveblood size enum, flips and priority"),
     (0x0800AB60, "LeafParticle_update", "leaf particle update; fixed8 velocity -150/+150 and camera-relative cull"),
     (0x0800AC1C, "LeafParticle_draw", "leaf particle draw; cycles initialized tile table 0x4C/0x4D/0x5C/0x5D with countdown 10"),
-    (0x0800B250, "effect_object_sfx4_constructor_candidate", "distinct effect-object constructor using vtable 0x08A8C198; plays SFX4 at volume 0x50"),
+    (0x0800AEA8, "latent_projectile_update", "technical runtime role recovered from vtable 0x08A8C198: moves by velocity, spends 0x5000 travel budget, collides with map/objects and dispatches hit callback 60"),
+    (0x0800ABBC, "hit_death_burst_update", "technical runtime role recovered from vtable 0x08A8C1E8: increments frame counter and removes after counter >31"),
+    (0x0800ABCC, "latent_projectile_draw", "technical runtime role: draws one 8x16 priority-1 OBJ using tile 0x126 in flight or 0x124 in terminal state"),
+    (0x0800AC88, "hit_death_burst_draw", "technical runtime role: four eight-update visual phases using tiles 0x127/0x128/0x12A/0x12C at priority 1"),
+    (0x0800B250, "latent_projectile_constructor", "technical runtime role recovered from update/draw behavior; vtable 0x08A8C198; plays SFX4; no static constructor root in public demo"),
     (0x0800B2BC, "LeafParticle_constructor", "constructor used by Leaves_update; initializes fixed8 -150/+150 velocity and 4-frame leaf animation state"),
-    (0x0800B31C, "effect_object_sfx3_constructor_candidate", "distinct effect-object constructor using vtable 0x08A8C1E8; plays SFX3 at volume 0x50; spawned by 0x080026E8 and 0x080060C4"),
+    (0x0800B31C, "hit_death_burst_constructor", "technical runtime role recovered from update/draw behavior; vtable 0x08A8C1E8; plays SFX3; direct callers are NPC/Player hit callbacks with propagation disabled"),
     (0x0800D968, "register_spawn_factories_npc_grass", "binds literal spawnType keys npc/grass to concrete factory callbacks"),
     (0x0800DBB4, "register_spawn_factory_fgtile", "binds literal spawnType key fgtile to 0x08003AEC"),
     (0x0800DFB0, "register_spawn_factory_leaves", "binds literal type key leaves to 0x08005EE0"),
@@ -145,7 +151,7 @@ KNOWN_GLOBALS = [
     (0x03001044, "leaf_emitter_x_offset_table", "six startup-initialized offsets 350,250,170,0,340,290"),
     (0x0300106C, "leaf_emitter_y_offset_table", "six startup-initialized offsets 40,60,80,30,20,50"),
     (0x03001B4C, "leaf_particle_frame_tile_table", "four startup-initialized logical OBJ tiles 0x4C,0x4D,0x5C,0x5D"),
-    (0x03000674, "ending_effect_argument_state_candidate", "Player_update compares this state to 1000: <=1000 resets to 0; >1000 increments by 20; when 0x03000678==1 the resulting value is fed to 0x08004FE0"),
+    (0x03000674, "ending_effect_argument_state", "startup zeroes this state; Player_update compares it to 1000: <=1000 resets to 0 and >1000 increments by 20, but exhaustive executable alias-write closure finds no seed above 1000, making that high branch unreachable from normal boot; while 0x03000678==1 the reachable resulting value 0 is fed to 0x08004FE0"),
     (0x03000678, "ending_event_active_flag", "set to 1 by state-4 final-sketch opcode -5 handler 0x080037F6; monitored by gameplay update"),
     (0x030006AC, "story_progression_stage", "written by normal-context dialogue opcode -4; consumed as stage index by Messages UI; state-4 pickup -4 does not write it"),
     (0x030006BC, "keys_current", "inverted KEYINPUT mask"),
@@ -181,6 +187,58 @@ FOCUS_TERMS = [
 
 def u32(data: bytes, off: int) -> int:
     return struct.unpack_from("<I", data, off)[0]
+
+
+def level6_collision_visual_alias_closure(data: bytes) -> dict:
+    """Prove Level 6 intentionally aliases one ROM array into two runtime roles.
+
+    The 0x40-byte LevelRecord keeps collision at +0x0C and streamed visual-B at
+    +0x10.  Level 6 points both fields at 0x08655CC4, but the loader copies
+    them into distinct globals and the collision/streaming consumers read those
+    distinct globals.  This is therefore a source-data alias, not a recovered
+    structure ambiguity.
+    """
+    level_index = 6
+    doff = LEVEL_DESC_OFF + level_index * LEVEL_DESC_SIZE
+    vals = struct.unpack_from('<16I', data, doff)
+    collision_addr = vals[0x0C // 4]
+    visual_b_addr = vals[0x10 // 4]
+    assert collision_addr == visual_b_addr == 0x08655CC4
+
+    # load_level_record_resources(): +0x10 -> visual-B global, +0x0C -> collision global.
+    assert struct.unpack_from('<3H', data, 0x5964) == (0x6902, 0x4B28, 0x601A)
+    assert struct.unpack_from('<3H', data, 0x596A) == (0x68C2, 0x4B27, 0x601A)
+    assert u32(data, 0x5A08) == 0x03000564
+    assert u32(data, 0x5A0C) == 0x03000550
+
+    # stream_world_tile_layers_region() dereferences visual A/B separately.
+    assert struct.unpack_from('<5H', data, 0xA360) == (0x4B25, 0x6818, 0x4B25, 0x4461, 0x681B)
+    assert u32(data, 0xA3F8) == 0x03000568
+    assert u32(data, 0xA3FC) == 0x03000564
+
+    # apply_actor_motion_with_tile_collision_candidate() dereferences only the
+    # collision pointer for the world-cell probes.
+    assert struct.unpack_from('<3H', data, 0x46F8) == (0x4FA8, 0x18E1, 0x683C)
+    assert u32(data, 0x499C) == 0x03000550
+
+    cells = 30 * 20
+    stats = layer_summary(data, collision_addr, cells)
+    return {
+        'level_index': level_index,
+        'shared_rom_addr': f'0x{collision_addr:08X}',
+        'collision_record_offset': '+0x0C',
+        'visual_b_record_offset': '+0x10',
+        'collision_runtime_global': '0x03000550',
+        'visual_b_runtime_global': '0x03000564',
+        'collision_consumer': '0x08004670',
+        'visual_b_consumer': '0x0800A330',
+        'cells': cells,
+        'zero_cells': stats['zero_cells'],
+        'nonzero_cells': cells - stats['zero_cells'],
+        'runtime_roles_separated': 'yes',
+        'classification': 'intentional source-data alias',
+        'confidence': 'high',
+    }
 
 
 def init_ram_to_rom_off(addr: int) -> int:
@@ -345,7 +403,7 @@ def dialogue_opcode_interpretation(opcode: int) -> str:
         -2: "normal context: set primary message-stream selector 0x03001814 to argument",
         -3: "normal context: insert argument into first free auxiliary selector: 0x03001810/0x0300180C/0x03001808",
         -4: "normal context: set story/progression stage 0x030006AC to argument; state-4 pickup context overrides this opcode",
-        -5: "normal context: generic record-action fallback calls 0x08005720(argument); state-4 pickup context overrides this opcode",
+        -5: "normal context: latent OBJ graphics-bank load via 0x08005720(argument), dormant from canonical state-2 selectors; state-4 pickup context overrides this opcode",
     }
     return semantics.get(opcode, "unclassified")
 
@@ -426,9 +484,10 @@ def header_info(data: bytes):
     }
 
 
-def write_csv(path: Path, fieldnames, rows):
+def write_csv(path: Path, fieldnames, rows, *, lineterminator=None):
     with path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        kwargs = {} if lineterminator is None else {"lineterminator": lineterminator}
+        w = csv.DictWriter(f, fieldnames=fieldnames, **kwargs)
         w.writeheader()
         w.writerows(rows)
 
@@ -563,7 +622,7 @@ def main():
         collision_rows.append({
             "level_index": i, "width": world_w, "height": world_h, "cells": world_cells,
             "collision_addr": f"0x{vals[0x0C//4]:08X}", **cstats,
-            "structure_note": "level 6 shares +0x0C and +0x10; treat collision role as special-case pending deeper trace" if i == 6 else "",
+            "structure_note": "level 6 intentionally aliases +0x0C collision and +0x10 visual-B to the same ROM array; loader copies them to distinct runtime globals and consumers remain role-separated" if i == 6 else "",
         })
 
     write_csv(args.out / "levels.csv", list(level_rows[0]), level_rows)
@@ -572,6 +631,8 @@ def main():
     write_csv(args.out / "level_graphics_variants.csv", list(graphics_variant_rows[0]), graphics_variant_rows)
     write_csv(args.out / "level_world_layers.csv", list(world_layer_rows[0]), world_layer_rows)
     write_csv(args.out / "collision_summary.csv", list(collision_rows[0]), collision_rows)
+    level6_alias = level6_collision_visual_alias_closure(data)
+    write_csv(args.out / "level6_collision_visual_alias.csv", list(level6_alias), [level6_alias])
 
     raw_desc_rows = []
     for i in range(LEVEL_COUNT):
@@ -630,8 +691,9 @@ def main():
     # transition.  Two recovered special branches divert before 0x08004258:
     # - Level 10 turn=4/5 gate tiles use the collection-gated forced-motion
     #   path and never consume portTo=8 as a scene destination.
-    # - The Level 9 treetype=20 tile takes the 0x0800417C vertical-target
-    #   branch; its stored portTo=524 is likewise not handed to request_scene.
+    # - The Level 9 treetype=20 tile takes the 0x0800417C bicycle-mount
+    #   branch (vertical target Y=512 plus shared ride mode 2); its stored
+    #   portTo=524 is likewise not handed to request_scene.
     portal_rows = []
     for row in actor_rows:
         if row["type"] != "fgtile" or row["portTo"] == "":
@@ -782,9 +844,9 @@ def main():
     write_csv(args.out / "strings_focus.csv", ["rom_offset","rom_addr","text"], focus_rows)
 
     write_csv(args.out / "known_functions.csv", ["address","name","evidence"], [
-        {"address":f"0x{a:08X}","name":n,"evidence":e} for a,n,e in KNOWN_FUNCTIONS])
+        {"address":f"0x{a:08X}","name":n,"evidence":e} for a,n,e in KNOWN_FUNCTIONS], lineterminator="\n")
     write_csv(args.out / "known_globals.csv", ["address","name","evidence"], [
-        {"address":f"0x{a:08X}","name":n,"evidence":e} for a,n,e in KNOWN_GLOBALS])
+        {"address":f"0x{a:08X}","name":n,"evidence":e} for a,n,e in KNOWN_GLOBALS], lineterminator="\n")
     sym_lines = [f"{a:08X} {n}" for a,n,_ in KNOWN_FUNCTIONS + KNOWN_GLOBALS]
     (args.out / "graveblood_001152.sym").write_text("\n".join(sym_lines) + "\n", encoding="ascii")
 

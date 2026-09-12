@@ -55,7 +55,7 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         for rel in required:
             self.assertTrue((ROOT / rel).is_file(), rel)
 
-    def test_reachable_final_effect_replays_exact_argument0_vram_copy_before_draw(self):
+    def test_reachable_final_effect_replays_exact_argument0_vram_copy_in_update_phase_after_draw(self):
         ending = ROOT / 'reconstruction/source/game/ending.c'
         header = ROOT / 'reconstruction/include/graveblood/ending.h'
         video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
@@ -74,9 +74,9 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('void gb_video_apply_final_effect(void);', video_h)
         self.assertIn('if(story.state.final_effect_pending)', game)
         self.assertIn('gb_video_apply_final_effect();', game)
-        effect_index = game.index('gb_video_apply_final_effect();')
-        frame_camera_index = game.index('gb_world_update_camera(&world, player.x, player.y);', effect_index)
-        self.assertLess(effect_index, frame_camera_index)
+        draw_index = game.index('gb_video_draw_player_state(&player, &story, world.camera_x, world.camera_y);')
+        effect_index = game.index('gb_video_apply_final_effect();', draw_index)
+        self.assertLess(draw_index, effect_index)
 
         gba_h = '''\n#ifndef GBA_H\n#define GBA_H\n#include <stdint.h>\ntypedef uint8_t u8;\ntypedef int8_t s8;\ntypedef uint16_t u16;\ntypedef int16_t s16;\ntypedef uint32_t u32;\ntypedef int32_t s32;\n#endif\n'''
         harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [0x10000] = 0x22, [0x13E80] = 0x66,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x11);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0x66);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
@@ -118,10 +118,13 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertNotIn('$(foreach dir,$(INCLUDES),-iquote $(CURDIR)/$(dir))', text)
 
     def test_runtime_is_mode0_cfa_style_and_not_mode3_debug_shell(self):
-        combined = '\n'.join(
-            p.read_text(encoding='utf-8')
-            for p in (ROOT / 'reconstruction/source').rglob('*.c')
-        )
+        source_root = ROOT / 'reconstruction/source'
+        normal_sources = [
+            p for p in source_root.rglob('*.c')
+            if p.name != 'emulator_selftest.c'
+        ]
+        combined = '\n'.join(p.read_text(encoding='utf-8') for p in normal_sources)
+        selftest = (source_root / 'game/emulator_selftest.c').read_text(encoding='utf-8')
         self.assertIn('MODE_0', combined)
         self.assertIn('BG0_ON', combined)
         self.assertIn('BG_256_COLOR', combined)
@@ -130,6 +133,8 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('gb_player_update', combined)
         self.assertIn('gb_portal_try_activate', combined)
         self.assertNotIn('MODE_3', combined)
+        self.assertIn('GB_DEVICE_SELFTEST', selftest)
+        self.assertIn('MODE_3 | BG2_ON', selftest)
         self.assertNotIn('alternate_backdrop', combined)
         self.assertNotIn('PRESS A TO START', combined)
 
@@ -213,7 +218,8 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('GbActorSystem actors;', game)
         self.assertIn('GbInteractionEvent interaction;', game)
         self.assertIn('gb_actor_system_load(actors, assets)', game)
-        self.assertIn('gb_actor_system_update(&actors, &player, &input, &interaction)', game)
+        self.assertIn('gb_actor_system_update_overlays(&actors, &player, &input, &interaction)', game)
+        self.assertIn('gb_actor_system_update_physical_npcs(&actors, &player)', game)
         self.assertIn('gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y)', game)
         self.assertGreaterEqual(game.count('gb_enter_level(&world, &player, &actors,'), 2)
 
@@ -592,7 +598,8 @@ volatile u16 gb_test_vram[0x18000 / 2];
 
 const u16 gb_actor_obj_palette[256] = {0};
 const u16 gb_player_obj_palette[16] = {0};
-const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0x1234};
+const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS] = {0xBEEF};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 /* Future renderer asset; keeping this test declaration macro-free makes the RED
    failure behavioral on the pre-feature tree instead of a compile-only failure. */
@@ -647,6 +654,32 @@ int main(void)
     clear_oam();
     gb_video_draw_player_state(&player, &story, 500, 470);
     verify_fixed_four(4, 6, 50, 80); /* (504,476) - camera; Player - camera */
+
+    /* Riding mode replaces the parked Level-9 composite with the ROM's five
+       16x16 bicycle sprites and stages the selected riding frame over the low
+       Player OBJ bank. */
+    clear_oam();
+    player.bicycle_mode = 2;
+    player.animation_frame = 1;
+    gb_video_draw_player_state(&player, &story, 500, 470);
+    const int ride_xs[5] = {50, 42, 58, 42, 58};
+    const int ride_ys[5] = {44, 60, 60, 76, 76};
+    for(int i = 0; i < 5; ++i)
+    {
+        assert((gb_test_oam[i * 4] & 0x00FF) == ride_ys[i]);
+        assert((gb_test_oam[i * 4 + 1] & 0x01FF) == ride_xs[i]);
+        assert((gb_test_oam[i * 4 + 2] & 0x03FF) == i * 8);
+        assert((gb_test_oam[i * 4 + 2] & 0x0C00) == (2u << 10));
+    }
+    assert(gb_test_vram[0x10000 / 2] == 0xBEEF);
+
+    /* Leaving ride mode restores ordinary Player frame pixels before the
+       parked bicycle + normal Player draw path resumes. */
+    player.bicycle_mode = 0;
+    clear_oam();
+    gb_video_draw_player_state(&player, &story, 500, 470);
+    assert(gb_test_vram[0x10000 / 2] == 0x1234);
+    verify_fixed_four(4, 6, 50, 80);
 
     level.level_id = 10;
     gb_video_load_level(&level);
@@ -936,6 +969,7 @@ volatile u16 gb_test_vram[0x18000 / 2];
 const u16 gb_actor_obj_palette[256] = {0};
 const u16 gb_player_obj_palette[16] = {0};
 const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS] = {0};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{0,0}};
 const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {0};
@@ -1750,6 +1784,11 @@ typedef int32_t s32;
         self.assertNotIn('gb_audio_play_music(2)', graveblood)
         self.assertIn('gb_story_take_pending_sfx(&story)', graveblood)
         self.assertIn('gb_audio_play_sfx((u8)pending_sfx)', graveblood)
+        self.assertRegex(
+            graveblood,
+            r'(?s)for\s*\(\s*;;\s*\)\s*\{.*?gb_story_take_pending_sfx\(&story\).*?'
+            r'if\s*\(pending_sfx\s*<\s*0\).*?break;.*?gb_audio_play_sfx\(\(u8\)pending_sfx\);',
+        )
         self.assertIn('gb_actor_system_take_pending_sfx(&actors)', graveblood)
         self.assertIn('gb_audio_play_sfx((u8)actor_sfx)', graveblood)
         self.assertLess(graveblood.index('gb_actor_system_take_pending_sfx(&actors)'),
@@ -1856,7 +1895,7 @@ typedef int32_t s32;
             run = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(0, run.returncode, run.stderr)
 
-    def test_story_level9_treetype20_vertical_target_action(self):
+    def test_story_level9_treetype20_bicycle_target_action(self):
         graveblood = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
         self.assertIn('gb_story_try_level9_treetype20_action(world.assets, &player, &input)', graveblood)
 
@@ -1874,29 +1913,34 @@ int main(void)
     input.pressed = KEY_A;
     input.held = KEY_A;
 
-    /* Canonical Level-9 treetype=20 Fgtile occupies 512,456..528,472. */
-    gb_player_spawn(&player, 512, 456);
+    /* ROM cell math accepts the 2x2 contact grid whose integer Player anchor
+       bounds are x=504..519 and y=464..479.  Fresh A queues the canonical
+       vertical target and commits shared bicycle mode 2. */
+    gb_player_spawn(&player, 504, 464);
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_TRAVERSED);
-    assert(player.x == 512 && player.y == 456);
-    assert(player.request_y_fixed == (512 - 456) * 256);
+    assert(player.x == 504 && player.y == 464);
+    assert(player.request_y_fixed == (512 - 464) * 256);
     assert(player.motion_reset_x == 0 && player.motion_reset_y == 0);
+    assert(player.bicycle_mode == 2);
 
     /* It is a fresh-A action, not an automatic contact trigger. */
-    gb_player_spawn(&player, 512, 456);
+    gb_player_spawn(&player, 519, 479);
     input.pressed = 0;
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
-    assert(player.y == 456);
+    assert(player.bicycle_mode == 0);
 
     /* The special action exists only in Level 9 and never consumes portTo=524. */
     input.pressed = KEY_A;
     level.level_id = 8;
-    gb_player_spawn(&player, 512, 456);
+    gb_player_spawn(&player, 504, 464);
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
-    assert(player.y == 456);
+    assert(player.bicycle_mode == 0);
 
-    /* Outside the physical tile rectangle it does nothing. */
+    /* One pixel outside each edge of the recovered contact rectangle is inert. */
     level.level_id = 9;
-    gb_player_spawn(&player, 511, 456);
+    gb_player_spawn(&player, 503, 464);
+    assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
+    gb_player_spawn(&player, 520, 479);
     assert(gb_story_try_level9_treetype20_action(&level, &player, &input) == GB_STORY_GATE_NONE);
     return 0;
 }
@@ -1954,11 +1998,14 @@ int gb_audio_play_sfx(u8 sound_id)
 int main(void)
 {
     const GbPortal portals[] = {
-        { .x = 10, .y = 20, .width = 16, .height = 16, .target_level = 8, .num = 1 }
+        { .x = 10, .y = 20, .width = 16, .height = 16, .target_level = 8, .num = 1 },
+        { .x = 40, .y = 20, .width = 16, .height = 16, .target_level = 7, .num = 1 },
+        { .x = 70, .y = 20, .width = 16, .height = 16, .target_level = 6, .num = 1 }
     };
     GbLevelAssets level = { 0 };
+    level.level_id = 1;
     level.portals = portals;
-    level.portal_count = 1;
+    level.portal_count = 3;
     GbPlayer player = { 0 };
     player.x = 12;
     player.y = 22;
@@ -1967,9 +2014,19 @@ int main(void)
 
     assert(gb_portal_try_activate(&level, &player, &none) == -1);
     assert(played_count == 0);
-    assert(gb_portal_try_activate(&level, &player, &fresh_a) == 8);
+    assert(gb_portal_try_activate_phase(&level, &player, &fresh_a, GB_PORTAL_PHASE_PRE_PLAYER) == 8);
     assert(played_id == 5);
     assert(played_count == 1);
+    assert(gb_portal_try_activate_phase(&level, &player, &fresh_a, GB_PORTAL_PHASE_POST_PLAYER) == -1);
+    assert(played_count == 1);
+
+    player.x = 72;
+    assert(gb_portal_try_activate_phase(&level, &player, &fresh_a, GB_PORTAL_PHASE_PRE_PLAYER) == -1);
+    assert(played_count == 1);
+    assert(gb_portal_try_activate_phase(&level, &player, &fresh_a, GB_PORTAL_PHASE_POST_PLAYER) == 6);
+    assert(played_count == 2);
+    assert(gb_portal_try_activate(&level, &player, &fresh_a) == 6);
+    assert(played_count == 3);
     return 0;
 }
 """
@@ -2092,21 +2149,33 @@ int main(void)
     assert(strcmp(gb_story_dialogue_record(&story)->speaker, "Vika") == 0);
     gb_story_update(&story, &actors, &fresh_a); /* step 1 */
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[1]);
+    assert(gb_story_take_pending_sfx(&story) == 8);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     gb_story_update(&story, &actors, &fresh_a); /* step 2 */
+    assert(gb_story_take_pending_sfx(&story) == 8);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     gb_story_update(&story, &actors, &fresh_a); /* runs -2, then -1 */
     assert(! gb_story_ui_active(&story));
     assert(story.state.primary_message_stream == 0);
     assert(actors.actors[0].dialogue_step == 4);
     assert(gb_story_message_primary(&story) == &gb_message_records[0]);
+    /* Both normal control records execute in this update and each allocates SFX7. */
+    assert(gb_story_take_pending_sfx(&story) == 7);
+    assert(gb_story_take_pending_sfx(&story) == 7);
+    assert(gb_story_take_pending_sfx(&story) == -1);
 
     /* Re-entering the same NPC begins at raw cursor 4 + 1 = step 5. */
     gb_story_handle_interaction(&story, &actors, &dialogue);
     assert(gb_story_take_pending_sfx(&story) == 3);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[0].records[5]);
     gb_story_update(&story, &actors, &fresh_a);
+    assert(gb_story_take_pending_sfx(&story) == 8);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     gb_story_update(&story, &actors, &fresh_a);
     assert(! gb_story_ui_active(&story));
     assert(actors.actors[0].dialogue_step == 4);
+    assert(gb_story_take_pending_sfx(&story) == 7);
+    assert(gb_story_take_pending_sfx(&story) == -1);
 
     /* Message lookup is clean-room bounded by extracted stream/stage rows. */
     story.state.story_stage = 1;
@@ -2124,7 +2193,7 @@ int main(void)
     one_actor(&actors, &collection_desc, 11);
     story.state.collection_progress = 1;
     gb_story_handle_interaction(&story, &actors, &pickup);
-    assert(gb_story_take_pending_sfx(&story) == 3);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     assert(story.state.collection_progress == 2);
     assert(actors.actors[0].consumed && ! actors.actors[0].active);
     assert(story.state.consumed_story_overlays & (1u << 11));
@@ -2136,6 +2205,8 @@ int main(void)
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[5].records[0]);
     gb_story_update(&story, &actors, &fresh_a);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[5].records[1]);
+    assert(gb_story_take_pending_sfx(&story) == 8);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     gb_story_update(&story, &actors, &fresh_a);
     assert(! gb_story_ui_active(&story));
     assert(story.state.collection_progress == 4);
@@ -2150,7 +2221,9 @@ int main(void)
     gb_story_handle_interaction(&story, &actors, &pickup);
     assert(gb_story_take_pending_sfx(&story) == 3);
     gb_story_update(&story, &actors, &fresh_a); /* step 1 */
+    assert(gb_story_take_pending_sfx(&story) == 8);
     gb_story_update(&story, &actors, &fresh_a); /* step 2 */
+    assert(gb_story_take_pending_sfx(&story) == 8);
     gb_story_update(&story, &actors, &fresh_a); /* state4 -2 terminal */
     assert(! gb_story_ui_active(&story));
     assert(story.state.collection_progress == 6);
@@ -2162,11 +2235,15 @@ int main(void)
     one_actor(&actors, &collection_desc, 15);
     story.state.collection_progress = 4;
     gb_story_handle_interaction(&story, &actors, &pickup);
+    assert(gb_story_take_pending_sfx(&story) == 3);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[6].records[0]);
     gb_story_update(&story, &actors, &fresh_a); /* -4 then content step 2 */
     assert(story.state.monster_render_enabled == 1);
     assert(gb_story_dialogue_record(&story) == &gb_dialogue_scripts[6].records[2]);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     gb_story_update(&story, &actors, &fresh_a); /* content step 3 */
+    assert(gb_story_take_pending_sfx(&story) == 8);
+    assert(gb_story_take_pending_sfx(&story) == -1);
     gb_story_update(&story, &actors, &fresh_a); /* -5 terminal */
     assert(story.state.final_effect_pending == 1);
     assert(story.state.collection_progress == 5);
@@ -2770,7 +2847,7 @@ int main(void)
     GbLevelAssets level = { 0 };
     level.world_width_tiles = 100;
     level.world_height_tiles = 100;
-    GbWorld world;
+    GbWorld world = {0};
     gb_world_load(&world, &level);
     if(! require(world.stream_valid == 0, "load must invalidate stream origin")) return 1;
 
@@ -2779,19 +2856,23 @@ int main(void)
     if(! require(world.stream_valid == 1 && world.stream_tile_x == 0 && world.stream_tile_y == 0, "initial origin")) return 1;
 
     gb_world_update_camera(&world, 128, 88);
+    if(! require(full_count == 1 && column_count == 0 && row_count == 0, "camera must stay inside dead-zone")) return 1;
+    if(! require(world.stream_tile_x == 0 && world.stream_tile_y == 0, "dead-zone keeps stream origin")) return 1;
+
+    gb_world_update_camera(&world, 144, 88);
     if(! require(full_count == 1 && column_count == 1, "one-tile x crossing must update one column")) return 1;
     if(! require(last_a == 32 && last_b == 0, "right edge column must be new origin + 31")) return 1;
     if(! require(world.stream_tile_x == 1 && world.stream_tile_y == 0, "x origin update")) return 1;
 
-    gb_world_update_camera(&world, 128, 96);
+    gb_world_update_camera(&world, 144, 109);
     if(! require(row_count == 1, "one-tile y crossing must update one row")) return 1;
     if(! require(last_a == 1 && last_b == 32, "bottom row must use new origin + 31")) return 1;
     if(! require(world.stream_tile_x == 1 && world.stream_tile_y == 1, "y origin update")) return 1;
 
-    gb_world_update_camera(&world, 160, 96);
+    gb_world_update_camera(&world, 200, 109);
     if(! require(full_count == 2, "multi-tile jump must full-fill")) return 1;
-    if(! require(last_a == 5 && last_b == 1, "jump full-fill origin")) return 1;
-    if(! require(last_camera_x == 40 && last_camera_y == 8, "camera offsets must still apply")) return 1;
+    if(! require(last_a == 8 && last_b == 1, "jump full-fill origin")) return 1;
+    if(! require(last_camera_x == 64 && last_camera_y == 8, "ROM dead-zone camera offsets must apply")) return 1;
     return 0;
 }
 """

@@ -142,7 +142,7 @@ class CfaAssetTests(unittest.TestCase):
             self.assertIn('GB_ACTOR_MAX_FRAMES = 8', header)
             self.assertIn('GB_ACTOR_ROUTE_COUNT = 5', header)
 
-    def test_generator_packs_level9_level10_fixed_composite_from_initial_obj_bank(self):
+    def test_generator_packs_level9_level10_parked_bicycle_from_initial_obj_bank(self):
         g = self._module()
         rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
         self.assertTrue(hasattr(g, 'pack_level_static_obj_bank'))
@@ -150,8 +150,8 @@ class CfaAssetTests(unittest.TestCase):
         self.assertEqual(4, packed.frame_count)
         self.assertEqual(4 * 16 * 16, len(packed.data))
 
-        # Player_draw submits the same four 16x16 initial-OBJ pieces as one
-        # 32x32 composite in Levels 9 and 10: 0x17C/0x17E over 0x19C/0x19E.
+        # Player_draw submits the same four 16x16 initial-OBJ pieces as the
+        # parked 32x32 bicycle composite in Levels 9 and 10: 0x17C/0x17E over 0x19C/0x19E.
         source_base = g.OBJ_TILES_SOURCE - g.ROM_BASE
         expected = bytearray()
         for tile_arg in (0x17C, 0x17E, 0x19C, 0x19E):
@@ -244,6 +244,20 @@ class CfaAssetTests(unittest.TestCase):
             self.assertEqual(expected_cells, len(runtime.layer_b))
             self.assertEqual(2048, len(runtime.fixed_map))
             self.assertEqual(634, len(runtime.translation))
+
+    def test_level2_generated_translation_preserves_unchecked_rom_overrun_entries(self):
+        g = self._module()
+        rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
+        specs = g.build_level_specs(ROOT)
+        runtime = g.load_runtime_background(ROOT, rom, specs[2])
+
+        # 0x0800A330 performs translation[source_id] with no bounds check.
+        # Level 2 references IDs through 3216, so the generated clean-room
+        # table must retain the adjacent ROM halfwords instead of truncating
+        # at the nominal translation/palette boundary.
+        self.assertEqual(len(runtime.translation), 3217)
+        self.assertEqual(runtime.translation[2260], 0x7F9D)
+        self.assertEqual(max(runtime.layer_a), 3216)
 
     def test_every_level_variant_has_87_world_safe_bg0_ui_tiles(self):
         g = self._module()
@@ -422,9 +436,9 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('final-sketch', call_sites.lower())
         self.assertTrue(call_sites.startswith('call_address,target,caller,sound_id,play_mode,volume,'))
         self.assertIn('0x08002E22,0x08001B74,npc_state2_fresh_a_activation,3,one-shot,80', call_sites)
-        self.assertIn('state-2 dialogue interaction activation,high', call_sites)
+        self.assertIn('first state-2 text page when 0x0300062C latch is zero,high', call_sites)
         self.assertIn('0x08003078,0x08001B74,npc_state4_fresh_a_activation,3,one-shot,80', call_sites)
-        self.assertIn('state-4 collection interaction activation,high', call_sites)
+        self.assertIn('first state-4 text page when 0x0300062C latch is zero,high', call_sites)
         self.assertIn('0x0800426C,0x08001B74,Fgtile_update,5,one-shot,80,generic scene portal activation,high', call_sites)
         self.assertIn('0x08004B2A,0x08001B74,TitleScene_update,6,one-shot,80,fresh START title transition,high', call_sites)
         self.assertIn('0x080089F8,0x08001B74,Player_update,4,one-shot,80,FRIENDS successful UP navigation,high', call_sites)
@@ -434,12 +448,12 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('0x0800389A,0x08001B74,state4_final_collection_handler,7,one-shot,80,state4 dialogue opcode -3 terminal,high', call_sites)
         self.assertIn('0x0800898E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab previous (fresh L; MESSAGES/STATUS/FRIENDS/BACKPACK),high', call_sites)
         self.assertIn('0x0800904E,0x08001B74,Player_update,11,one-shot,80,PDA menu tab next (fresh R; MESSAGES/STATUS/FRIENDS/BACKPACK),high', call_sites)
-        self.assertIn('0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-2 interaction activation when 0x0300062C mode byte is nonzero,high', call_sites)
-        self.assertIn('0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,alternate state-4 interaction activation when 0x0300062C mode byte is nonzero,high', call_sites)
+        self.assertIn('0x080032AC,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,subsequent state-2 text page while 0x0300062C latch is nonzero,high', call_sites)
+        self.assertIn('0x08003668,0x08001B74,npc_state4_fresh_a_activation,8,one-shot,80,subsequent state-4 text page while 0x0300062C latch is nonzero,high', call_sites)
         self.assertIn('0x08003298,0x08001B74,npc_special_proximity_latch,9,one-shot,80,legsColor 0x70 NPC proximity latch activation,high', call_sites)
         self.assertIn('0x08009AA2,0x08001B74,Player_update,12,one-shot,80,FRIENDS DOWN-at-bottom boundary feedback,high', call_sites)
         self.assertIn('0x08009B58,0x08001B74,Player_update,12,one-shot,80,FRIENDS UP-at-top boundary feedback,high', call_sites)
-        self.assertIn('0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R Player action/state-reset path,high', call_sites)
+        self.assertIn('0x08009C16,0x08001B74,Player_update,10,one-shot,30,fresh R bicycle action while shared ride mode 0x030005F4 == 2,high', call_sites)
         self.assertIn('0x080032D2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -4 set story/progression stage,high', call_sites)
         self.assertIn('0x080033A2,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -3 add auxiliary message stream,high', call_sites)
         self.assertIn('0x08003462,0x08001B74,npc_state4_fresh_a_activation,7,one-shot,80,normal dialogue opcode -2 set primary message stream,high', call_sites)
@@ -450,8 +464,8 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('0x08009904,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor previous (fresh LEFT; cursor 0..3),high', call_sites)
         self.assertIn('0x0800999E,0x08001B74,Player_update,4,one-shot,80,PDA MESSAGES cursor next (fresh RIGHT; cursor 0..3),high', call_sites)
         self.assertIn('0x08009CCA,0x08001B74,Player_update,7,one-shot,80,interaction state-2 return/back (fresh B),high', call_sites)
-        self.assertIn('0x0800B2A6,0x08001B74,effect_object_sfx4_constructor_candidate,4,one-shot,80,effect-object constructor 0x0800B250 (vtable 0x08A8C198),high', call_sites)
-        self.assertIn('0x0800B37E,0x08001B74,effect_object_sfx3_constructor_candidate,3,one-shot,80,effect-object constructor 0x0800B31C (vtable 0x08A8C1E8; spawned by 0x080026E8/0x080060C4),high', call_sites)
+        self.assertIn('0x0800B2A6,0x08001B74,latent_projectile_constructor,4,one-shot,80,latent projectile constructor; technical role recovered from update/draw (vtable 0x08A8C198),high', call_sites)
+        self.assertIn('0x0800B37E,0x08001B74,hit_death_burst_constructor,3,one-shot,80,hit/death burst constructor; technical role recovered from update/draw (vtable 0x08A8C1E8),high', call_sites)
 
         pda_pages = (ROOT / 'data' / 'pda_menu_pages.csv').read_text(encoding='utf-8').splitlines()
         self.assertEqual('selector,page_name,renderer_branch,key_policy,evidence', pda_pages[0])
@@ -476,6 +490,100 @@ class CfaAssetTests(unittest.TestCase):
         self.assertIn('sample 2 unreachable/orphaned in public demo', music_routes)
         self.assertIn(',2,high,', music_routes)
         self.assertIn('exhaustive full-ROM loop-player scan finds exactly three calls', music_routes)
+
+    def test_effect_object_runtime_semantics_and_static_reachability(self):
+        semantics_path = ROOT / 'data' / 'effect_object_semantics.csv'
+        reachability_path = ROOT / 'data' / 'effect_object_reachability.csv'
+        self.assertTrue(semantics_path.is_file(), semantics_path)
+        self.assertTrue(reachability_path.is_file(), reachability_path)
+
+        semantics = {
+            row['effect_role']: row
+            for row in csv.DictReader(semantics_path.read_text(encoding='utf-8').splitlines())
+        }
+        self.assertEqual({'latent_projectile', 'hit_death_burst'}, set(semantics))
+
+        projectile = semantics['latent_projectile']
+        self.assertEqual('0x0800B250', projectile['constructor'])
+        self.assertEqual('0x08A8C198', projectile['vtable'])
+        self.assertEqual('0x0800AEA8', projectile['update'])
+        self.assertEqual('0x0800ABCC', projectile['draw'])
+        self.assertEqual('4', projectile['sfx_id'])
+        self.assertEqual('80', projectile['sfx_volume'])
+        self.assertEqual('1', projectile['width_fixed8'])
+        self.assertEqual('1', projectile['height_fixed8'])
+        self.assertIn('position_init', projectile)
+        self.assertEqual('x=input_x;y=input_y', projectile['position_init'])
+        self.assertEqual('0x5000', projectile['initial_timer_or_budget'])
+        self.assertEqual('0x126 active;0x124 terminal', projectile['draw_tiles'])
+        self.assertEqual('1', projectile['obj_priority'])
+        self.assertEqual('vtable+0x1C', projectile['hit_callback'])
+        self.assertEqual('60', projectile['hit_argument'])
+        self.assertIn('max(abs(vx),abs(vy))', projectile['update_contract'])
+        self.assertIn('budget < -10', projectile['terminal_rule'])
+        self.assertIn('object overlap removes immediately', projectile['terminal_rule'])
+
+        burst = semantics['hit_death_burst']
+        self.assertEqual('0x0800B31C', burst['constructor'])
+        self.assertEqual('0x08A8C1E8', burst['vtable'])
+        self.assertEqual('0x0800ABBC', burst['update'])
+        self.assertEqual('0x0800AC88', burst['draw'])
+        self.assertEqual('3', burst['sfx_id'])
+        self.assertEqual('80', burst['sfx_volume'])
+        self.assertEqual('0x2000', burst['width_fixed8'])
+        self.assertEqual('0x2000', burst['height_fixed8'])
+        self.assertEqual('x=input_center_x-0x1000;y=input_center_y+0x1000', burst['position_init'])
+        self.assertEqual('-1', burst['initial_timer_or_budget'])
+        self.assertEqual('0x127;0x128;0x12A;0x12C', burst['draw_tiles'])
+        self.assertEqual('1', burst['obj_priority'])
+        self.assertEqual('optional vtable+0x1C propagation', burst['hit_callback'])
+        self.assertEqual('constructor arg6', burst['hit_argument'])
+        self.assertIn('counter > 31', burst['terminal_rule'])
+        self.assertIn('four 8-update phases', burst['update_contract'])
+
+        reachability = {
+            row['subject']: row
+            for row in csv.DictReader(reachability_path.read_text(encoding='utf-8').splitlines())
+        }
+        projectile_reach = reachability['latent_projectile_constructor']
+        self.assertEqual('none', projectile_reach['direct_bl_callers'])
+        self.assertEqual('none', projectile_reach['literal_pointer_references'])
+        self.assertEqual('no_static_root_in_public_demo', projectile_reach['status'])
+
+        burst_reach = reachability['hit_death_burst_constructor']
+        self.assertEqual('0x0800272A;0x080060FC', burst_reach['direct_bl_callers'])
+        self.assertEqual('NPC_hit_callback;Player_hit_callback', burst_reach['roots'])
+        self.assertEqual('arg6=0 at both direct call sites', burst_reach['propagation'])
+        self.assertEqual('no_external_root_in_public_demo', burst_reach['status'])
+
+        dispatch = reachability['vtable_slot_0x1C_dispatch']
+        self.assertEqual('0x0800AF6A;0x0800B3C4', dispatch['direct_bl_callers'])
+        self.assertIn('projectile hit', dispatch['evidence'])
+        self.assertIn('burst optional propagation', dispatch['evidence'])
+
+        known_functions_path = ROOT / 'data' / 'known_functions.csv'
+        self.assertNotIn(b'\r\n', known_functions_path.read_bytes())
+        known_functions = known_functions_path.read_text(encoding='utf-8')
+        symbols = (ROOT / 'data' / 'graveblood_001152.sym').read_text(encoding='utf-8')
+        call_sites = (ROOT / 'data' / 'audio_call_sites.csv').read_text(encoding='utf-8')
+        self.assertIn('0x0800B250,latent_projectile_constructor,', known_functions)
+        self.assertIn('0x0800B31C,hit_death_burst_constructor,', known_functions)
+        self.assertIn('0800B250 latent_projectile_constructor', symbols)
+        self.assertIn('0800B31C hit_death_burst_constructor', symbols)
+        self.assertNotIn('effect_object_sfx4_constructor_candidate', known_functions)
+        self.assertNotIn('effect_object_sfx3_constructor_candidate', known_functions)
+        self.assertIn(',latent_projectile_constructor,4,one-shot,80,', call_sites)
+        self.assertIn(',hit_death_burst_constructor,3,one-shot,80,', call_sites)
+
+        for name in (
+            'effect_object_sfx4_update_0800AEA8.txt',
+            'effect_object_sfx4_draw_0800ABCC.txt',
+            'effect_object_sfx3_update_0800ABBC.txt',
+            'effect_object_sfx3_draw_0800AC88.txt',
+            'effect_object_npc_hit_callback_080026E8.txt',
+            'effect_object_player_hit_callback_080060C4.txt',
+        ):
+            self.assertTrue((ROOT / 'disasm' / name).is_file(), name)
 
     def test_all_one_shot_audio_calls_have_high_confidence_semantics(self):
         rows = list(csv.DictReader((ROOT / 'data' / 'audio_call_sites.csv').read_text(encoding='utf-8').splitlines()))

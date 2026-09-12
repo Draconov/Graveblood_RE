@@ -150,8 +150,11 @@ class SpawnFactoryExtractionTests(unittest.TestCase):
         self.assertEqual(by_fact['normal_priority']['value'], '2')
         self.assertEqual(by_fact['alternate_idle_countdown_reset']['value'], '5')
         self.assertEqual(by_fact['monster_priority']['value'], '2')
-        self.assertEqual(by_fact['level9_fixed_composite']['value'], '32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2')
-        self.assertEqual(by_fact['level10_fixed_composite']['value'], '32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2')
+        self.assertEqual(by_fact['bicycle_mode_global']['value'], '0x030005F4; riding mode == 2')
+        self.assertEqual(by_fact['bicycle_frame_offsets']['value'], '0,4,8,0x50,0x54,0x58')
+        self.assertIn('five 16x16', by_fact['bicycle_riding_composite']['value'])
+        self.assertEqual(by_fact['level9_parked_bicycle_composite']['value'], '32x32 at world (504,476); tiles 0x17C,0x17E,0x19C,0x19E; priority 2; hidden while bicycle mode == 2')
+        self.assertEqual(by_fact['level10_parked_bicycle_composite']['value'], '32x32 at world (706,884); tiles 0x17C,0x17E,0x19C,0x19E; priority 2; hidden while bicycle mode == 2')
 
     def test_actor_field_semantics_guards_setglobal_default_and_leaves_global_override(self):
         self.assertTrue(hasattr(mod, 'extract_new_actor_field_semantics'))
@@ -884,13 +887,60 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertTrue(hasattr(mod, 'extract_ending_effect_static_reachability'))
         reach = mod.extract_ending_effect_static_reachability(self.data)
         self.assertEqual(reach['argument_state'], '0x03000674')
+        self.assertEqual(reach['boot_initial_argument'], 0)
         self.assertEqual(reach['direct_player_update_writers'], '0x080081D0;0x080088AA')
-        self.assertEqual(reach['code_proven_seed_above_1000'], 'none found')
+        self.assertEqual(reach['immediate_alias_write_closure'], 'no additional writers')
+        self.assertEqual(reach['code_proven_seed_above_1000'], 'none')
+        self.assertEqual(reach['reachable_argument_values_from_boot'], '0')
+        self.assertEqual(reach['high_branch_reachable_from_boot'], 'no')
         self.assertEqual(reach['repeat_effect_reachable_with_normal_zero_seed'], 'argument 0 only')
-        self.assertIn('does not prove absence of indirect/external runtime writes', reach['scope_caveat'])
-        self.assertEqual(reach['confidence'], 'high for direct-writer inventory; conservative for global reachability')
+        self.assertEqual(reach['event_flag_boot_value'], 0)
+        self.assertEqual(reach['event_flag_setter'], '0x0800380A')
+        self.assertEqual(reach['event_flag_reset_after_boot'], 'none')
+        self.assertEqual(reach['scene_transition_resets_state'], 'no')
+        self.assertIn('arbitrary hardware/external corruption', reach['scope_caveat'])
+        self.assertEqual(reach['confidence'], 'high static closure for public-demo executable code')
 
-    def test_level9_treetype20_record_is_vertical_target_action_not_portal(self):
+    def test_ending_effect_alias_write_closure_finds_no_hidden_seed(self):
+        self.assertTrue(hasattr(mod, 'extract_ending_effect_alias_write_closure'))
+        rows = mod.extract_ending_effect_alias_write_closure(self.data)
+        keyed = {row['target_address']: row for row in rows}
+
+        argument = keyed['0x03000674']
+        self.assertEqual(argument['target_name'], 'ending_effect_argument_state')
+        self.assertEqual(argument['exact_literal_occurrences'], 0)
+        self.assertEqual(argument['candidate_literal_load_roots'], 56)
+        self.assertEqual(argument['write_sites'], '0x080081D0;0x080088AA')
+        self.assertEqual(argument['non_player_update_write_sites'], 'none')
+        self.assertEqual(argument['largest_proven_written_value_from_zero_seed'], 0)
+        self.assertEqual(argument['closure_result'], 'no seed above 1000 found')
+        self.assertEqual(argument['confidence'], 'high')
+
+        flag = keyed['0x03000678']
+        self.assertEqual(flag['target_name'], 'ending_event_active_flag')
+        self.assertEqual(flag['exact_literal_occurrences'], 1)
+        self.assertEqual(flag['candidate_literal_load_roots'], 57)
+        self.assertEqual(flag['write_sites'], '0x0800380A')
+        self.assertEqual(flag['non_final_handler_write_sites'], 'none')
+        self.assertEqual(flag['closure_result'], 'only final-sketch handler can set flag after boot')
+        self.assertEqual(flag['confidence'], 'high')
+
+    def test_ending_effect_boot_zero_and_scene_lifetime_are_closed(self):
+        self.assertTrue(hasattr(mod, 'extract_ending_effect_boot_lifetime'))
+        row = mod.extract_ending_effect_boot_lifetime(self.data)
+        self.assertEqual(row['zero_helper'], '0x08000186')
+        self.assertEqual(row['iwram_zero_call'], '0x08000136')
+        self.assertEqual(row['zero_range_start'], '0x03000000')
+        self.assertEqual(row['zero_range_end_exclusive'], '0x03000788')
+        self.assertEqual(row['argument_state_initial_value'], 0)
+        self.assertEqual(row['event_flag_initial_value'], 0)
+        self.assertEqual(row['initialized_iwram_copy_start'], '0x03000788')
+        self.assertEqual(row['zero_helper_call_sites'], '0x0800012C;0x08000136;0x08000140')
+        self.assertEqual(row['scene_reset_calls_to_zero_helper'], 'none')
+        self.assertEqual(row['scene_transition_resets_ending_state'], 'no')
+        self.assertEqual(row['confidence'], 'high')
+
+    def test_level9_treetype20_record_enters_bicycle_mode_not_portal(self):
         self.assertTrue(hasattr(mod, 'extract_level9_treetype20_action'))
         row = mod.extract_level9_treetype20_action(self.data)
         self.assertEqual(row['level'], 9)
@@ -904,6 +954,11 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(row['player_target_y_px'], 512)
         self.assertEqual(row['player_target_y_offset'], '+0x394')
         self.assertEqual(row['vertical_target_helper'], '0x080080A4')
+        self.assertEqual(row['contact_cell_x'], '((PlayerX_fixed-0x800)>>11) in {62,63}')
+        self.assertEqual(row['contact_cell_y'], '((PlayerY_fixed-0x1800)>>11) in {55,56}')
+        self.assertEqual(row['integer_player_anchor_bounds'], 'x=504..519,y=464..479')
+        self.assertEqual(row['shared_bicycle_mode_global'], '0x030005F4')
+        self.assertEqual(row['shared_bicycle_mode_value'], 2)
         self.assertIn('not used as a scene destination', row['portTo_semantics'])
         self.assertEqual(row['confidence'], 'high')
 
@@ -934,8 +989,11 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(row['player_update_reads'], '0x080081D2;0x080088AC')
         self.assertEqual(row['player_update_direct_stores'], 'none')
         self.assertEqual(row['same_scene_behavior'], 'latched while normal Player_update continues')
-        self.assertIn('does not rule out scene-reset or indirect/external writes', row['scope_caveat'])
-        self.assertEqual(row['confidence'], 'high for direct Player_update access inventory; conservative globally')
+        self.assertEqual(row['all_static_write_sites'], '0x0800380A')
+        self.assertEqual(row['reset_after_boot'], 'none')
+        self.assertEqual(row['scene_transition_behavior'], 'latched across gameplay scene transitions; reset only by reboot/startup zero-fill')
+        self.assertIn('arbitrary hardware/external corruption', row['scope_caveat'])
+        self.assertEqual(row['confidence'], 'high static closure for public-demo executable code')
 
     def test_ending_vram_effect_runtime_gate_is_exported_exactly(self):
         self.assertTrue(hasattr(mod, 'extract_ending_vram_effect_runtime'))
@@ -957,6 +1015,7 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(low['argument_update'], 'argument_state = 0')
         self.assertEqual(low['effect_call'], '0x080088B6 when event_flag == 1')
         self.assertEqual(low['argument_before_call'], '0')
+        self.assertEqual(low['reachable_from_normal_boot'], 'yes')
 
         high = keyed['player_update_gt_1000']
         self.assertEqual(high['handler'], '0x080081CE')
@@ -964,11 +1023,14 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertEqual(high['argument_update'], 'argument_state += 20')
         self.assertEqual(high['effect_call'], '0x080088B6 when event_flag == 1')
         self.assertEqual(high['argument_before_call'], 'updated argument_state')
+        self.assertEqual(high['reachable_from_normal_boot'], 'no')
+        self.assertEqual(high['unreachable_reason'], 'no executable writer can seed argument_state above 1000 from boot value 0')
 
         globs = {addr: (name, evidence) for addr, name, evidence in struct_mod.KNOWN_GLOBALS}
-        self.assertEqual(globs[0x03000674][0], 'ending_effect_argument_state_candidate')
+        self.assertEqual(globs[0x03000674][0], 'ending_effect_argument_state')
         self.assertIn('<=1000 resets to 0', globs[0x03000674][1])
         self.assertIn('>1000 increments by 20', globs[0x03000674][1])
+        self.assertIn('unreachable from normal boot', globs[0x03000674][1])
 
         self.assertTrue(hasattr(mod, 'extract_ending_vram_effect_level10_sources'))
         sources = mod.extract_ending_vram_effect_level10_sources(self.data)
@@ -998,12 +1060,19 @@ class V4StoryAndGateSemanticsTests(unittest.TestCase):
         self.assertIn("treetype=20", funcs[0x08003B98][1])
         self.assertIn("0x0800417C", funcs[0x08003B98][1])
         self.assertEqual(funcs[0x080037F6][0], "state4_final_collection_handler")
+        self.assertEqual(funcs[0x08004FE0][0], "ending_vram_effect")
+        self.assertIn("argument 0", funcs[0x08004FE0][1])
+        self.assertIn("high branch unreachable", funcs[0x08004FE0][1])
         self.assertEqual(funcs[0x080068BC][0], "Player_draw_state4_monster_branch")
         self.assertEqual(funcs[0x080080A4][0], "Player_apply_vertical_target_delta")
         self.assertIn("+0x394", funcs[0x080080A4][1])
         self.assertEqual(globs[0x0300061C][0], "state4_monster_render_flag")
         self.assertEqual(globs[0x03000620][0], "state4_collection_progress_index")
         self.assertIn("normal-context", globs[0x030006AC][1])
+
+    def test_known_global_symbol_csv_uses_lf_only(self):
+        raw = (ROOT / "data" / "known_globals.csv").read_bytes()
+        self.assertNotIn(b"\r", raw)
 
 
 class NpcInteractionGeometryExtractionTests(unittest.TestCase):
