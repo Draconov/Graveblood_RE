@@ -108,7 +108,7 @@ xvfb-run -a env SDL_AUDIODRIVER=dummy \
     --seconds 2 --ppu-screenshot dist/mgba-selftest-ppu.png
 ```
 
-The self-test ROM uses production Graveblood code to check seven emulator-side contracts: equal-priority Player/physical-post-Player-NPC OAM ordering and priority bits, two-phase VBlank timing, the Level-9 boundary plus delayed Level-10 scene handoff, the complete Level-10 scripted entrance on the real collision map, far-right Level-9 leaf emission, the ending-effect VRAM payload/bounds, and Timer1 audio cadence. The ending check deliberately validates the GBA VRAM bus result rather than ordinary-RAM byte semantics: the original unaligned first copy reaches VRAM through byte stores, so each final halfword contains the odd source byte replicated twice, while the aligned second copy remains byte-exact. The audio check counts interrupts across 60 real VBlanks and requires 63–66 Timer1 IRQs, matching the recovered 64 Hz count-up timer. Its DMA setup probe accepts both the literal `0xB200` write and mGBA's effective FIFO-DMA `0xB640` readback; mGBA normalizes FIFO DMA to destination-fixed, 32-bit transfers, so rejecting that effective value would be a false failure.
+The self-test ROM uses production Graveblood code to check seven emulator-side contracts: equal-priority Player/physical-post-Player-NPC OAM ordering and priority bits, two-phase VBlank timing, the Level-9 boundary plus delayed Level-10 scene handoff, the complete Level-10 scripted entrance on the real collision map, far-right Level-9 leaf emission, the ending-effect VRAM payload/bounds, and Timer1 audio cadence. The ending check deliberately validates the real GBA VRAM bus result rather than ordinary-RAM byte semantics: the original unaligned first copy uses byte stores, which mirror the odd source byte across each BG-VRAM halfword below `0x06010000` but are ignored once the destination enters OBJ VRAM. The aligned second copy starts at `0x06010000` and remains byte-exact through legal wide stores. The self-test seeds its OBJ-VRAM guards with 16-bit stores so the guards themselves are hardware-valid. The audio check counts interrupts across 60 real VBlanks and requires 63–66 Timer1 IRQs, matching the recovered 64 Hz count-up timer. Its DMA setup probe accepts both the literal `0xB200` write and mGBA's effective FIFO-DMA `0xB640` readback; mGBA normalizes FIFO DMA to destination-fixed, 32-bit transfers, so rejecting that effective value would be a false failure.
 
 When `--ppu-screenshot` is supplied, the cartridge then leaves a controlled production-renderer overlap fixture on screen. The runner resumes mGBA, requests mGBA's own native F12 screenshot through `xdotool`, parses the resulting 240×160 core PNG, and checks two composited pixels: the equal-priority Player must win over the deliberately post-Player physical NPC at the lower Player OAM index in that fixture, while the adjacent transparent Player pixel must reveal the NPC below. This is an eighth external PPU assertion layered on top of the seven EWRAM report bits. The normal release cartridge does not enter this path because it is compiled only when `GB_EMULATOR_SELFTEST` is defined. A flash cartridge is still recommended for analog speaker quality and device-specific timing that even an accurate emulator cannot prove.
 
@@ -205,32 +205,32 @@ A ROM-independent hardware-facing gate is also checked in:
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools.test_hardware_address_runtime -v
 ```
 
-On Linux, its host harnesses map the literal GBA regions used by production code (`0x04000000` MMIO, `0x05000000` palette RAM, `0x06000000` VRAM, and `0x07000000` OAM) into isolated test processes. The tests execute the real `input.c`, `audio.c`, `video.c`, `actors.c`, and ending-effect code against those addresses and verify active-low input, FIFO-A/DMA1/timer programming, Mode-0/OAM/OBJ uploads, Player/NPC/Grass/leaf submissions, the two-phase VBlank wait, and the argument-0 VRAM boundary/result model. Those mappings still use ordinary host RAM semantics, so they cannot by themselves reproduce GBA VRAM byte-store replication or emulator FIFO-DMA normalization; the mGBA cartridge test is the authority for those bus-level effects.
+On Linux, its host harnesses map the literal GBA regions used by production code (`0x04000000` MMIO, `0x05000000` palette RAM, `0x06000000` VRAM, and `0x07000000` OAM) into isolated test processes. The tests execute the real `input.c`, `audio.c`, `video.c`, `actors.c`, and ending-effect code against those addresses and verify active-low input, FIFO-A/DMA1/timer programming, Mode-0/OAM/OBJ uploads, Player/NPC/Grass/leaf submissions, the two-phase VBlank wait, and the argument-0 VRAM boundary/result model. `ending.c` now expresses the GBA byte-store result explicitly, so the host harness can verify the BG-VRAM replication and OBJ-VRAM no-op portions deterministically; mGBA/real hardware remain the authority for the complete bus/PPU/audio behavior.
 
 The same gate cross-compiles every checked-in reconstruction C unit plus both `.incbin` assembly units for **ARM7TDMI Thumb** and performs a relocatable ARM link. It uses `clang --target=arm-none-eabi` when available, otherwise `arm-none-eabi-gcc`. This is deliberately **not** presented as a substitute for the final devkitARM/libgba ROM link or an emulator/device run: mGBA/flash-cart validation remains the authority for actual PPU/audio/timing behavior.
 
 ## 7. GitHub Actions
 
-`.github/workflows/build-release-rom.yml` builds in:
+`.github/workflows/build-release-rom.yml` is intentionally release-only. It runs only for tags matching:
+
+```text
+Graveblood_RE_v*-dev
+```
+
+The workflow uses the pinned builder:
 
 ```text
 devkitpro/devkitarm:20260610
 ```
 
-CI first runs the ROM-independent hardware-address/ARM gate on `ubuntu-latest`:
-
-```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools.test_hardware_address_runtime -v
-```
-
-The devkitPro build job depends on that gate, then runs:
+and builds only the normal game cartridge:
 
 ```sh
 make -C reconstruction -j"$(nproc)"
 python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
 ```
 
-The same build job also creates `Graveblood_RE_selftest.gba` with `GB_EMULATOR_SELFTEST` and `Graveblood_RE_device_test.gba` with `GB_DEVICE_SELFTEST` in isolated build directories; all three cartridges are header-validated and uploaded in the `Graveblood_RE-rom` artifact. A separate `ubuntu-24.04` job installs `mgba-sdl`, Xvfb, and `xdotool`, downloads that exact artifact, requires the normal ROM to survive a five-second mGBA boot smoke, then runs the self-test ROM through `tools/run_mgba_selftest.py`. The GDB report must mark all seven hardware/emulator checks as passed, the Timer1 report must land in the 63–66 IRQ cadence window over 60 VBlanks, and mGBA's native 240×160 screenshot must pass the two-pixel Player/NPC composition probe. The validated PNG is uploaded as a CI artifact. Tagged releases still publish only the normal ROM and now depend on the emulator job, so an early boot exit, failed scenario-level self-test, wrong audio cadence, or wrong composited PPU pixel blocks publication.
+No Actions artifact, checksum asset, self-test cartridge, device-test cartridge, mGBA screenshot, or extra validation job is published by this workflow. The diagnostic test suites and optional self-test/device-test build paths remain in the repository for manual/local validation, but they are deliberately separate from the release publication path.
 
 ## 8. Development release tags
 
@@ -241,14 +241,13 @@ git tag Graveblood_RE_v0.0.1-dev
 git push origin Graveblood_RE_v0.0.1-dev
 ```
 
-The release workflow publishes:
+The release workflow publishes exactly one release asset:
 
 ```text
 Graveblood_RE_v0.0.1.gba
-Graveblood_RE_v0.0.1.gba.sha256
 ```
 
-and marks the GitHub release as a prerelease. Re-running the same release replaces the assets with `--clobber`.
+and marks the GitHub release as a prerelease. Re-running the same tag replaces that ROM with `--clobber`.
 
 ## 9. Reconstruction rule
 

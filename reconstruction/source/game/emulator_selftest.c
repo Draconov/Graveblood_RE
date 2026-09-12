@@ -18,7 +18,7 @@
 #define GB_SELFTEST_REG_TM1CNT 0x04000106u
 #define GB_SELFTEST_OAM_BASE ((volatile u16*)0x07000000u)
 #define GB_SELFTEST_VRAM_BASE ((volatile u8*)0x06000000u)
-#define GB_SELFTEST_OBJ_VRAM ((volatile u8*)0x06010000u)
+#define GB_SELFTEST_OBJ_VRAM ((volatile u16*)0x06010000u)
 
 enum {
     GB_SELFTEST_PPU_X0 = 100,
@@ -224,26 +224,32 @@ static void gb_selftest_leaves(void)
 static void gb_selftest_ending(void)
 {
     volatile u8* vram = GB_SELFTEST_VRAM_BASE;
-    vram[GB_ENDING_ARG0_COPY1_BYTES] = 0xA5;
-    vram[GB_ENDING_VRAM_BYTES - 1] = 0x5A;
+    const u32 copy2_last = GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1u;
+    const u32 copy2_after = GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES;
+    volatile u16* copy2_after_guard = (volatile u16*)(vram + copy2_after);
+    volatile u16* copy1_obj_tail_guard =
+        (volatile u16*)(vram + GB_ENDING_ARG0_COPY1_BYTES - 2u);
+    volatile u16* vram_end_guard = (volatile u16*)(vram + GB_ENDING_VRAM_BYTES - 2u);
+
+    /* OBJ VRAM ignores byte stores, so seed guards with legal halfword stores. */
+    *copy2_after_guard = 0xA55Au;
+    *copy1_obj_tail_guard = 0x5AA5u;
+    *vram_end_guard = 0xC33Cu;
 
     gb_video_apply_final_effect();
 
-    const u32 copy2_last = GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1u;
-    const u32 copy2_after = GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES;
     const int ok =
         vram[0] == gb_ending_arg0_copy1[1] &&
         vram[1] == gb_ending_arg0_copy1[1] &&
         vram[GB_ENDING_OBJ_VRAM_OFFSET] == gb_ending_arg0_copy2[0] &&
         vram[copy2_last] == gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES - 1] &&
-        vram[copy2_after] == gb_ending_arg0_copy1[copy2_after + 1u] &&
-        vram[copy2_after + 1u] == gb_ending_arg0_copy1[copy2_after + 1u] &&
-        vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xA5 &&
-        vram[GB_ENDING_VRAM_BYTES - 1] == 0x5A;
+        *copy2_after_guard == 0xA55Au &&
+        *copy1_obj_tail_guard == 0x5AA5u &&
+        *vram_end_guard == 0xC33Cu;
 
     volatile GbEmulatorSelftestReport* report = gb_selftest_report();
     report->ending_guard = ok ? 0xA55AA55Au :
-        ((u32)vram[GB_ENDING_ARG0_COPY1_BYTES] << 8) | vram[GB_ENDING_VRAM_BYTES - 1];
+        ((u32)*copy2_after_guard << 16) | *copy1_obj_tail_guard;
     gb_selftest_mark(GB_SELFTEST_ENDING, ok);
 }
 
@@ -323,9 +329,8 @@ static void gb_selftest_prepare_ppu_fixture(void)
     const u16 player_tile = player_attr2 & 0x03FFu;
     const u16 npc_tile = npc_attr2 & 0x03FFu;
     const u16 player_palette = (player_attr2 >> 12) & 0x000Fu;
-    GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 32u] = 0x01u;
-    GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 32u] = 0x01u;
-    GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 32u + 1u] = 0x01u;
+    GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 16u] = 0x0001u;
+    GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 16u] = 0x0011u;
     OBJ_COLORS[player_palette * 16u + 1u] = GB_SELFTEST_PPU_PLAYER_COLOR;
     OBJ_COLORS[1] = GB_SELFTEST_PPU_NPC_COLOR;
     BG_COLORS[0] = 0x7C00u;

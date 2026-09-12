@@ -105,14 +105,13 @@ class MgbaSmokeRunnerTests(unittest.TestCase):
 
 
 class MgbaWorkflowWiringTests(unittest.TestCase):
-    def test_release_workflow_requires_real_mgba_smoke_after_build(self):
+    def test_release_workflow_has_no_extra_mgba_job_or_screenshot_artifact(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("emulator-smoke:", workflow)
-        self.assertIn("needs: build", workflow)
-        self.assertIn("mgba-sdl", workflow)
-        self.assertIn("tools/run_mgba_smoke.py", workflow)
-        self.assertIn("xvfb-run", workflow)
-        self.assertRegex(workflow, r"needs:\s*\[build, emulator-smoke\]")
+        self.assertNotIn("emulator-smoke:", workflow)
+        self.assertNotIn("mgba-sdl", workflow)
+        self.assertNotIn("tools/run_mgba_smoke.py", workflow)
+        self.assertNotIn("xvfb-run", workflow)
+        self.assertNotIn("actions/upload-artifact", workflow)
 
 
 if __name__ == "__main__":

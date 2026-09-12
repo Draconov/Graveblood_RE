@@ -127,11 +127,12 @@ void irqDisable(u32 irq);
 
 
 class HardwareValidationWiringTests(unittest.TestCase):
-    def test_github_rom_build_depends_on_hardware_address_validation_gate(self):
+    def test_release_workflow_does_not_publish_hardware_validation_artifacts(self):
         workflow = (ROOT / ".github/workflows/build-release-rom.yml").read_text(encoding="utf-8")
-        self.assertIn("hardware-address-validation:", workflow)
-        self.assertIn("python3 -m unittest tools.test_hardware_address_runtime -v", workflow)
-        self.assertIn("needs: hardware-address-validation", workflow)
+        self.assertNotIn("hardware-address-validation:", workflow)
+        self.assertNotIn("tools.test_hardware_address_runtime", workflow)
+        self.assertNotIn("actions/upload-artifact", workflow)
+        self.assertTrue((ROOT / "tools/test_hardware_address_runtime.py").is_file())
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "literal GBA mmap validation requires Linux")
@@ -527,10 +528,10 @@ int main(void)
     assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + 1] == 0x34);
     assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 2] == 0x43);
     assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x44);
-    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES] == 0x22);
-    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES + 1] == 0x22);
-    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0x24);
-    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x24);
+    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES] == 0xA5);
+    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES + 1] == 0xA5);
+    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0xA5);
+    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0xA5);
     assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xA5);
     assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xA5);
     return 0;

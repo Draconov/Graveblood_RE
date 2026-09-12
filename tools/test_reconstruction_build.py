@@ -79,7 +79,7 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertLess(draw_index, effect_index)
 
         gba_h = '''\n#ifndef GBA_H\n#define GBA_H\n#include <stdint.h>\ntypedef uint8_t u8;\ntypedef int8_t s8;\ntypedef uint16_t u16;\ntypedef int16_t s16;\ntypedef uint32_t u32;\ntypedef int32_t s32;\n#endif\n'''
-        harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [1] = 0x12,\n    [0x13E80] = 0x66, [0x13E81] = 0x67,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [1] = 0x45,\n    [GB_ENDING_ARG0_COPY2_BYTES - 2] = 0x54,\n    [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x12);\n    assert(vram[1] == 0x12);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + 1] == 0x45);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 2] == 0x54);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0x67);\n    assert(vram[0x13E81] == 0x67);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
+        harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [1] = 0x12,\n    [0x13E80] = 0x66, [0x13E81] = 0x67,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [1] = 0x45,\n    [GB_ENDING_ARG0_COPY2_BYTES - 2] = 0x54,\n    [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x12);\n    assert(vram[1] == 0x12);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + 1] == 0x45);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 2] == 0x54);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0xAA);\n    assert(vram[0x13E81] == 0xAA);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0xAA);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0xAA);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
             (td / 'gba.h').write_text(gba_h, encoding='utf-8')
@@ -254,17 +254,21 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn(DEVKIT_IMAGE, text)
         self.assertIn('make -C reconstruction -j"$(nproc)"', text)
         self.assertIn(ROM_NAME, text)
-        self.assertIn('name: Graveblood_RE-rom', text)
-        self.assertIn('actions/upload-artifact@v4', text)
-        self.assertIn('actions/download-artifact@v4', text)
+        self.assertIn('docker run --rm', text)
+        self.assertNotIn('actions/upload-artifact@v4', text)
+        self.assertNotIn('actions/download-artifact@v4', text)
+        self.assertNotIn('Graveblood_RE_selftest', text)
+        self.assertNotIn('Graveblood_RE_device_test', text)
+        self.assertNotIn('.sha256', text)
         self.assertNotIn('repository: GValiente/butano', text)
         self.assertNotIn('path: vendor/butano', text)
         self.assertNotIn('LIBBUTANO', text)
 
     def test_workflow_releases_only_version_tags(self):
         text = (ROOT / '.github/workflows/build-release-rom.yml').read_text(encoding='utf-8')
-        self.assertIn("startsWith(github.ref, 'refs/tags/Graveblood_RE_v')", text)
-        self.assertIn("endsWith(github.ref, '-dev')", text)
+        self.assertIn("- 'Graveblood_RE_v*-dev'", text)
+        self.assertNotIn('pull_request:', text)
+        self.assertNotIn('workflow_dispatch:', text)
         self.assertIn('Graveblood_RE_v${VERSION}.gba', text)
         self.assertIn('contents: write', text)
         self.assertIn('gh release create', text)

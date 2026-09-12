@@ -21,7 +21,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm             -v "$GITHUB_WORKSPACE:/workspace"             -w /workspace             devkitpro/devkitarm:20260610             bash -lc 'make -C reconstruction -j"$(nproc)"'
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            devkitpro/devkitarm:20260610 \
+            bash -lc 'make -C reconstruction -j"$(nproc)"'
 
           test -s reconstruction/Graveblood_RE.gba
           python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
@@ -45,7 +49,10 @@ jobs:
           cp reconstruction/Graveblood_RE.gba "$ROM_NAME"
 
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME"               --title "$GITHUB_REF_NAME"               --prerelease               --generate-notes
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --prerelease \
+              --generate-notes
           fi
 
           gh release upload "$GITHUB_REF_NAME" "$ROM_NAME" --clobber

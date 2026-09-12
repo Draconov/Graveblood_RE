@@ -82,11 +82,11 @@ class DeviceSelftestTests(unittest.TestCase):
         self.assertIn("defined(GB_DEVICE_SELFTEST)", header)
         self.assertIn("defined(GB_DEVICE_SELFTEST)", source)
 
-    def test_workflow_builds_and_uploads_device_test_rom(self):
+    def test_release_workflow_does_not_build_or_publish_device_test_rom(self):
         workflow = (ROOT / ".github/workflows/build-release-rom.yml").read_text(encoding="utf-8")
-        self.assertIn("Graveblood_RE_device_test", workflow)
-        self.assertIn("EXTRA_CFLAGS=-DGB_DEVICE_SELFTEST", workflow)
-        self.assertIn("reconstruction/Graveblood_RE_device_test.gba", workflow)
+        self.assertNotIn("Graveblood_RE_device_test", workflow)
+        self.assertNotIn("GB_DEVICE_SELFTEST", workflow)
+        self.assertNotIn("actions/upload-artifact", workflow)
 
     def test_device_selftest_source_compiles_for_arm7tdmi_thumb(self):
         clang = shutil.which("clang")

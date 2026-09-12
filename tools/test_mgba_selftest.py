@@ -393,14 +393,13 @@ exit 9
 
 
 class EmulatorSelftestBuildWiringTests(unittest.TestCase):
-    def test_workflow_builds_and_runs_dedicated_selftest_rom(self):
+    def test_release_workflow_does_not_build_or_publish_dedicated_selftest_rom(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("Graveblood_RE_selftest", workflow)
-        self.assertIn("GB_EMULATOR_SELFTEST", workflow)
-        self.assertIn("tools/run_mgba_selftest.py", workflow)
-        self.assertIn("--ppu-screenshot", workflow)
-        self.assertIn("xdotool", workflow)
-        self.assertIn("mgba-selftest-ppu.png", workflow)
+        self.assertNotIn("Graveblood_RE_selftest", workflow)
+        self.assertNotIn("GB_EMULATOR_SELFTEST", workflow)
+        self.assertNotIn("tools/run_mgba_selftest.py", workflow)
+        self.assertNotIn("--ppu-screenshot", workflow)
+        self.assertNotIn("mgba-selftest-ppu.png", workflow)
         self.assertIn("-g", (ROOT / "tools" / "run_mgba_selftest.py").read_text(encoding="utf-8"))
 
     def test_makefile_accepts_extra_compile_flags_for_isolated_selftest_build(self):
@@ -445,13 +444,25 @@ class EmulatorSelftestBuildWiringTests(unittest.TestCase):
         self.assertIn("gb_emulator_selftest_run();", main_text)
         self.assertIn("gb_game_run();", main_text)
 
-    def test_ending_selftest_expects_gba_vram_byte_store_replication(self):
+    def test_ending_selftest_matches_gba_bg_and_obj_vram_byte_store_rules(self):
         source_text = (ROOT / "reconstruction" / "source" / "game" / "emulator_selftest.c").read_text(encoding="utf-8")
         self.assertIn("vram[0] == gb_ending_arg0_copy1[1]", source_text)
         self.assertIn("vram[1] == gb_ending_arg0_copy1[1]", source_text)
-        self.assertIn("vram[copy2_after] == gb_ending_arg0_copy1[copy2_after + 1u]", source_text)
-        self.assertIn("vram[copy2_after + 1u] == gb_ending_arg0_copy1[copy2_after + 1u]", source_text)
+        self.assertIn("*copy2_after_guard = 0xA55Au", source_text)
+        self.assertIn("*copy1_obj_tail_guard = 0x5AA5u", source_text)
+        self.assertIn("*vram_end_guard = 0xC33Cu", source_text)
+        self.assertIn("*copy2_after_guard == 0xA55Au", source_text)
+        self.assertIn("*copy1_obj_tail_guard == 0x5AA5u", source_text)
+        self.assertIn("*vram_end_guard == 0xC33Cu", source_text)
+        self.assertNotIn("vram[copy2_after] == gb_ending_arg0_copy1[copy2_after + 1u]", source_text)
         self.assertNotIn("vram[0] == gb_ending_arg0_copy1[0]", source_text)
+
+    def test_ppu_fixture_uses_legal_halfword_writes_for_obj_vram_probe_pixels(self):
+        source_text = (ROOT / "reconstruction" / "source" / "game" / "emulator_selftest.c").read_text(encoding="utf-8")
+        self.assertIn("#define GB_SELFTEST_OBJ_VRAM ((volatile u16*)0x06010000u)", source_text)
+        self.assertIn("GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 16u] = 0x0001u;", source_text)
+        self.assertIn("GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 16u] = 0x0011u;", source_text)
+        self.assertNotIn("GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 32u]", source_text)
 
     def test_audio_selftest_accepts_mgba_fifo_dma_normalized_readback(self):
         source_text = (ROOT / "reconstruction" / "source" / "game" / "emulator_selftest.c").read_text(encoding="utf-8")
