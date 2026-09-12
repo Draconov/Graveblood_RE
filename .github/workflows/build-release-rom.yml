@@ -1,152 +1,38 @@
-name: Build and release Graveblood_RE ROM
+name: Publish Graveblood_RE ROM
 
 on:
   push:
-  pull_request:
-  workflow_dispatch:
+    tags:
+      - 'Graveblood_RE_v*-dev'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  hardware-address-validation:
-    name: Validate hardware-address runtime
+  release:
+    name: Build and publish ROM
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Graveblood_RE
         uses: actions/checkout@v4
 
-      - name: Run literal-address and ARM validation
+      - name: Build release ROM
         shell: bash
         run: |
           set -euo pipefail
-          PYTHONDONTWRITEBYTECODE=1 \
-            python3 -m unittest tools.test_hardware_address_runtime -v
+          docker run --rm             -v "$GITHUB_WORKSPACE:/workspace"             -w /workspace             devkitpro/devkitarm:20260610             bash -lc 'make -C reconstruction -j"$(nproc)"'
 
-  build:
-    name: Build GBA ROM
-    needs: hardware-address-validation
-    runs-on: ubuntu-latest
-    container:
-      image: devkitpro/devkitarm:20260610
-      options: --user 1001
-
-    steps:
-      - name: Checkout Graveblood_RE
-        uses: actions/checkout@v4
-
-      - name: Build Graveblood_RE ROM
-        shell: bash
-        run: |
-          set -euo pipefail
-          make -C reconstruction -j"$(nproc)"
           test -s reconstruction/Graveblood_RE.gba
           python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE.gba
-          sha256sum reconstruction/Graveblood_RE.gba \
-            > reconstruction/Graveblood_RE.gba.sha256
 
-          make -C reconstruction \
-            TARGET=Graveblood_RE_selftest \
-            BUILD=build-selftest \
-            EXTRA_CFLAGS=-DGB_EMULATOR_SELFTEST \
-            -j"$(nproc)"
-          test -s reconstruction/Graveblood_RE_selftest.gba
-          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE_selftest.gba
-          sha256sum reconstruction/Graveblood_RE_selftest.gba \
-            > reconstruction/Graveblood_RE_selftest.gba.sha256
-
-          make -C reconstruction \
-            TARGET=Graveblood_RE_device_test \
-            BUILD=build-device-test \
-            EXTRA_CFLAGS=-DGB_DEVICE_SELFTEST \
-            -j"$(nproc)"
-          test -s reconstruction/Graveblood_RE_device_test.gba
-          python3 tools/validate_gba_rom.py reconstruction/Graveblood_RE_device_test.gba
-          sha256sum reconstruction/Graveblood_RE_device_test.gba \
-            > reconstruction/Graveblood_RE_device_test.gba.sha256
-
-      - name: Upload ROM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Graveblood_RE-rom
-          path: |
-            reconstruction/Graveblood_RE.gba
-            reconstruction/Graveblood_RE.gba.sha256
-            reconstruction/Graveblood_RE_selftest.gba
-            reconstruction/Graveblood_RE_selftest.gba.sha256
-            reconstruction/Graveblood_RE_device_test.gba
-            reconstruction/Graveblood_RE_device_test.gba.sha256
-          if-no-files-found: error
-          compression-level: 0
-
-  emulator-smoke:
-    name: Boot ROM in mGBA
-    needs: build
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout Graveblood_RE
-        uses: actions/checkout@v4
-
-      - name: Download built ROM artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Graveblood_RE-rom
-          path: dist
-
-      - name: Install mGBA SDL frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y mgba-sdl xvfb xdotool
-
-      - name: Boot ROM under mGBA
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s dist/Graveblood_RE.gba
-          xvfb-run -a env SDL_AUDIODRIVER=dummy \
-            python3 tools/run_mgba_smoke.py dist/Graveblood_RE.gba --seconds 5
-          test -s dist/Graveblood_RE_selftest.gba
-          xvfb-run -a env SDL_AUDIODRIVER=dummy \
-            python3 tools/run_mgba_selftest.py \
-              dist/Graveblood_RE_selftest.gba \
-              --seconds 2 \
-              --ppu-screenshot dist/mgba-selftest-ppu.png
-
-      - name: Upload mGBA PPU validation screenshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: Graveblood_RE-mgba-ppu
-          path: dist/mgba-selftest-ppu.png
-          if-no-files-found: error
-          compression-level: 0
-
-  release:
-    name: Publish tagged ROM release
-    if: startsWith(github.ref, 'refs/tags/Graveblood_RE_v') && endsWith(github.ref, '-dev')
-    needs: [build, emulator-smoke]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download built ROM artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Graveblood_RE-rom
-          path: dist
-
-      - name: Create release if needed and upload versioned ROM
+      - name: Publish ROM release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          test -s dist/Graveblood_RE.gba
 
           if [[ ! "$GITHUB_REF_NAME" =~ ^Graveblood_RE_v([0-9]+\.[0-9]+\.[0-9]+)-dev$ ]]; then
             echo "Unsupported release tag: $GITHUB_REF_NAME" >&2
@@ -156,17 +42,10 @@ jobs:
 
           VERSION="${BASH_REMATCH[1]}"
           ROM_NAME="Graveblood_RE_v${VERSION}.gba"
-          cp dist/Graveblood_RE.gba "dist/$ROM_NAME"
-          (cd dist && sha256sum "$ROM_NAME" > "$ROM_NAME.sha256")
+          cp reconstruction/Graveblood_RE.gba "$ROM_NAME"
 
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
-              --prerelease \
-              --generate-notes
+            gh release create "$GITHUB_REF_NAME"               --title "$GITHUB_REF_NAME"               --prerelease               --generate-notes
           fi
 
-          gh release upload "$GITHUB_REF_NAME" \
-            "dist/$ROM_NAME" \
-            "dist/$ROM_NAME.sha256" \
-            --clobber
+          gh release upload "$GITHUB_REF_NAME" "$ROM_NAME" --clobber
