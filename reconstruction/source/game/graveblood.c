@@ -40,8 +40,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
     gb_story_on_level_load(story, actors);
     gb_audio_play_music(level_id == 10 ? 1 : 0);
     gb_world_update_camera(world, player->x, player->y);
-    gb_video_draw_actors(actors, player, world->camera_x, world->camera_y);
-    gb_video_draw_player_state(player, story, world->camera_x, world->camera_y);
+    gb_video_draw_gameplay_objects(actors, player, story, world->camera_x, world->camera_y);
     gb_video_draw_story_ui(story);
 }
 
@@ -118,8 +117,8 @@ void gb_game_run(void)
                 world.stream_valid = 0;
                 gb_world_update_camera(&world, player.x, player.y);
                 gb_audio_play_music(world.assets->level_id == 10 ? 1 : 0);
-                gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);
-                gb_video_draw_player_state(&player, &story, world.camera_x, world.camera_y);
+                gb_video_draw_gameplay_objects(&actors, &player, &story,
+                                               world.camera_x, world.camera_y);
                 gb_video_draw_story_ui(&story);
                 continue;
             }
@@ -150,8 +149,8 @@ void gb_game_run(void)
            Player_update may then track a new dead-zone camera position, but
            that pending position is not published until the next gameplay frame. */
         gb_world_publish_camera(&world);
-        gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);
-        gb_video_draw_player_state(&player, &story, world.camera_x, world.camera_y);
+        gb_video_draw_gameplay_objects(&actors, &player, &story,
+                                       world.camera_x, world.camera_y);
         gb_video_draw_story_ui(&story);
 
         if(! story.state.final_effect_pending &&

@@ -4547,6 +4547,60 @@ def extract_gameplay_frame_order(data: bytes) -> list[dict]:
     ]
 
 
+
+def extract_gameplay_oam_insertion_order(data: bytes) -> list[dict]:
+    """Bind insertion-ordered draw traversal to the shared monotonic OAM allocator.
+
+    The common OBJ submit helper uses one incrementing OAM index.  Story overlays
+    are loaded before the physical level list, and Player has one recovered
+    physical-list ordinal per level.  Therefore equal-priority OBJ tie-breaking
+    must follow overlay/physical insertion order rather than reserving Player at
+    a globally lower OAM index.
+    """
+    expected = (
+        0x18EB, 0x46B1, 0x6936, 0x691D, 0x0189, 0x4466, 0x4339,
+        0x00F6, 0x4329, 0x8031, 0x21C0, 0x6A1B, 0x05C0, 0x0DC0,
+        0x4318, 0x4B0A, 0x0052, 0x401A, 0x9B07, 0x0109, 0x029B,
+        0x400B, 0x431A, 0x464B, 0x691B, 0x4320, 0x1C5C, 0x464B,
+        0x8070, 0x80B2, 0x611C,
+    )
+    if _unpack_halfwords(data, 0x0800A958, len(expected)) != expected:
+        raise ValueError('shared monotonic OAM submit sequence drifted')
+
+    overlay_rows = extract_story_overlay_update_order(data)
+    if overlay_rows[0]['relative_order'] != 'first':
+        raise ValueError('story-overlay prefix ordering drifted')
+    player_rows = extract_player_npc_update_order(data)
+
+    rows = [
+        {
+            'fact': 'oam_allocator',
+            'level': 'all',
+            'value': 'shared monotonic OAM submission counter',
+            'evidence': '0x0800A958..0x0800A994 writes OAM[counter] then increments the same counter',
+            'runtime_consequence': 'draw traversal order is the equal-priority OBJ tie-break order',
+            'confidence': 'high',
+        },
+        {
+            'fact': 'story_overlay_prefix',
+            'level': 'all',
+            'value': 'story overlays before physical LevelRecord+0x38 actors',
+            'evidence': '0x08005996 submits story overlay list before 0x080059AE physical actor list',
+            'runtime_consequence': 'loaded overlay NPCs can own lower OAM indices than Player',
+            'confidence': 'high',
+        },
+    ]
+    for row in player_rows:
+        rows.append({
+            'fact': 'player_physical_index',
+            'level': row['level'],
+            'value': row['player_index'],
+            'evidence': f"serialized Player record at {row['player_rom_addr']}",
+            'runtime_consequence': 'insert Player after this many physical-list objects, following the overlay prefix',
+            'confidence': 'high',
+        })
+    return rows
+
 def extract_player_npc_update_order(data: bytes) -> list[dict]:
     """Export canonical Player-vs-physical-NPC update ordinals for all levels.
 
@@ -4859,6 +4913,11 @@ def main():
     frame_order_rows = extract_gameplay_frame_order(data)
     write_csv(args.out / "gameplay_frame_order.csv",
               ["fact","value","evidence","confidence"], frame_order_rows)
+
+    oam_order_rows = extract_gameplay_oam_insertion_order(data)
+    write_csv(args.out / "gameplay_oam_insertion_order.csv",
+              ["fact","level","value","evidence","runtime_consequence","confidence"],
+              oam_order_rows)
 
     player_portal_rows = extract_player_portal_update_order(data)
     write_csv(args.out / "player_portal_update_order.csv",

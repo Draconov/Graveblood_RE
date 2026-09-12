@@ -82,7 +82,7 @@ class GameplayFrameOrderTests(unittest.TestCase):
 
         game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
         publish = game.index('gb_world_publish_camera(&world);')
-        draw = game.index('gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);', publish)
+        draw = game.index('gb_video_draw_gameplay_objects(&actors, &player, &story,', publish)
         start_gate = game.index('(input.pressed & KEY_START)')
         wardrobe_gate = game.index('input.held == (KEY_B | KEY_SELECT)')
         self.assertLess(draw, start_gate)
@@ -145,7 +145,7 @@ int main(void) {
         self.assertIn('gb_world_publish_camera(&world);', game)
         self.assertIn('gb_world_track_camera(&world, player.x, player.y);', game)
         publish = game.index('gb_world_publish_camera(&world);')
-        draw_actors = game.index('gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);', publish)
+        draw_actors = game.index('gb_video_draw_gameplay_objects(&actors, &player, &story,', publish)
         env_update = game.index('gb_actor_system_update_environment(&actors, world.camera_x, world.camera_y);', draw_actors)
         player_update = game.index('gb_player_update(&player, world.assets, &input);', env_update)
         track = game.index('gb_world_track_camera(&world, player.x, player.y);', player_update)
@@ -156,7 +156,7 @@ int main(void) {
         # The active-gameplay tail must not immediately publish the just-tracked camera.
         tail = game[track:game.index('\n    }\n}', track)]
         self.assertNotIn('gb_world_publish_camera(&world);', tail)
-        self.assertNotIn('gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y);', tail)
+        self.assertNotIn('gb_video_draw_gameplay_objects(&actors, &player, &story,', tail)
 
 
 if __name__ == '__main__':

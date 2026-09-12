@@ -93,6 +93,19 @@ void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level)
         return;
     }
 
+    /* load_level_record_resources submits the level-gated story-overlay list
+       to the object manager before LevelRecord+0x38 physical actors.  Keep the
+       same insertion order because update traversal and OAM allocation both
+       consume the object vector in registration order. */
+    for(u8 i = 0; i < GB_ACTOR_STORY_DESCRIPTOR_COUNT; ++i)
+    {
+        const GbStoryActorDescriptor* story = &gb_story_actor_descriptors[i];
+        if(story->actor.level == level->level_id)
+        {
+            gb_actor_append(system, &story->actor, story->overlay_index);
+        }
+    }
+
     const GbActorLevelIndexSpan span = gb_actor_level_spans[level->level_id];
     for(u16 i = 0; i < span.count; ++i)
     {
@@ -100,15 +113,6 @@ void gb_actor_system_load(GbActorSystem* system, const GbLevelAssets* level)
         if(descriptor_index < GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT)
         {
             gb_actor_append(system, &gb_actor_descriptors[descriptor_index], GB_ACTOR_STORY_NONE);
-        }
-    }
-
-    for(u8 i = 0; i < GB_ACTOR_STORY_DESCRIPTOR_COUNT; ++i)
-    {
-        const GbStoryActorDescriptor* story = &gb_story_actor_descriptors[i];
-        if(story->actor.level == level->level_id)
-        {
-            gb_actor_append(system, &story->actor, story->overlay_index);
         }
     }
 }

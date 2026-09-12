@@ -74,12 +74,12 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('void gb_video_apply_final_effect(void);', video_h)
         self.assertIn('if(story.state.final_effect_pending)', game)
         self.assertIn('gb_video_apply_final_effect();', game)
-        draw_index = game.index('gb_video_draw_player_state(&player, &story, world.camera_x, world.camera_y);')
+        draw_index = game.index('gb_video_draw_gameplay_objects(&actors, &player, &story,')
         effect_index = game.index('gb_video_apply_final_effect();', draw_index)
         self.assertLess(draw_index, effect_index)
 
         gba_h = '''\n#ifndef GBA_H\n#define GBA_H\n#include <stdint.h>\ntypedef uint8_t u8;\ntypedef int8_t s8;\ntypedef uint16_t u16;\ntypedef int16_t s16;\ntypedef uint32_t u32;\ntypedef int32_t s32;\n#endif\n'''
-        harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [0x10000] = 0x22, [0x13E80] = 0x66,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x11);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0x66);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
+        harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [1] = 0x12,\n    [0x13E80] = 0x66, [0x13E81] = 0x67,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [1] = 0x45,\n    [GB_ENDING_ARG0_COPY2_BYTES - 2] = 0x54,\n    [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x12);\n    assert(vram[1] == 0x12);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + 1] == 0x45);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 2] == 0x54);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0x67);\n    assert(vram[0x13E81] == 0x67);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x33);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
             (td / 'gba.h').write_text(gba_h, encoding='utf-8')
@@ -220,7 +220,7 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('gb_actor_system_load(actors, assets)', game)
         self.assertIn('gb_actor_system_update_overlays(&actors, &player, &input, &interaction)', game)
         self.assertIn('gb_actor_system_update_physical_npcs(&actors, &player)', game)
-        self.assertIn('gb_video_draw_actors(&actors, &player, world.camera_x, world.camera_y)', game)
+        self.assertIn('gb_video_draw_gameplay_objects(&actors, &player, &story,', game)
         self.assertGreaterEqual(game.count('gb_enter_level(&world, &player, &actors,'), 2)
 
     def test_development_guide_is_devkitpro_only(self):
@@ -1622,10 +1622,19 @@ int main(void)
     level.level_id = 0;
     gb_actor_system_load(&system, &level);
     assert(system.count == 55);
-    for(unsigned i = 1; i < 49; ++i)
+    unsigned overlay_count = 0;
+    while(overlay_count < system.count &&
+          system.actors[overlay_count].story_overlay_index != GB_ACTOR_STORY_NONE)
+    {
+        assert(system.actors[overlay_count].descriptor->rom_order >= 0x8000);
+        ++overlay_count;
+    }
+    assert(overlay_count == 6);
+    for(unsigned i = overlay_count + 1; i < system.count; ++i)
+    {
         assert(system.actors[i - 1].descriptor->rom_order < system.actors[i].descriptor->rom_order);
-    for(unsigned i = 49; i < system.count; ++i)
-        assert(system.actors[i].descriptor->rom_order >= 0x8000);
+        assert(system.actors[i].descriptor->rom_order < 0x8000);
+    }
 
     level.level_id = 3;
     gb_actor_system_load(&system, &level);
@@ -1798,7 +1807,7 @@ typedef int32_t s32;
         self.assertIn('gb_story_update(&story, &actors, &input);', graveblood)
         self.assertIn('gb_story_try_level10_gate(&story, world.assets, &player, &input)', graveblood)
         self.assertIn('gb_video_draw_story_ui(&story);', graveblood)
-        self.assertIn('gb_video_draw_player_state(&player, &story,', graveblood)
+        self.assertIn('gb_video_draw_gameplay_objects(&actors, &player, &story,', graveblood)
 
         harness = r"""
 #include <assert.h>

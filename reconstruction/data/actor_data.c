@@ -278,6 +278,10 @@ const GbActorLevelIndexSpan gb_actor_level_spans[11] = {
     { 274, 16 }
 };
 
+const u8 gb_player_physical_indices[11] = {
+    8, 2, 0, 0, 0, 0, 8, 0, 4, 2, 1
+};
+
 const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DESCRIPTOR_COUNT] = {
     { { 541, 548, 16, -32, 32768, 0, 5, 0, 0, 56, 0, 0, 0, 0, 0, 0, 6 }, 0 },
     { { 563, 483, 16, -32, 32769, 0, 5, 0, 0, 56, 2, 0, 0, 0, 0, 0, 6 }, 1 },

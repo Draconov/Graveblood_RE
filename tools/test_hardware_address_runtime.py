@@ -501,10 +501,15 @@ int main(void)
 #include <graveblood/video.h>
 
 const u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {
-    [0] = 0x11, [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x22,
+    [0] = 0x11, [1] = 0x12,
+    [GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES] = 0x21,
+    [GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES + 1] = 0x22,
+    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x24,
 };
 const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {
-    [0] = 0x33, [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x44,
+    [0] = 0x33, [1] = 0x34,
+    [GB_ENDING_ARG0_COPY2_BYTES - 2] = 0x43,
+    [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x44,
 };
 
 int main(void)
@@ -517,10 +522,15 @@ int main(void)
 
     gb_video_apply_final_effect();
     volatile u8* vram = (volatile u8*)0x06000000u;
-    assert(vram[0] == 0x11);
-    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x22);
+    assert(vram[0] == 0x12 && vram[1] == 0x12);
     assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x33);
+    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + 1] == 0x34);
+    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 2] == 0x43);
     assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x44);
+    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES] == 0x22);
+    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES + 1] == 0x22);
+    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0x24);
+    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0x24);
     assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xA5);
     assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xA5);
     return 0;

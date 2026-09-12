@@ -23,6 +23,8 @@ void gb_video_stream_column(const GbLevelAssets* level, s16 world_x, s16 top);
 void gb_video_stream_row(const GbLevelAssets* level, s16 left, s16 world_y);
 void gb_video_set_camera(s16 x, s16 y);
 void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 camera_x, s16 camera_y);
+void gb_video_draw_gameplay_objects(GbActorSystem* system, const GbPlayer* player,
+                                    const GbStoryRuntime* story, s16 camera_x, s16 camera_y);
 void gb_video_draw_player(const GbPlayer* player, s16 camera_x, s16 camera_y);
 void gb_video_clear_story_ui(void);
 void gb_video_draw_story_ui(const GbStoryRuntime* story);

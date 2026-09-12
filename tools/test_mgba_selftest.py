@@ -78,11 +78,22 @@ def _send_packet(conn: socket.socket, payload: bytes) -> None:
         raise AssertionError(f"expected client ack, got {ack!r}")
 
 
-def _report_bytes(*, pass_mask: int = EXPECTED_MASK, fail_mask: int = 0, complete: int = COMPLETE) -> bytes:
+def _report_bytes(
+    *,
+    pass_mask: int = EXPECTED_MASK,
+    fail_mask: int = 0,
+    complete: int = COMPLETE,
+    ending_guard: int = 0xA55AA55A,
+    audio_irq_count: int = 64,
+    audio_setup_ok: int = 1,
+    audio_ie: int = 0x10,
+    audio_ime: int = 1,
+) -> bytes:
     words = [
         MAGIC, VERSION, EXPECTED_MASK, pass_mask, fail_mask, complete,
         0x00000800, 0x00000800, 5, 10, 0, 706, 780, 1, 2611, 80,
-        0xA55AA55A, 64, 1, 0x10, 1, 160, PPU_PROBE_COORDS, PPU_PROBE_COLORS,
+        ending_guard, audio_irq_count, audio_setup_ok, audio_ie, audio_ime,
+        160, PPU_PROBE_COORDS, PPU_PROBE_COLORS,
     ]
     assert len(words) == REPORT_WORDS
     return b"".join((word & 0xFFFFFFFF).to_bytes(4, "little") for word in words)
@@ -340,6 +351,34 @@ exit 9
             self.assertNotEqual(0, proc.returncode)
             self.assertIn("fail", (proc.stderr + proc.stdout).lower())
 
+    def test_selftest_runner_failure_prints_hardware_diagnostics(self):
+        with tempfile.TemporaryDirectory() as td_raw:
+            td = Path(td_raw)
+            rom = self._rom(td)
+            emulator = self._fake_emulator(
+                td,
+                _report_bytes(
+                    pass_mask=EXPECTED_MASK & ~(0x20 | 0x40),
+                    fail_mask=0x20 | 0x40,
+                    ending_guard=0x00125A34,
+                    audio_irq_count=0,
+                    audio_setup_ok=0,
+                    audio_ie=0x0010,
+                    audio_ime=1,
+                ),
+            )
+            proc = subprocess.run(
+                [sys.executable, str(RUNNER), str(rom), "--emulator", str(emulator), "--seconds", "0.05"],
+                cwd=ROOT, capture_output=True, text=True, timeout=5,
+            )
+            output = proc.stderr + proc.stdout
+            self.assertNotEqual(0, proc.returncode)
+            self.assertIn("ending_guard=0x00125a34", output.lower())
+            self.assertIn("audio_irq_count=0", output)
+            self.assertIn("audio_setup_ok=0", output)
+            self.assertIn("audio_ie=0x0010", output.lower())
+            self.assertIn("audio_ime=0x0001", output.lower())
+
     def test_selftest_runner_rejects_early_emulator_exit(self):
         with tempfile.TemporaryDirectory() as td_raw:
             td = Path(td_raw)
@@ -405,6 +444,20 @@ class EmulatorSelftestBuildWiringTests(unittest.TestCase):
         self.assertIn("#ifdef GB_EMULATOR_SELFTEST", main_text)
         self.assertIn("gb_emulator_selftest_run();", main_text)
         self.assertIn("gb_game_run();", main_text)
+
+    def test_ending_selftest_expects_gba_vram_byte_store_replication(self):
+        source_text = (ROOT / "reconstruction" / "source" / "game" / "emulator_selftest.c").read_text(encoding="utf-8")
+        self.assertIn("vram[0] == gb_ending_arg0_copy1[1]", source_text)
+        self.assertIn("vram[1] == gb_ending_arg0_copy1[1]", source_text)
+        self.assertIn("vram[copy2_after] == gb_ending_arg0_copy1[copy2_after + 1u]", source_text)
+        self.assertIn("vram[copy2_after + 1u] == gb_ending_arg0_copy1[copy2_after + 1u]", source_text)
+        self.assertNotIn("vram[0] == gb_ending_arg0_copy1[0]", source_text)
+
+    def test_audio_selftest_accepts_mgba_fifo_dma_normalized_readback(self):
+        source_text = (ROOT / "reconstruction" / "source" / "game" / "emulator_selftest.c").read_text(encoding="utf-8")
+        self.assertIn("const u16 dma_control = GB_SELFTEST_REG16(GB_SELFTEST_REG_DMA1CNT_H);", source_text)
+        self.assertIn("dma_control == 0xB200u || dma_control == 0xB640u", source_text)
+        self.assertNotIn("GB_SELFTEST_REG16(GB_SELFTEST_REG_DMA1CNT_H) == 0xB200u &&", source_text)
 
     def test_audio_selftest_irq_counter_is_driven_by_timer1_handler(self):
         gba_header = r'''

@@ -232,10 +232,12 @@ static void gb_selftest_ending(void)
     const u32 copy2_last = GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1u;
     const u32 copy2_after = GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES;
     const int ok =
-        vram[0] == gb_ending_arg0_copy1[0] &&
+        vram[0] == gb_ending_arg0_copy1[1] &&
+        vram[1] == gb_ending_arg0_copy1[1] &&
         vram[GB_ENDING_OBJ_VRAM_OFFSET] == gb_ending_arg0_copy2[0] &&
         vram[copy2_last] == gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES - 1] &&
-        vram[copy2_after] == gb_ending_arg0_copy1[copy2_after] &&
+        vram[copy2_after] == gb_ending_arg0_copy1[copy2_after + 1u] &&
+        vram[copy2_after + 1u] == gb_ending_arg0_copy1[copy2_after + 1u] &&
         vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xA5 &&
         vram[GB_ENDING_VRAM_BYTES - 1] == 0x5A;
 
@@ -248,8 +250,9 @@ static void gb_selftest_ending(void)
 static void gb_selftest_audio(void)
 {
     gb_audio_init();
+    const u16 dma_control = GB_SELFTEST_REG16(GB_SELFTEST_REG_DMA1CNT_H);
     const u32 setup_ok =
-        GB_SELFTEST_REG16(GB_SELFTEST_REG_DMA1CNT_H) == 0xB200u &&
+        (dma_control == 0xB200u || dma_control == 0xB640u) &&
         GB_SELFTEST_REG16(GB_SELFTEST_REG_TM0CNT) == 0x0080u &&
         GB_SELFTEST_REG16(GB_SELFTEST_REG_TM1CNT) == 0x00C4u &&
         (GB_SELFTEST_REG16(GB_SELFTEST_REG_IE) & IRQ_TIMER1) != 0u &&

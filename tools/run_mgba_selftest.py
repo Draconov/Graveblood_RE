@@ -478,6 +478,12 @@ def main(argv: list[str] | None = None) -> int:
             for error in errors:
                 print(f"  - {error}", file=sys.stderr)
             print(f"pass=0x{words[3]:02x} fail=0x{words[4]:02x} complete=0x{words[5]:08x}", file=sys.stderr)
+            print(
+                f"ending_guard=0x{words[16]:08x} "
+                f"audio_irq_count={words[17]} audio_setup_ok={words[18]} "
+                f"audio_ie=0x{words[19]:04x} audio_ime=0x{words[20]:04x}",
+                file=sys.stderr,
+            )
             return 1
         if screenshot_output is not None:
             assert xdotool is not None and screenshot_dir is not None

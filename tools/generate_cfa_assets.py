@@ -150,6 +150,7 @@ class StoryActorSpec:
 class ActorRuntimeData:
     physical: tuple[ActorDescriptorSpec, ...]
     level_indices: dict[int, tuple[int, ...]]
+    player_indices: tuple[int, ...]
     story: tuple[StoryActorSpec, ...]
     routes: tuple[tuple[tuple[int, int], ...], ...]
     visuals: tuple[tuple[int, int], ...]
@@ -484,6 +485,8 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
 
     physical: list[ActorDescriptorSpec] = []
     level_indices: dict[int, list[int]] = {level: [] for level in LEVELS}
+    level_object_counts: dict[int, int] = {level: 0 for level in LEVELS}
+    player_indices: dict[int, int] = {}
     visual_list: list[tuple[int, int]] = []
     visual_index: dict[tuple[int, int], int] = {}
 
@@ -510,6 +513,12 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
         actor_class = _actor_class(row)
         rom_order = source_order
         source_order += 1
+        for level in refs:
+            if actor_class == ACTOR_CLASS_PLAYER:
+                if level in player_indices:
+                    raise ValueError(f'level {level} has multiple Player records')
+                player_indices[level] = level_object_counts[level]
+            level_object_counts[level] += 1
         if actor_class == ACTOR_CLASS_PLAYER:
             continue
 
@@ -601,9 +610,17 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
     if any(len(route) != 6 for route in routes):
         raise ValueError('each recovered NPC route must contain six waypoints')
 
+    expected_player_indices = (8, 2, 0, 0, 0, 0, 8, 0, 4, 2, 1)
+    actual_player_indices = tuple(player_indices.get(level, -1) for level in LEVELS)
+    if actual_player_indices != expected_player_indices:
+        raise ValueError(
+            f'Player physical insertion indices drifted: {actual_player_indices!r}'
+        )
+
     result = ActorRuntimeData(
         physical=tuple(physical),
         level_indices={level: tuple(level_indices[level]) for level in LEVELS},
+        player_indices=actual_player_indices,
         story=tuple(story),
         routes=routes,
         visuals=tuple(visual_list),
@@ -1043,6 +1060,10 @@ const GbActorLevelIndexSpan gb_actor_level_spans[11] = {{
 {span_rows}
 }};
 
+const u8 gb_player_physical_indices[11] = {{
+{_c_values(data.player_indices, 11)}
+}};
+
 const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DESCRIPTOR_COUNT] = {{
 {story_rows}
 }};
@@ -1402,6 +1423,7 @@ enum {{
 extern const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT];
 extern const u16 gb_level_actor_indices[GB_ACTOR_LEVEL_REFERENCE_COUNT];
 extern const GbActorLevelIndexSpan gb_actor_level_spans[11];
+extern const u8 gb_player_physical_indices[11];
 extern const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DESCRIPTOR_COUNT];
 extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS];
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
