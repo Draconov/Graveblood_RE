@@ -62,13 +62,20 @@ class PlayerFgtileUpdateOrderTests(unittest.TestCase):
             actual = list(csv.DictReader(f))
         self.assertEqual(actual, expected)
 
-    def test_clean_room_runs_post_player_fgtile_gates_after_player_update(self):
+    def test_clean_room_runs_post_player_fgtile_gates_at_their_physical_slots(self):
         game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        story = (ROOT / 'reconstruction/source/game/story.c').read_text(encoding='utf-8')
         player_update = game.index('gb_player_update(&player, world.assets, &input);')
-        level10_gate = game.index('gb_story_try_level10_gate(&story, world.assets, &player, &input)')
-        bicycle_gate = game.index('gb_story_try_level9_treetype20_action(world.assets, &player, &input)')
-        self.assertLess(player_update, level10_gate)
-        self.assertLess(player_update, bicycle_gate)
+        physical_loop = game.index('for(u16 index = (u16)player_physical_index + 1;')
+        level10_gate = game.index('gb_story_try_level10_gate_physical_index(')
+        bicycle_slot = game.index('if(level_id == 9 && physical_index == 11)')
+        bicycle_gate = game.index('gb_story_try_level9_treetype20_action(', bicycle_slot)
+        self.assertLess(player_update, physical_loop)
+        self.assertLess(physical_loop, level10_gate)
+        self.assertLess(physical_loop, bicycle_slot)
+        self.assertLess(bicycle_slot, bicycle_gate)
+        self.assertIn('physical_index < 13 || physical_index > 16', story)
+        self.assertIn('(u8)(physical_index - 13)', story)
 
 
 if __name__ == '__main__':

@@ -76,6 +76,18 @@ class DeviceSelftestTests(unittest.TestCase):
         self.assertIn("gb_audio_play_sfx(6)", text)
         self.assertIn("GB_SELFTEST_EXPECTED_MASK", text)
 
+    def test_ppu_overlap_probe_preserves_gameplay_2d_8bpp_obj_contract(self):
+        text = (RECON / "source/game/emulator_selftest.c").read_text(encoding="utf-8")
+        start = text.index("static void gb_selftest_prepare_ppu_fixture")
+        end = text.index("static void gb_selftest_run_checks", start)
+        probe = text[start:end]
+        self.assertNotIn("OBJ_1D_MAP", probe)
+        self.assertIn("REG_DISPCNT = MODE_0 | OBJ_ON;", probe)
+        self.assertIn("= 0x0001u;", probe)  # Player pixels: index 1, then transparent.
+        self.assertIn("= 0x0202u;", probe)  # NPC pixels: index 2 twice.
+        self.assertIn("OBJ_COLORS[1] = GB_SELFTEST_PPU_PLAYER_COLOR;", probe)
+        self.assertIn("OBJ_COLORS[2] = GB_SELFTEST_PPU_NPC_COLOR;", probe)
+
     def test_audio_irq_instrumentation_is_available_to_device_selftest(self):
         header = (RECON / "include/graveblood/audio.h").read_text(encoding="utf-8")
         source = (RECON / "source/engine/audio.c").read_text(encoding="utf-8")

@@ -1,18 +1,6 @@
 #include <graveblood/world.h>
+#include <graveblood/stream.h>
 #include <graveblood/video.h>
-
-static s16 gb_clamp_s16(s16 value, s16 minimum, s16 maximum)
-{
-    if(value < minimum)
-    {
-        return minimum;
-    }
-    if(value > maximum)
-    {
-        return maximum;
-    }
-    return value;
-}
 
 static int gb_abs_int(int value)
 {
@@ -63,13 +51,28 @@ void gb_world_track_camera(GbWorld* world, s16 focus_x, s16 focus_y)
 
 void gb_world_publish_camera(GbWorld* world)
 {
-    const int world_width_pixels = (int)world->assets->world_width_tiles * 8;
-    const int world_height_pixels = (int)world->assets->world_height_tiles * 8;
-    const s16 max_x = world_width_pixels > 240 ? (s16)(world_width_pixels - 240) : 0;
-    const s16 max_y = world_height_pixels > 160 ? (s16)(world_height_pixels - 160) : 0;
+    /* 0x0800A2D4 applies these as two ordered clamps, not a conventional
+       clamp with a normalized range: first >= 0, then <= (size-view)*8.
+       Level 7 is 29 tiles wide, so its signed maximum is deliberately -8. */
+    const s16 max_x = (s16)(((int)world->assets->world_width_tiles - GB_STREAM_VIEWPORT_WIDTH) * 8);
+    const s16 max_y = (s16)(((int)world->assets->world_height_tiles - GB_STREAM_VIEWPORT_HEIGHT) * 8);
 
-    world->camera_x = gb_clamp_s16(world->camera_x, 0, max_x);
-    world->camera_y = gb_clamp_s16(world->camera_y, 0, max_y);
+    if(world->camera_x < 0)
+    {
+        world->camera_x = 0;
+    }
+    if(world->camera_x > max_x)
+    {
+        world->camera_x = max_x;
+    }
+    if(world->camera_y < 0)
+    {
+        world->camera_y = 0;
+    }
+    if(world->camera_y > max_y)
+    {
+        world->camera_y = max_y;
+    }
 
     const s16 tile_x = (s16)(world->camera_x >> 3);
     const s16 tile_y = (s16)(world->camera_y >> 3);
@@ -81,7 +84,11 @@ void gb_world_publish_camera(GbWorld* world)
     {
         const int dx = (int)tile_x - world->stream_tile_x;
         const int dy = (int)tile_y - world->stream_tile_y;
-        if(gb_abs_int(dx) > 1 || gb_abs_int(dy) > 1)
+        const int abs_dx = gb_abs_int(dx);
+        const int abs_dy = gb_abs_int(dy);
+        if(abs_dx > GB_STREAM_VIEWPORT_WIDTH ||
+           abs_dy > GB_STREAM_VIEWPORT_HEIGHT ||
+           abs_dx * abs_dy > 150)
         {
             gb_video_stream_full(world->assets, tile_x, tile_y);
         }
@@ -89,20 +96,36 @@ void gb_world_publish_camera(GbWorld* world)
         {
             if(dx > 0)
             {
-                gb_video_stream_column(world->assets, (s16)(tile_x + 31), tile_y);
+                const int first_x = world->stream_tile_x + GB_STREAM_WINDOW_WIDTH;
+                const int last_x = tile_x + GB_STREAM_VIEWPORT_WIDTH;
+                for(int x = first_x; x <= last_x; ++x)
+                {
+                    gb_video_stream_column(world->assets, (s16)x, tile_y);
+                }
             }
             else if(dx < 0)
             {
-                gb_video_stream_column(world->assets, tile_x, tile_y);
+                for(int x = tile_x; x < world->stream_tile_x; ++x)
+                {
+                    gb_video_stream_column(world->assets, (s16)x, tile_y);
+                }
             }
 
             if(dy > 0)
             {
-                gb_video_stream_row(world->assets, tile_x, (s16)(tile_y + 31));
+                const int first_y = world->stream_tile_y + GB_STREAM_WINDOW_HEIGHT;
+                const int last_y = tile_y + GB_STREAM_VIEWPORT_HEIGHT;
+                for(int y = first_y; y <= last_y; ++y)
+                {
+                    gb_video_stream_row(world->assets, tile_x, (s16)y);
+                }
             }
             else if(dy < 0)
             {
-                gb_video_stream_row(world->assets, tile_x, tile_y);
+                for(int y = tile_y; y < world->stream_tile_y; ++y)
+                {
+                    gb_video_stream_row(world->assets, tile_x, (s16)y);
+                }
             }
         }
     }

@@ -51,6 +51,24 @@ static int gb_portal_try_activate_range(const GbLevelAssets* level,
     return -1;
 }
 
+
+int gb_portal_try_activate_physical_index(const GbLevelAssets* level, const GbPlayer* player,
+                                          const GbInput* input, u8 physical_index)
+{
+    if(! level)
+    {
+        return -1;
+    }
+    for(u8 i = 0; i < level->portal_count; ++i)
+    {
+        if(level->portals[i].physical_index == physical_index)
+        {
+            return gb_portal_try_activate_range(level, player, input, i, (u8)(i + 1));
+        }
+    }
+    return -1;
+}
+
 int gb_portal_try_activate_phase(const GbLevelAssets* level, const GbPlayer* player,
                                  const GbInput* input, GbPortalPhase phase)
 {

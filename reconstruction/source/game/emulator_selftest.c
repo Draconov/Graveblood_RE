@@ -328,13 +328,16 @@ static void gb_selftest_prepare_ppu_fixture(void)
     const u16 npc_attr2 = GB_SELFTEST_OAM_BASE[9 * 4 + 2];
     const u16 player_tile = player_attr2 & 0x03FFu;
     const u16 npc_tile = npc_attr2 & 0x03FFu;
-    const u16 player_palette = (player_attr2 >> 12) & 0x000Fu;
+    /* ATTR2 indexes 32-byte hardware units even in 8bpp mode, so indexing
+       the u16 OBJ VRAM view by tile*16 lands on each sprite's first pixel.
+       Preserve the production 2D mapping and use shared-palette indices 1/2:
+       Player = [opaque, transparent], NPC = [opaque, opaque]. */
     GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 16u] = 0x0001u;
-    GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 16u] = 0x0011u;
-    OBJ_COLORS[player_palette * 16u + 1u] = GB_SELFTEST_PPU_PLAYER_COLOR;
-    OBJ_COLORS[1] = GB_SELFTEST_PPU_NPC_COLOR;
+    GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 16u] = 0x0202u;
+    OBJ_COLORS[1] = GB_SELFTEST_PPU_PLAYER_COLOR;
+    OBJ_COLORS[2] = GB_SELFTEST_PPU_NPC_COLOR;
     BG_COLORS[0] = 0x7C00u;
-    REG_DISPCNT = MODE_0 | OBJ_ON | OBJ_1D_MAP;
+    REG_DISPCNT = MODE_0 | OBJ_ON;
 
     volatile GbEmulatorSelftestReport* report = gb_selftest_report();
     report->ppu_probe_coords =

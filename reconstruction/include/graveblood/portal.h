@@ -11,6 +11,8 @@ typedef enum {
 } GbPortalPhase;
 
 int gb_portal_try_activate(const GbLevelAssets* level, const GbPlayer* player, const GbInput* input);
+int gb_portal_try_activate_physical_index(const GbLevelAssets* level, const GbPlayer* player,
+                                          const GbInput* input, u8 physical_index);
 int gb_portal_try_activate_phase(const GbLevelAssets* level, const GbPlayer* player,
                                  const GbInput* input, GbPortalPhase phase);
 

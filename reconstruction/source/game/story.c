@@ -697,37 +697,63 @@ static int gb_story_level10_gate_portal_rect(const GbPlayer* player,
            player->y >= gate->y && player->y < gate->y + 16;
 }
 
-GbStoryGateResult gb_story_try_level10_gate(const GbStoryRuntime* story,
-                                               const GbLevelAssets* level,
-                                               GbPlayer* player, const GbInput* input)
+static GbStoryGateResult gb_story_try_level10_gate_record(const GbStoryRuntime* story,
+                                                            GbPlayer* player,
+                                                            const GbInput* input, u8 gate_index)
 {
-    if(! story || ! level || ! player || ! input || level->level_id != 10 ||
-       ! (input->pressed & KEY_A))
+    if(! story || ! player || ! input || gate_index >= 4 || ! (input->pressed & KEY_A))
     {
         return GB_STORY_GATE_NONE;
     }
 
-    for(u8 i = 0; i < 4; ++i)
+    const GbStoryLevel10Gate* gate = &gb_story_level10_gates[gate_index];
+    const int grid_contact = gb_story_level10_gate_grid_contact(player, gate);
+    const int portal_rect = gb_story_level10_gate_portal_rect(player, gate);
+    if(! grid_contact && ! portal_rect)
     {
-        const GbStoryLevel10Gate* gate = &gb_story_level10_gates[i];
-        const int grid_contact = gb_story_level10_gate_grid_contact(player, gate);
-        const int portal_rect = gb_story_level10_gate_portal_rect(player, gate);
-        if(! grid_contact && ! portal_rect)
-        {
-            continue;
-        }
-
-        /* These turn-4/5 records are never generic portTo=8 portals. Before
-           the rusty-key threshold they are inert; afterwards only the exact
-           recovered 2x2 contact grid dispatches the vertical traversal. */
-        if(story->state.collection_progress > 3 && grid_contact)
-        {
-            gb_player_queue_vertical_target(player, gate->target_y);
-            return GB_STORY_GATE_TRAVERSED;
-        }
-        return GB_STORY_GATE_BLOCKED;
+        return GB_STORY_GATE_NONE;
     }
 
+    /* These turn-4/5 records are never generic portTo=8 portals. Before
+       the rusty-key threshold they are inert; afterwards only the exact
+       recovered 2x2 contact grid dispatches the vertical traversal. */
+    if(story->state.collection_progress > 3 && grid_contact)
+    {
+        gb_player_queue_vertical_target(player, gate->target_y);
+        return GB_STORY_GATE_TRAVERSED;
+    }
+    return GB_STORY_GATE_BLOCKED;
+}
+
+GbStoryGateResult gb_story_try_level10_gate_physical_index(const GbStoryRuntime* story,
+                                                            const GbLevelAssets* level,
+                                                            GbPlayer* player, const GbInput* input,
+                                                            u8 physical_index)
+{
+    if(! level || level->level_id != 10 || physical_index < 13 || physical_index > 16)
+    {
+        return GB_STORY_GATE_NONE;
+    }
+    return gb_story_try_level10_gate_record(story, player, input, (u8)(physical_index - 13));
+}
+
+GbStoryGateResult gb_story_try_level10_gate(const GbStoryRuntime* story,
+                                               const GbLevelAssets* level,
+                                               GbPlayer* player, const GbInput* input)
+{
+    if(! level || level->level_id != 10)
+    {
+        return GB_STORY_GATE_NONE;
+    }
+    for(u8 physical_index = 13; physical_index <= 16; ++physical_index)
+    {
+        const GbStoryGateResult result = gb_story_try_level10_gate_physical_index(
+            story, level, player, input, physical_index);
+        if(result != GB_STORY_GATE_NONE)
+        {
+            return result;
+        }
+    }
     return GB_STORY_GATE_NONE;
 }
 

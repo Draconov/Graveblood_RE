@@ -37,6 +37,10 @@ class CfaAssetTests(unittest.TestCase):
                          [specs[level].player_idle_selector for level in range(11)])
         self.assertEqual([8, 8, 6], [p.target_level for p in specs[7].portals])
         self.assertEqual([9, 9, 7, 7], [p.target_level for p in specs[8].portals])
+        self.assertEqual([9, 45, 46, 49], [p.physical_index for p in specs[0].portals])
+        self.assertEqual([0, 1, 3, 5, 6, 7], [p.physical_index for p in specs[1].portals])
+        self.assertEqual([0, 1, 2, 3], [p.physical_index for p in specs[8].portals])
+        self.assertEqual([5, 6, 8], [p.physical_index for p in specs[9].portals])
         # Fgtile portal geometry passes through the same atoi-style property parser
         # as actor descriptors: decimal source strings truncate before storage.
         self.assertEqual((75, 281), (specs[8].portals[0].x, specs[8].portals[0].y))
@@ -124,10 +128,20 @@ class CfaAssetTests(unittest.TestCase):
         rom_path = Path(os.environ['GRAVEBLOOD_ROM'])
         data = g.build_actor_runtime_data(ROOT)
         packed = g.pack_actor_sprite_bank(rom_path.read_bytes(), data.visuals)
-        self.assertEqual(256, len(packed.palette))
+        # The canonical title initializer loads only the first 0x5B OBJ
+        # colors. Gameplay graphics descriptors carry a zero OBJ-palette copy
+        # count, so levels preserve those low colors instead of treating the
+        # pointer/data following entry 90 as a 256-color palette.
+        self.assertEqual(0x5B, len(packed.palette))
         self.assertEqual(34 * 8, packed.frame_count)
         self.assertEqual(34 * 8 * 512, len(packed.data))
-        self.assertLess(max(packed.data), 240, 'palette bank 15 must remain free for Player 4bpp colors')
+        expected_palette = struct.unpack_from('<91H', rom_path.read_bytes(), g.OBJ_PALETTE_SOURCE - g.ROM_BASE)
+        self.assertEqual(tuple(expected_palette), packed.palette)
+        self.assertLessEqual(max(packed.data), 90)
+
+        high = g.pack_actor_obj_high_palette(rom_path.read_bytes())
+        expected_high = struct.unpack_from('<32H', rom_path.read_bytes(), 0x08652DB4 - g.ROM_BASE)
+        self.assertEqual(tuple(expected_high), high)
 
         with tempfile.TemporaryDirectory() as td:
             out = Path(td)
@@ -321,22 +335,27 @@ class CfaAssetTests(unittest.TestCase):
             runtime = g.load_runtime_background(ROOT, rom, spec, variant)
             palette = [rgb555(value) for value in runtime.palette]
 
+            tile_cache = {}
+
             def layer_image(source):
                 image = Image.new('RGBA', (spec.width * 8, spec.height * 8), (0, 0, 0, 0))
                 for cell, source_id in enumerate(source):
                     entry = runtime.translation[source_id]
-                    tile_index = entry & 0x03FF
-                    tile_bytes = runtime.tile_bytes[tile_index * 64:(tile_index + 1) * 64]
-                    tile = Image.new('RGBA', (8, 8))
-                    pixels = []
-                    for palette_index in tile_bytes:
-                        rgb = palette[palette_index]
-                        pixels.append((*rgb, 0 if palette_index == 0 else 255))
-                    tile.putdata(pixels)
-                    if entry & 0x0400:
-                        tile = tile.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-                    if entry & 0x0800:
-                        tile = tile.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+                    key = (entry & 0x03FF, bool(entry & 0x0400), bool(entry & 0x0800))
+                    tile = tile_cache.get(key)
+                    if tile is None:
+                        tile_index, flip_x, flip_y = key
+                        tile_bytes = runtime.tile_bytes[tile_index * 64:(tile_index + 1) * 64]
+                        tile = Image.new('RGBA', (8, 8))
+                        tile.putdata([
+                            (*palette[palette_index], 0 if palette_index == 0 else 255)
+                            for palette_index in tile_bytes
+                        ])
+                        if flip_x:
+                            tile = tile.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                        if flip_y:
+                            tile = tile.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+                        tile_cache[key] = tile
                     image.alpha_composite(tile, ((cell % spec.width) * 8, (cell // spec.width) * 8))
                 return image
 
@@ -360,14 +379,28 @@ class CfaAssetTests(unittest.TestCase):
             self.assertLessEqual(len(packed.tiles), 256)
             self.assertLessEqual(len(packed.palette), 256)
 
-    def test_player_animation_is_24_frames_and_fits_one_4bpp_palette(self):
+    def test_player_animation_is_24_exact_8bpp_frames_from_original_dynamic_rows(self):
         g = self._module()
         rom = Path(os.environ['GRAVEBLOOD_ROM']).read_bytes()
         packed = g.pack_player_animation(rom)
         self.assertEqual((16, 32), packed.size)
         self.assertEqual(24, packed.frame_count)
-        self.assertLessEqual(len(packed.palette), 16)
-        self.assertEqual(24 * 256, len(packed.data))
+        self.assertEqual(0x5B, len(packed.palette))
+        self.assertEqual(24 * 512, len(packed.data))
+        self.assertLessEqual(max(packed.data), 90)
+
+        init = g.player_animation_initializers_from_rom(rom)
+        sources = g.player_animation_source_bases(init['bank'])
+        packed_sources = (sources['regular_walk'] + sources['up_walk'] +
+                          sources['idle_unique'] + sources['idle_selector1'])
+        source_base = g.OBJ_TILES_SOURCE - g.ROM_BASE
+        expected = bytearray()
+        for frame_base in packed_sources:
+            for row in range(4):
+                for tile in (frame_base + row * 16, frame_base + row * 16 + 1):
+                    start = source_base + tile * 64
+                    expected.extend(rom[start:start + 64])
+        self.assertEqual(bytes(expected), packed.data)
 
     def test_player_animation_pack_has_no_deprecation_warnings(self):
         g = self._module()
@@ -380,8 +413,9 @@ class CfaAssetTests(unittest.TestCase):
         assets_h = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')
         player_c = (ROOT / 'reconstruction/data/player_sprite.c').read_text(encoding='utf-8')
         self.assertIn('GB_PLAYER_FRAME_COUNT = 24', assets_h)
-        self.assertIn('gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128]', assets_h)
-        self.assertIn('gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128]', player_c)
+        self.assertIn('GB_PLAYER_FRAME_HALFWORDS = 256', assets_h)
+        self.assertIn('gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS]', assets_h)
+        self.assertIn('gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS]', player_c)
 
     def test_collision_assets_preserve_original_u16_cells(self):
         assets_h = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')

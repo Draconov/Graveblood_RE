@@ -9987,9 +9987,9 @@ const u16 gb_level02_bg0_ui_tiles[GB_BG0_UI_TILE_COUNT] = {
 };
 
 const GbPortal gb_level02_portals[3] = {
-    { 1000, 288, 16, 16, 0, 150 },
-    { 1032, 288, 16, 16, 0, 150 },
-    { 1016, 288, 16, 16, 0, 150 }
+    { 1000, 288, 16, 16, 0, 150, 1 },
+    { 1032, 288, 16, 16, 0, 150, 5 },
+    { 1016, 288, 16, 16, 0, 150, 6 }
 };
 
 const GbLevelAssets gb_level02_assets = {

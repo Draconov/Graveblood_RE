@@ -117,7 +117,7 @@ int main(void)
 
     gb_world_update_camera(&world, 200, 109); /* center X 208 => camera X 64 */
     if(!require(world.camera_x == 64 && world.camera_y == 8, "large right follow")) return 1;
-    if(!require(full_count == 2, "multi-tile movement full fills")) return 1;
+    if(!require(full_count == 1 && column_count == 8, "seven-tile movement stays incremental")) return 1;
 
     gb_world_update_camera(&world, 140, 109); /* center X 148 < camera+96 => camera X 52 */
     if(!require(world.camera_x == 52 && world.camera_y == 8, "left dead-zone follow")) return 1;
@@ -138,6 +138,20 @@ int main(void)
     if(!require(world.camera_y == (60 - 20) * 8, "bottom world clamp")) return 1;
     gb_world_update_camera(&world, -1000, -1000);
     if(!require(world.camera_x == 0 && world.camera_y == 0, "top-left world clamp")) return 1;
+
+    /* Level 7 is narrower than the 30-tile viewport.  The ROM first
+       clamps the tracked camera to >= 0, then applies the signed maximum
+       (29 - 30) * 8, so the published camera is deliberately -8. */
+    GbLevelAssets narrow = {0};
+    narrow.world_width_tiles = 29;
+    narrow.world_height_tiles = 24;
+    GbWorld narrow_world = {0};
+    gb_world_load(&narrow_world, &narrow);
+    gb_world_update_camera(&narrow_world, 147, 125);
+    if(!require(narrow_world.camera_x == -8 && narrow_world.camera_y == 24,
+                "Level 7 signed viewport clamp")) return 1;
+    if(!require(narrow_world.stream_tile_x == -1 && narrow_world.stream_tile_y == 3,
+                "Level 7 negative stream origin")) return 1;
     return 0;
 }
 '''

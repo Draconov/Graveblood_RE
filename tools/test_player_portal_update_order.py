@@ -62,18 +62,22 @@ class PlayerPortalUpdateOrderTests(unittest.TestCase):
             actual = list(csv.DictReader(f))
         self.assertEqual(actual, expected)
 
-    def test_clean_room_evaluates_portals_on_both_sides_of_player_update(self):
+    def test_clean_room_preserves_exact_physical_stream_order_around_player(self):
         game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
+        actors_h = (ROOT / 'reconstruction/include/graveblood/actors.h').read_text(encoding='utf-8')
+        portal_h = (ROOT / 'reconstruction/include/graveblood/portal.h').read_text(encoding='utf-8')
         compact = ' '.join(game.split())
-        pre_text = 'gb_portal_try_activate_phase( world.assets, &player, &input, GB_PORTAL_PHASE_PRE_PLAYER);'
-        post_text = 'gb_portal_try_activate_phase( world.assets, &player, &input, GB_PORTAL_PHASE_POST_PLAYER);'
-        self.assertIn(pre_text, compact, 'pre-Player portal phase is missing')
-        self.assertIn(post_text, compact, 'post-Player portal phase is missing')
-        pre_call = compact.index(pre_text)
-        player_call = compact.index('gb_player_update(&player, world.assets, &input);')
-        post_call = compact.index(post_text)
-        self.assertLess(pre_call, player_call)
-        self.assertLess(player_call, post_call)
+
+        # The ROM object manager walks the physical vector one record at a time.
+        # A coarse NPC bucket followed by a portal bucket loses canonical ordering
+        # in Levels 0/1/2/5/6/9 where post-Player NPCs and portals interleave.
+        self.assertIn('gb_actor_system_update_physical_npc_at', actors_h)
+        self.assertIn('gb_portal_try_activate_physical_index', portal_h)
+        self.assertNotIn('gb_actor_system_update_physical_npcs(&actors, &player)', compact)
+        self.assertNotIn('GB_PORTAL_PHASE_POST_PLAYER', compact)
+        self.assertIn('gb_player_physical_indices[level_id]', compact)
+        self.assertIn('gb_actor_system_update_physical_npc_at( &actors, &player, physical_index)', compact)
+        self.assertIn('gb_portal_try_activate_physical_index( world.assets, &player, &input, physical_index)', compact)
 
 
 if __name__ == '__main__':

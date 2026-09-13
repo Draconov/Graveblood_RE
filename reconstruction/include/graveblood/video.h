@@ -18,6 +18,8 @@ void gb_video_load_pda(const GbLevelAssets* level, const GbPdaRuntime* pda, cons
 void gb_video_draw_pda(const GbPdaRuntime* pda, const GbStoryRuntime* story);
 void gb_video_draw_wardrobe(u8 selector);
 void gb_video_load_level(const GbLevelAssets* level);
+void gb_video_gameplay_lighting_reset_cursor(void);
+void gb_video_gameplay_lighting_tick(int advance_clock);
 void gb_video_stream_full(const GbLevelAssets* level, s16 left, s16 top);
 void gb_video_stream_column(const GbLevelAssets* level, s16 world_x, s16 top);
 void gb_video_stream_row(const GbLevelAssets* level, s16 left, s16 world_y);

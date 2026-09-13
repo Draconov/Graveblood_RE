@@ -32,6 +32,7 @@ typedef int32_t s32; typedef uint32_t u32;
 const GbActorDescriptor gb_actor_descriptors[GB_ACTOR_PHYSICAL_DESCRIPTOR_COUNT] = {{0}};
 const u16 gb_level_actor_indices[GB_ACTOR_LEVEL_REFERENCE_COUNT] = {0};
 const GbActorLevelIndexSpan gb_actor_level_spans[11] = {{0}};
+const u8 gb_player_physical_indices[11] = {0};
 const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DESCRIPTOR_COUNT] = { { {0}, 0 } };
 const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS] = {{{0}}};
 
@@ -139,10 +140,14 @@ int main(void)
             ran = subprocess.run([str(exe)], text=True, capture_output=True)
             self.assertEqual(0, ran.returncode, ran.stdout + ran.stderr)
 
-    def test_video_contract_stages_grass_and_leaf_pixels_without_changing_obj_mapping(self):
+    def test_video_contract_stages_grass_and_leaf_pixels_in_recovered_2d_obj_mapping(self):
         video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
         header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
-        self.assertIn('OBJ_1D_MAP', video)
+        start = video.index('static void gb_video_configure_gameplay_display(void)')
+        end = video.index('static void gb_video_configure_title_display(void)', start)
+        gameplay_config = video[start:end]
+        self.assertNotIn('OBJ_1D_MAP', gameplay_config)
+        self.assertIn('REG_DISPCNT = MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON;', gameplay_config)
         self.assertIn('gb_grass_obj_tiles', video)
         self.assertIn('gb_leaf_obj_frames', video)
         self.assertIn('gb_actor_grass_draw_state', video)

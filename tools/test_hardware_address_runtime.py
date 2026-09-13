@@ -257,10 +257,12 @@ int main(void)
 #include <sys/mman.h>
 #include <graveblood/video.h>
 
-const u16 gb_actor_obj_palette[256] = { [0] = 0x1111, [255] = 0x2222 };
-const u16 gb_player_obj_palette[16] = { [0] = 0x3333, [15] = 0x4444 };
-const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {
-    [0] = 0x5555, [GB_PLAYER_FRAME_COUNT * 128 - 1] = 0x6666,
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = { [0] = 0x1111, [90] = 0x2222 };
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = { [0] = 0x3333, [31] = 0x4444 };
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {
+    [3 * GB_PLAYER_FRAME_HALFWORDS] = 0x5555,
+    [3 * GB_PLAYER_FRAME_HALFWORDS + 64] = 0x6666,
 };
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {
     [0] = 0x7777,
@@ -270,6 +272,8 @@ const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STAT
     [0] = 0x9999,
     [GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS - 1] = 0xAAAA,
 };
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
 
 u8 gb_player_frame_index(const GbPlayer* player)
 {
@@ -293,25 +297,23 @@ int main(void)
     map_region(0x07000000u, 0x1000);
 
     gb_video_init();
-    assert(REG_DISPCNT == (BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON | OBJ_1D_MAP));
+    assert(REG_DISPCNT == (BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON));
     assert(BGCTRL[0] == (BG_256_COLOR | SCREEN_BASE(27) | BG_PRIORITY(0)));
     assert(BGCTRL[1] == (BG_256_COLOR | SCREEN_BASE(28) | BG_PRIORITY(1)));
     assert(BGCTRL[2] == (BG_256_COLOR | SCREEN_BASE(29) | BG_PRIORITY(2)));
     assert(BGCTRL[3] == (BG_256_COLOR | SCREEN_BASE(30) | BG_PRIORITY(3)));
 
-    /* Player palette bank 15 intentionally overwrites actor palette entries 240..255. */
-    assert(OBJ_COLORS[0] == 0x1111);
-    assert(OBJ_COLORS[240] == 0x3333);
+    /* Normal level setup preserves the low OBJ palette and applies only
+       the loader's fixed high-32 patch. */
+    assert(OBJ_COLORS[0] == 0);
+    assert(OBJ_COLORS[90] == 0);
+    assert(OBJ_COLORS[224] == 0x3333);
     assert(OBJ_COLORS[255] == 0x4444);
 
     volatile u16* sprite_vram = (volatile u16*)0x06010000u;
-    assert(sprite_vram[0] == 0x5555);
-    assert(sprite_vram[GB_PLAYER_FRAME_COUNT * 128 - 1] == 0x6666);
-    assert(sprite_vram[GB_PLAYER_FRAME_COUNT * 128] == 0x7777);
-    assert(sprite_vram[GB_PLAYER_FRAME_COUNT * 128 +
-                       GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS - 1] == 0x8888);
-    assert(sprite_vram[GB_PLAYER_FRAME_COUNT * 128 +
-                       GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] == 0x9999);
+    /* Special initial-bank composites are staged at their original 2D logical roots. */
+    assert(sprite_vram[(0x159 * 64) / 2] == 0x7777);
+    assert(sprite_vram[(0x17C * 64) / 2] == 0x9999);
 
     assert(OAM[0] == 160);
     assert(OAM[127 * 4] == 160);
@@ -322,12 +324,16 @@ int main(void)
     player.facing_right = 1;
     gb_video_draw_player(&player, 10, 5);
     assert((OAM[0] & 0x00FF) == 59);
+    assert((OAM[0] & (1u << 13)) != 0); /* original Player is 8bpp */
     assert((OAM[1] & 0x01FF) == 90);
     assert((OAM[1] & (1u << 12)) != 0);
-    assert((OAM[2] & 0x03FF) == 28);
+    assert((OAM[2] & 0x03FF) == 0x100); /* logical 0x80 -> ATTR2 tile 0x100 */
     assert((OAM[2] & 0x0C00) == (2u << 10));
     assert((OAM[4] & 0x00FF) == 43);
-    assert((OAM[6] & 0x03FF) == 24);
+    assert((OAM[4] & (1u << 13)) != 0);
+    assert((OAM[6] & 0x03FF) == 0x0C0); /* logical 0x60 -> ATTR2 tile 0x0C0 */
+    assert(sprite_vram[(0x060 * 64) / 2] == 0x5555);
+    assert(sprite_vram[(0x070 * 64) / 2] == 0x6666);
     return 0;
 }
 """
@@ -346,6 +352,12 @@ int main(void)
 #include <sys/mman.h>
 #include <graveblood/video.h>
 
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {0};
 const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = { { 24, 0 } };
 const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {
     [0] = 0x1234,
@@ -357,6 +369,11 @@ const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {
 
 int main(void)
 {
+    void* mmio = mmap((void*)0x04000000u, 0x2000, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    void* palette = mmap((void*)0x05000000u, 0x1000, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    assert(mmio == (void*)0x04000000u && palette == (void*)0x05000000u);
     void* vram = mmap((void*)0x06000000u, 0x18000, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     void* oam = mmap((void*)0x07000000u, 0x1000, PROT_READ | PROT_WRITE,
@@ -364,6 +381,7 @@ int main(void)
     assert(vram == (void*)0x06000000u && oam == (void*)0x07000000u);
     memset(vram, 0, 0x18000);
     memset(oam, 0, 0x1000);
+    gb_video_init();
 
     GbActorDescriptor npc = { 0 };
     npc.actor_class = GB_ACTOR_NPC;
@@ -409,26 +427,27 @@ int main(void)
     const int leaf_oam = 12 * 4;
     assert((OAM[npc_bottom] & 0x00FF) == 59);
     assert((OAM[npc_bottom + 1] & 0x01FF) == 90);
-    assert((OAM[npc_bottom + 2] & 0x03FF) == 272);
+    assert((OAM[npc_bottom + 2] & 0x03FF) == 0x180);
     assert((OAM[npc_bottom + 2] & 0x0C00) == (1u << 10));
     assert((OAM[npc_top] & 0x00FF) == 43);
-    assert((OAM[npc_top + 2] & 0x03FF) == 264);
+    assert((OAM[npc_top + 2] & 0x03FF) == 0x140);
 
     assert((OAM[grass_oam] & 0x00FF) == 69);
     assert((OAM[grass_oam + 1] & 0x01FF) == 120);
     assert((OAM[grass_oam + 1] & (1u << 12)) != 0);
-    assert((OAM[grass_oam + 2] & 0x03FF) == 280);
+    assert((OAM[grass_oam + 2] & 0x03FF) == 0x090);
     assert((OAM[grass_oam + 2] & 0x0C00) == (1u << 10));
 
     assert((OAM[leaf_oam] & 0x00FF) == 87);
     assert((OAM[leaf_oam + 1] & 0x01FF) == 146);
-    assert((OAM[leaf_oam + 2] & 0x03FF) == 296);
+    assert((OAM[leaf_oam + 2] & 0x03FF) == 0x0B8);
 
-    /* Dynamic OBJ slots begin after Player (24*8), monster (5*8), and static (4*8) tiles. */
-    volatile u16* dynamic_vram = (volatile u16*)0x06012100u;
-    assert(dynamic_vram[0] == 0x1234);
-    assert(dynamic_vram[GB_ACTOR_FRAME_HALFWORDS] == 0x2345);
-    assert(dynamic_vram[2 * GB_ACTOR_FRAME_HALFWORDS] == 0x3456);
+    /* 2D OBJ staging: NPC slot 0 begins at logical 0xA0, while the
+       canonical grass and leaf tiles stay at their original logical roots. */
+    volatile u16* obj_vram = (volatile u16*)0x06010000u;
+    assert(obj_vram[(0x0A0 * 64) / 2] == 0x1234);
+    assert(obj_vram[(0x048 * 64) / 2] == 0x2345);
+    assert(obj_vram[(0x05C * 64) / 2] == 0x3456);
     return 0;
 }
 """

@@ -39,10 +39,17 @@ class MapRendererTests(unittest.TestCase):
         self.assertEqual(image.convert('RGB').getpixel((300, 300)), (148, 156, 180))
 
     def test_world_composite_respects_bg_priority(self):
-        # World layer A is streamed to BG1 (priority 1) and layer B to BG2
-        # (priority 2). Where both are opaque, A must be visible on top.
+        # The original stream call sends layer A to BG2 (priority 2) and
+        # layer B to BG1 (priority 1). Where both are opaque, B is on top.
         image = mod.render_level_world(self.data, level_index=0, variant_index=0)
-        self.assertEqual(image.getpixel((1176, 80)), (98, 197, 106, 255))
+        self.assertEqual(image.getpixel((1176, 80)), (197, 180, 205, 255))
+
+    def test_shared_world_compositor_puts_layer_b_in_front_of_layer_a(self):
+        from PIL import Image
+        layer_a = Image.new("RGBA", (1, 1), (10, 20, 30, 255))
+        layer_b = Image.new("RGBA", (1, 1), (200, 180, 160, 255))
+        image = mod._composite_world_layers(layer_a, layer_b, (0, 0, 0))
+        self.assertEqual(image.getpixel((0, 0)), (200, 180, 160, 255))
 
     def test_packed_static_tilemap_splits_bg2_and_bg3(self):
         # The 64x32 source at level+0x1C is two 32-column BG maps packed
@@ -87,7 +94,7 @@ class MapRendererTests(unittest.TestCase):
         self.assertEqual(row["vram_address"], 0x0600E740)
         self.assertEqual(row["screenblock"], 28)
         self.assertEqual(row["screenblock_offset"], 0x740)
-        self.assertEqual(row["screenblock_owner"], "BG1 streamed world layer A")
+        self.assertEqual(row["screenblock_owner"], "BG1 streamed world layer B")
 
     def test_runtime_alias_report_is_reproducible_and_complete(self):
         writer = getattr(mod, "write_runtime_alias_summary", None)

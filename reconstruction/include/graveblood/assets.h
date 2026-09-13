@@ -10,6 +10,7 @@ typedef struct {
     u8 height;
     u16 target_level;
     u16 num;
+    u8 physical_index;
 } GbPortal;
 
 typedef enum {
@@ -165,6 +166,9 @@ enum {
     GB_ACTOR_ROUTE_COUNT = 5,
     GB_ACTOR_ROUTE_POINTS = 6,
     GB_ACTOR_VISUAL_COUNT = 34,
+    GB_ACTOR_OBJ_PALETTE_COUNT = 91,
+    GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT = 200,
+    GB_ACTOR_OBJ_HIGH_PALETTE_COUNT = 32,
     GB_ACTOR_MAX_FRAMES = 8,
     GB_ACTOR_FRAME_HALFWORDS = 256,
     GB_GRASS_OBJ_HALFWORDS = 128,
@@ -222,7 +226,9 @@ extern const u8 gb_player_physical_indices[11];
 extern const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DESCRIPTOR_COUNT];
 extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS];
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
-extern const u16 gb_actor_obj_palette[256];
+extern const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT];
+extern const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT];
+extern const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT];
 extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS];
 extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
 extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
@@ -262,14 +268,14 @@ extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
 enum {
     GB_PLAYER_FRAME_COUNT = 24,
+    GB_PLAYER_FRAME_HALFWORDS = 256,
     GB_PLAYER_BICYCLE_FRAME_COUNT = 6,
     GB_PLAYER_BICYCLE_SPRITE_COUNT = 5,
     GB_PLAYER_BICYCLE_SPRITE_HALFWORDS = 128,
     GB_PLAYER_BICYCLE_FRAME_HALFWORDS = GB_PLAYER_BICYCLE_SPRITE_COUNT * GB_PLAYER_BICYCLE_SPRITE_HALFWORDS,
 };
 
-extern const u16 gb_player_obj_palette[16];
-extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];
+extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS];
 extern const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS];
 
 #endif

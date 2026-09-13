@@ -54,6 +54,10 @@ ENDING_ARG0_COPY1_SOURCE = 0x08641361
 ENDING_ARG0_COPY1_BYTES = 96000
 ENDING_ARG0_COPY2_SOURCE = 0x0836EE54
 ENDING_ARG0_COPY2_BYTES = 16000
+OBJ_BASE_PALETTE_COUNT = 0x5B
+OBJ_LIGHTING_SOURCE_COUNT = 200
+OBJ_HIGH_PALETTE_SOURCE = 0x08652DB4
+OBJ_HIGH_PALETTE_COUNT = 32
 
 
 @dataclass(frozen=True)
@@ -64,6 +68,7 @@ class PortalSpec:
     height: int
     target_level: int
     num: int
+    physical_index: int
 
 
 @dataclass(frozen=True)
@@ -160,6 +165,8 @@ class ActorRuntimeData:
 class PackedActorSpriteBank:
     frame_count: int
     palette: tuple[int, ...]
+    lighting_source: tuple[int, ...]
+    high_palette: tuple[int, ...]
     data: bytes
 
 
@@ -358,6 +365,31 @@ def extract_canonical_font(rom: bytes) -> CanonicalFont:
     return CanonicalFont(bitmap_base, tuple(glyphs))
 
 
+def pack_actor_obj_high_palette(rom: bytes) -> tuple[int, ...]:
+    """Return the fixed 32-color patch copied to OBJ entries 224..255.
+
+    The graphics descriptors point at the shared low OBJ palette source but
+    normal level descriptors carry a zero copy count.  The canonical loader
+    nevertheless always performs this separate 0x40-byte patch.
+    """
+    return _read_u16_array(rom, OBJ_HIGH_PALETTE_SOURCE, OBJ_HIGH_PALETTE_COUNT)
+
+
+def _pack_actor_base_palette(rom: bytes) -> tuple[int, ...]:
+    return _read_u16_array(rom, OBJ_PALETTE_SOURCE, OBJ_BASE_PALETTE_COUNT)
+
+
+def pack_actor_obj_lighting_source(rom: bytes) -> tuple[int, ...]:
+    """Raw OBJ-source halfwords read by the gameplay lighting routine.
+
+    Only the first 91 entries form the title-loaded base sprite palette.  The
+    original lighting routine nevertheless reads this source through pair 199;
+    preserve those ROM halfwords verbatim instead of treating them as a larger
+    semantic palette.
+    """
+    return _read_u16_array(rom, OBJ_PALETTE_SOURCE, OBJ_LIGHTING_SOURCE_COUNT)
+
+
 def pack_monster_sprite_bank(rom: bytes) -> PackedActorSpriteBank:
     src_base = OBJ_TILES_SOURCE - ROM_BASE
     if src_base < 0 or src_base + 0x8000 > len(rom):
@@ -369,9 +401,10 @@ def pack_monster_sprite_bank(rom: bytes) -> PackedActorSpriteBank:
         for logical in (base, base + 1, base + 16, base + 17):
             start = logical * 64
             packed.extend(initial[start:start + 64])
-    palette_off = OBJ_PALETTE_SOURCE - ROM_BASE
-    palette = struct.unpack_from('<256H', rom, palette_off)
-    return PackedActorSpriteBank(len(MONSTER_TILE_ARGS), tuple(palette), bytes(packed))
+    palette = _pack_actor_base_palette(rom)
+    return PackedActorSpriteBank(
+        len(MONSTER_TILE_ARGS), palette, pack_actor_obj_lighting_source(rom), pack_actor_obj_high_palette(rom), bytes(packed)
+    )
 
 
 def pack_level_static_obj_bank(rom: bytes) -> PackedActorSpriteBank:
@@ -386,9 +419,10 @@ def pack_level_static_obj_bank(rom: bytes) -> PackedActorSpriteBank:
         for logical in (base, base + 1, base + 16, base + 17):
             start = logical * 64
             packed.extend(initial[start:start + 64])
-    palette_off = OBJ_PALETTE_SOURCE - ROM_BASE
-    palette = struct.unpack_from('<256H', rom, palette_off)
-    return PackedActorSpriteBank(len(LEVEL_STATIC_TILE_ARGS), tuple(palette), bytes(packed))
+    palette = _pack_actor_base_palette(rom)
+    return PackedActorSpriteBank(
+        len(LEVEL_STATIC_TILE_ARGS), palette, pack_actor_obj_lighting_source(rom), pack_actor_obj_high_palette(rom), bytes(packed)
+    )
 
 
 def build_graphics_variants(root: Path) -> dict[tuple[int, int], GraphicsVariantSpec]:
@@ -413,6 +447,13 @@ def build_level_specs(root: Path) -> dict[int, LevelSpec]:
         (int(r['source_level']), r['actor_rom_offset'].upper()): r
         for r in _read_csv(root / 'data' / 'portal_edges.csv')
     }
+    physical_indices: dict[tuple[int, str], int] = {}
+    level_counts = {level: 0 for level in LEVELS}
+    for actor in actors:
+        refs = tuple(int(value) for value in actor.get('normal_level_indices', '').split(';') if value)
+        for level in refs:
+            physical_indices[(level, actor['rom_offset'].upper())] = level_counts[level]
+            level_counts[level] += 1
     out: dict[int, LevelSpec] = {}
     for level in LEVELS:
         row = levels[level]
@@ -428,6 +469,7 @@ def build_level_specs(root: Path) -> dict[int, LevelSpec]:
                 height=_actor_number(actor, 'height'),
                 target_level=int(edge['destination']),
                 num=int(edge['num']),
+                physical_index=physical_indices[(level, actor['rom_offset'].upper())],
             ))
         out[level] = LevelSpec(
             level=level,
@@ -636,7 +678,7 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
 
 def pack_actor_sprite_bank(rom: bytes, visuals: tuple[tuple[int, int], ...]) -> PackedActorSpriteBank:
     """Pack all eight ROM-addressable NPC frames for each recovered visual."""
-    palette = _read_u16_array(rom, OBJ_PALETTE_SOURCE, 256)
+    palette = _pack_actor_base_palette(rom)
     bias = npc_source_bias_from_rom(rom)
     source_base_off = OBJ_TILES_SOURCE - ROM_BASE
     out = bytearray()
@@ -650,13 +692,19 @@ def pack_actor_sprite_bank(rom: bytes, visuals: tuple[tuple[int, int], ...]) -> 
                     if len(blob) != 64:
                         raise ValueError(f'NPC source tile {source_tile} overruns ROM')
                     out.extend(blob)
-    return PackedActorSpriteBank(frame_count=len(visuals) * 8, palette=palette, data=bytes(out))
+    return PackedActorSpriteBank(
+        frame_count=len(visuals) * 8,
+        palette=palette,
+        lighting_source=pack_actor_obj_lighting_source(rom),
+        high_palette=pack_actor_obj_high_palette(rom),
+        data=bytes(out),
+    )
 
 
 def pack_foreground_sprite_bank(rom: bytes) -> PackedForegroundSpriteBank:
-    """Pack exact initial-OBJ grass and leaf tiles for the 1D clean-room layout.
+    """Pack exact initial-OBJ grass and leaf tiles for the recovered 2D layout.
 
-    The original uses 2D OBJ mapping.  Grass logical tile 0x48 therefore uses
+    Grass logical tile 0x48 therefore uses
     rows 0x48/0x49 and 0x58/0x59.  The leaf particle frame table points at
     four independent 8x8 tiles: 0x4C, 0x4D, 0x5C, 0x5D.
     """
@@ -777,50 +825,39 @@ def pack_background(image: Image.Image) -> PackedBackground:
     )
 
 
-def _pack_4bpp_image(image: Image.Image, index: dict[tuple[int, int, int], int]) -> bytes:
-    if image.size != (16, 32):
-        raise ValueError(f'unexpected player sprite size {image.size}')
-    out = bytearray()
-    for tile_y in range(4):
-        for tile_x in range(2):
-            nibbles: list[int] = []
-            for py in range(8):
-                for px in range(8):
-                    rgba = image.getpixel((tile_x * 8 + px, tile_y * 8 + py))
-                    nibbles.append(0 if rgba[3] == 0 else index[rgba[:3]])
-            for i in range(0, 64, 2):
-                out.append(nibbles[i] | (nibbles[i + 1] << 4))
-    return bytes(out)
-
-
 def pack_player_animation(rom: bytes) -> PackedSprite:
+    """Pack the 24 normal Player frames as exact original 8bpp OBJ indices.
+
+    Player_draw stages four 16x8 source rows per frame into sparse 2D OBJ
+    rows. Preserve those palette indices directly instead of converting the
+    character to a synthetic 4bpp palette.
+    """
     init = player_animation_initializers_from_rom(rom)
     sources = player_animation_source_bases(init['bank'])
     packed_sources = (sources['regular_walk'] + sources['up_walk'] +
                       sources['idle_unique'] + sources['idle_selector1'])
-    images = [reconstruct_player_frame_from_source_rows(rom, source) for source in packed_sources]
-    opaque = sorted({
-        rgba[:3]
-        for image in images
-        for rgba in (image.get_flattened_data() if hasattr(image, 'get_flattened_data') else image.getdata())
-        if rgba[3]
-    })
-    if len(opaque) > 15:
-        raise ValueError('player animation exceeds one 4bpp OBJ palette')
-    palette = ((0, 0, 0), *opaque)
-    index = {rgb: i + 1 for i, rgb in enumerate(opaque)}
-    data = b''.join(_pack_4bpp_image(image, index) for image in images)
-    return PackedSprite((16, 32), len(images), tuple(palette), data)
+    source_base = OBJ_TILES_SOURCE - ROM_BASE
+    data = bytearray()
+    for frame_base in packed_sources:
+        for row in range(4):
+            for source_tile in (frame_base + row * 16, frame_base + row * 16 + 1):
+                off = source_base + source_tile * 64
+                blob = rom[off:off + 64]
+                if len(blob) != 64:
+                    raise ValueError(f'Player source tile {source_tile} overruns ROM')
+                data.extend(blob)
+    palette = _pack_actor_base_palette(rom)
+    return PackedSprite((16, 32), len(packed_sources), tuple(palette), bytes(data))
 
 
 def pack_player_bicycle_animation(rom: bytes) -> bytes:
     """Materialize Player_draw's six-frame, five-sprite bicycle composition.
 
     The original remains in 2D OBJ mode and dynamically stages five source
-    ranges into logical tiles 0x151/0x160/0x170/0x180/0x190.  The clean-room
-    game uses 1D OBJ mapping, so each of the five submitted 16x16 roots is
-    repacked into contiguous 1D tile order while preserving exact 8bpp palette
-    indices.  The six source offsets are the ROM table at 0x08019968.
+    ranges into logical tiles 0x151/0x160/0x170/0x180/0x190.  Store each of
+    the five submitted 16x16 pieces as a contiguous asset payload; the runtime
+    stages those bytes back into the recovered sparse 2D roots before OAM
+    submission.  The six source offsets are the ROM table at 0x08019968.
     """
     frame_offsets = struct.unpack_from('<6I', rom, 0x08019968 - ROM_BASE)
     if frame_offsets != (0, 4, 8, 0x50, 0x54, 0x58):
@@ -941,8 +978,8 @@ def _asset_c(
 ) -> str:
     portal_rows = []
     for p in spec.portals:
-        portal_rows.append(f'    {{ {p.x}, {p.y}, {p.width}, {p.height}, {p.target_level}, {p.num} }}')
-    portals = ',\n'.join(portal_rows) if portal_rows else '    { 0, 0, 0, 0, 0, 0 }'
+        portal_rows.append(f'    {{ {p.x}, {p.y}, {p.width}, {p.height}, {p.target_level}, {p.num}, {p.physical_index} }}')
+    portals = ',\n'.join(portal_rows) if portal_rows else '    { 0, 0, 0, 0, 0, 0, 0 }'
     name = _asset_symbol(level, variant)
     tile_words = _bytes_to_u16(runtime.tile_bytes)
     ui_tiles = select_bg0_ui_tiles(runtime)
@@ -1012,8 +1049,12 @@ const GbLevelAssets {name}_assets = {{
 
 
 def _player_c(sprite: PackedSprite) -> str:
-    palette = [_bgr555(c) for c in sprite.palette] + [0] * (16 - len(sprite.palette))
-    return f'''#include <graveblood/assets.h>\n\nconst u16 gb_player_obj_palette[16] = {{\n{_c_values(palette, 8, 4)}\n}};\n\nconst u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {{\n{_c_values(_bytes_to_u16(sprite.data), 12, 4)}\n}};\n'''
+    return f'''#include <graveblood/assets.h>
+
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(sprite.data), 12, 4)}
+}};
+'''
 
 
 def _player_bicycle_c(data: bytes) -> str:
@@ -1097,8 +1138,16 @@ const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{
 {visuals}
 }};
 
-const u16 gb_actor_obj_palette[256] = {{
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = {{
 {_c_values(sprites.palette, 10, 4)}
+}};
+
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {{
+{_c_values(sprites.lighting_source, 10, 4)}
+}};
+
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {{
+{_c_values(sprites.high_palette, 10, 4)}
 }};
 
 const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {{
@@ -1227,6 +1276,7 @@ typedef struct {{
     u8 height;
     u16 target_level;
     u16 num;
+    u8 physical_index;
 }} GbPortal;
 
 typedef enum {{
@@ -1370,6 +1420,9 @@ enum {{
     GB_ACTOR_ROUTE_COUNT = 5,
     GB_ACTOR_ROUTE_POINTS = 6,
     GB_ACTOR_VISUAL_COUNT = {actor_visual_count},
+    GB_ACTOR_OBJ_PALETTE_COUNT = {OBJ_BASE_PALETTE_COUNT},
+    GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT = {OBJ_LIGHTING_SOURCE_COUNT},
+    GB_ACTOR_OBJ_HIGH_PALETTE_COUNT = {OBJ_HIGH_PALETTE_COUNT},
     GB_ACTOR_MAX_FRAMES = 8,
     GB_ACTOR_FRAME_HALFWORDS = 256,
     GB_GRASS_OBJ_HALFWORDS = 128,
@@ -1427,7 +1480,9 @@ extern const u8 gb_player_physical_indices[11];
 extern const GbStoryActorDescriptor gb_story_actor_descriptors[GB_ACTOR_STORY_DESCRIPTOR_COUNT];
 extern const GbRoutePoint gb_actor_routes[GB_ACTOR_ROUTE_COUNT][GB_ACTOR_ROUTE_POINTS];
 extern const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT];
-extern const u16 gb_actor_obj_palette[256];
+extern const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT];
+extern const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT];
+extern const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT];
 extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS];
 extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
 extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
@@ -1467,14 +1522,14 @@ extern const u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES];
 
 enum {{
     GB_PLAYER_FRAME_COUNT = 24,
+    GB_PLAYER_FRAME_HALFWORDS = 256,
     GB_PLAYER_BICYCLE_FRAME_COUNT = 6,
     GB_PLAYER_BICYCLE_SPRITE_COUNT = 5,
     GB_PLAYER_BICYCLE_SPRITE_HALFWORDS = 128,
     GB_PLAYER_BICYCLE_FRAME_HALFWORDS = GB_PLAYER_BICYCLE_SPRITE_COUNT * GB_PLAYER_BICYCLE_SPRITE_HALFWORDS,
 }};
 
-extern const u16 gb_player_obj_palette[16];
-extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128];
+extern const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS];
 extern const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS];
 
 #endif

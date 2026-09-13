@@ -85,6 +85,10 @@ void gb_story_update(GbStoryRuntime* story, GbActorSystem* actors, const GbInput
 GbStoryGateResult gb_story_try_level10_gate(const GbStoryRuntime* story,
                                                const GbLevelAssets* level,
                                                GbPlayer* player, const GbInput* input);
+GbStoryGateResult gb_story_try_level10_gate_physical_index(const GbStoryRuntime* story,
+                                                            const GbLevelAssets* level,
+                                                            GbPlayer* player, const GbInput* input,
+                                                            u8 physical_index);
 GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* level,
                                                         GbPlayer* player,
                                                         const GbInput* input);

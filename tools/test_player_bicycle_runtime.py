@@ -43,7 +43,7 @@ def _expected_bicycle_blob(data: bytes) -> bytes:
             vram[dst:dst + count * 64] = data[src:src + count * 64]
 
         # Player_draw submits five enum-3 (16x16) sprites from these 2D roots.
-        # Repack each root into the clean-room renderer's 1D OBJ tile order.
+        # Materialize each recovered 2D root as a contiguous asset payload; runtime restages it sparsely.
         for root_tile in (0x151, 0x170, 0x172, 0x190, 0x192):
             for ty in range(2):
                 for tx in range(2):

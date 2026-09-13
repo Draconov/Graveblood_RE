@@ -114,8 +114,8 @@ BG_VRAM_BASE = 0x06000000
 BG_SCREENBLOCK_BYTES = 0x800
 BG_SCREENBLOCK_OWNERS = {
     27: "BG0 text/UI",
-    28: "BG1 streamed world layer A",
-    29: "BG2 streamed world layer B",
+    28: "BG1 streamed world layer B",
+    29: "BG2 streamed world layer A",
     30: "BG3 fixed backing map",
     31: "unmapped screenblock 31 residue",
 }
@@ -352,20 +352,25 @@ def render_static_bg_layers(
     return bg2, bg3, unresolved[0], unresolved[1]
 
 
+def _composite_world_layers(layer_a: Image.Image, layer_b: Image.Image, backdrop: tuple[int, int, int]) -> Image.Image:
+    """Composite the streamed layers using the original BG priority order."""
+    out = Image.new("RGBA", layer_a.size, backdrop + (255,))
+    out.alpha_composite(layer_a)
+    out.alpha_composite(layer_b)
+    return out
+
+
 def render_level_world(data: bytes, level_index: int, variant_index: int = 0) -> Image.Image:
     """Composite streamed world layers according to their hardware priority.
 
-    Layer A is streamed to BG1 (priority 1), while layer B is streamed to
-    BG2 (priority 2).  BG1 therefore wins wherever both pixels are opaque.
+    Layer A is streamed to BG2 (priority 2), while layer B is streamed to
+    BG1 (priority 1).  BG1/layer B therefore wins wherever both are opaque.
     """
     desc = _variant_descriptor(data, level_index, variant_index)
     palette = _palette_rgb(data, desc["bg_palette_source"])
     layer_a, _ = render_world_layer(data, level_index, variant_index, "A")
     layer_b, _ = render_world_layer(data, level_index, variant_index, "B")
-    out = Image.new("RGBA", layer_a.size, palette[0] + (255,))
-    out.alpha_composite(layer_b)
-    out.alpha_composite(layer_a)
-    return out
+    return _composite_world_layers(layer_a, layer_b, palette[0])
 
 
 def _parse_actor_rows(csv_path: Path) -> list[dict[str, str]]:
@@ -431,9 +436,7 @@ def render_all(rom_path: Path, out_dir: Path, actors_csv: Path | None = None) ->
             b, unresolved_b = render_world_layer(data, level_index, variant_index, "B")
             desc = _variant_descriptor(data, level_index, variant_index)
             palette = _palette_rgb(data, desc["bg_palette_source"])
-            world = Image.new("RGBA", a.size, palette[0] + (255,))
-            world.alpha_composite(b)
-            world.alpha_composite(a)
+            world = _composite_world_layers(a, b, palette[0])
             base = f"level{level_index:02d}_v{variant_index}"
             a.save(out_dir / f"{base}_layerA.png")
             b.save(out_dir / f"{base}_layerB.png")

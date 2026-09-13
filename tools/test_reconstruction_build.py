@@ -78,6 +78,44 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         effect_index = game.index('gb_video_apply_final_effect();', draw_index)
         self.assertLess(draw_index, effect_index)
 
+        # The ending flag is a latched Player-update effect trigger, not a global
+        # gameplay freeze.  The original terminal -5 handler calls the effect
+        # immediately, and later Player updates replay it before continuing the
+        # normal Player/object traversal.
+        self.assertNotIn(
+            'if(! story.state.final_effect_pending &&\n           ! gb_story_ui_active(&story)',
+            game,
+        )
+        self.assertIn(
+            'const int final_effect_was_pending = story.state.final_effect_pending;',
+            game,
+        )
+        self.assertIn(
+            'if(! final_effect_was_pending && story.state.final_effect_pending)',
+            game,
+        )
+        story_update_index = game.index('gb_story_update(&story, &actors, &input);')
+        same_frame_index = game.find(
+            'if(! final_effect_was_pending && story.state.final_effect_pending)',
+            story_update_index,
+        )
+        self.assertGreater(
+            same_frame_index, story_update_index,
+            'terminal -5 must apply the first ending blast in the same update',
+        )
+
+        pre_portal_index = game.index('gb_portal_try_activate_physical_index(')
+        replay_index = game.find('gb_video_apply_final_effect();', pre_portal_index)
+        player_update_index = game.index('gb_player_update(&player, world.assets, &input);')
+        self.assertGreater(
+            replay_index, pre_portal_index,
+            'latched ending replay must occur at the Player slot after pre-Player objects',
+        )
+        self.assertLess(
+            replay_index, player_update_index,
+            'latched ending replay must not suppress the normal Player update',
+        )
+
         gba_h = '''\n#ifndef GBA_H\n#define GBA_H\n#include <stdint.h>\ntypedef uint8_t u8;\ntypedef int8_t s8;\ntypedef uint16_t u16;\ntypedef int16_t s16;\ntypedef uint32_t u32;\ntypedef int32_t s32;\n#endif\n'''
         harness = '''\n#include <assert.h>\n#include <string.h>\n#include <graveblood/assets.h>\n#include <graveblood/ending.h>\n\nconst u8 gb_ending_arg0_copy1[GB_ENDING_ARG0_COPY1_BYTES] = {\n    [0] = 0x11, [1] = 0x12,\n    [0x13E80] = 0x66, [0x13E81] = 0x67,\n    [GB_ENDING_ARG0_COPY1_BYTES - 1] = 0x33\n};\nconst u8 gb_ending_arg0_copy2[GB_ENDING_ARG0_COPY2_BYTES] = {\n    [0] = 0x44, [1] = 0x45,\n    [GB_ENDING_ARG0_COPY2_BYTES - 2] = 0x54,\n    [GB_ENDING_ARG0_COPY2_BYTES - 1] = 0x55\n};\n\nint main(void)\n{\n    static u8 vram[GB_ENDING_VRAM_BYTES];\n    memset(vram, 0xAA, sizeof(vram));\n    gb_ending_apply_argument0(vram);\n    assert(vram[0] == 0x12);\n    assert(vram[1] == 0x12);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET] == 0x44);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + 1] == 0x45);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 2] == 0x54);\n    assert(vram[GB_ENDING_OBJ_VRAM_OFFSET + GB_ENDING_ARG0_COPY2_BYTES - 1] == 0x55);\n    assert(vram[0x13E80] == 0xAA);\n    assert(vram[0x13E81] == 0xAA);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 2] == 0xAA);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES - 1] == 0xAA);\n    assert(vram[GB_ENDING_ARG0_COPY1_BYTES] == 0xAA);\n    assert(vram[GB_ENDING_VRAM_BYTES - 1] == 0xAA);\n    return 0;\n}\n'''
         with tempfile.TemporaryDirectory() as td:
@@ -167,6 +205,33 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('BG_OFFSET[3].x = (u16)(x / 4)', video)
         self.assertIn('BG_OFFSET[3].y = (u16)(y / 4)', video)
 
+    def test_streamed_world_layers_match_reference_bg_priority_ownership(self):
+        video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
+        self.assertIn(
+            'gb_stream_fill(level, level->layer_a, left, top, (volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK));',
+            video,
+        )
+        self.assertIn(
+            'gb_stream_fill(level, level->layer_b, left, top, (volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK));',
+            video,
+        )
+        self.assertIn(
+            'gb_stream_fill_column(level, level->layer_a, world_x, top, (volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK));',
+            video,
+        )
+        self.assertIn(
+            'gb_stream_fill_column(level, level->layer_b, world_x, top, (volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK));',
+            video,
+        )
+        self.assertIn(
+            'gb_stream_fill_row(level, level->layer_a, left, world_y, (volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK));',
+            video,
+        )
+        self.assertIn(
+            'gb_stream_fill_row(level, level->layer_b, left, world_y, (volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK));',
+            video,
+        )
+
     def test_runtime_has_all_level_registry_and_game_uses_default_lookup(self):
         assets = (ROOT / 'reconstruction/include/graveblood/assets.h').read_text(encoding='utf-8')
         world = (ROOT / 'reconstruction/source/engine/world.c').read_text(encoding='utf-8')
@@ -219,7 +284,7 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('GbInteractionEvent interaction;', game)
         self.assertIn('gb_actor_system_load(actors, assets)', game)
         self.assertIn('gb_actor_system_update_overlays(&actors, &player, &input, &interaction)', game)
-        self.assertIn('gb_actor_system_update_physical_npcs(&actors, &player)', game)
+        self.assertIn('gb_actor_system_update_physical_npc_at(', game)
         self.assertIn('gb_video_draw_gameplay_objects(&actors, &player, &story,', game)
         self.assertGreaterEqual(game.count('gb_enter_level(&world, &player, &actors,'), 2)
 
@@ -363,19 +428,24 @@ typedef int32_t s32;
             ], check=True, cwd=ROOT)
             subprocess.run([str(exe)], check=True, cwd=ROOT)
 
-    def test_actor_video_uses_bounded_dynamic_8bpp_slots_and_preserves_player_palette(self):
+    def test_actor_video_uses_original_2d_8bpp_obj_layout_and_bounded_npc_slots(self):
         video = (ROOT / 'reconstruction/source/engine/video.c').read_text(encoding='utf-8')
         header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')
         self.assertIn('void gb_video_draw_actors', header)
         self.assertIn('#define GB_ACTOR_OAM_FIRST 9', video)
         self.assertIn('#define GB_ACTOR_OAM_COUNT 48', video)
         self.assertIn('#define GB_OBJ_256_COLOR (1u << 13)', video)
-        self.assertIn('#define GB_PLAYER_PALETTE_BANK 15', video)
-        self.assertIn('gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256)', video)
-        self.assertIn('OBJ_COLORS + GB_PLAYER_PALETTE_BANK * 16', video)
-        self.assertIn('(GB_PLAYER_PALETTE_BANK << 12)', video)
-        self.assertIn('GB_PLAYER_FRAME_COUNT * 128', video)
-        self.assertIn('GB_MONSTER_OBJ_TILE_BASE', video)
+        self.assertIn('#define GB_NPC_OBJ_SLOT_COUNT 24', video)
+        self.assertIn('#define GB_PLAYER_TOP_LOGICAL_TILE 0x60', video)
+        self.assertIn('#define GB_PLAYER_BOTTOM_LOGICAL_TILE 0x80', video)
+        self.assertIn('#define GB_GRASS_LOGICAL_TILE 0x48', video)
+        self.assertNotIn('gb_copy_u16(OBJ_COLORS, gb_actor_obj_palette, 256)', video)
+        self.assertIn('gb_copy_u16(OBJ_COLORS + 224, gb_actor_obj_high_palette, GB_ACTOR_OBJ_HIGH_PALETTE_COUNT)', video)
+        self.assertIn('gb_stage_8bpp_16x32', video)
+        self.assertIn('gb_npc_obj_logical_root', video)
+        self.assertIn('gb_player_obj_tiles +', video)
+        self.assertNotIn('GB_PLAYER_PALETTE_BANK', video)
+        self.assertNotIn('gb_player_obj_palette', video)
         self.assertIn('GB_ACTOR_FRAME_HALFWORDS', video)
         self.assertIn('actor->descriptor->actor_class == GB_ACTOR_NPC', video)
         self.assertIn('actor->descriptor->actor_class == GB_ACTOR_GRASS', video)
@@ -462,6 +532,7 @@ const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {
     { 24, 0 },
 };
 const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = { 0x1234 };
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = { 0 };
 const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = { 0 };
 const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = { 0 };
 
@@ -493,13 +564,13 @@ int main(void)
     assert((gb_test_oam[1] & 0x01FF) == 90); /* 100 - 10 */
     assert((gb_test_oam[1] & (1u << 12)) != 0); /* H flip */
     assert((gb_test_oam[2] & 0x0C00) == (2u << 10));
-    assert((gb_test_oam[2] & 0x03FF) == (3u * 8u + 4u));
+    assert((gb_test_oam[2] & 0x03FF) == 0x100u);
 
     assert((gb_test_oam[4] & 0x00FF) == 43); /* 80 - 32 - 5 */
     assert((gb_test_oam[5] & 0x01FF) == 90);
     assert((gb_test_oam[5] & (1u << 12)) != 0);
     assert((gb_test_oam[6] & 0x0C00) == (2u << 10));
-    assert((gb_test_oam[6] & 0x03FF) == (3u * 8u));
+    assert((gb_test_oam[6] & 0x03FF) == 0x0C0u);
 
     GbActorDescriptor desc = { 0 };
     desc.actor_class = GB_ACTOR_NPC;
@@ -529,9 +600,11 @@ int main(void)
     assert((gb_test_oam[npc0 + 1] & 0x01FF) == 90);
     assert((gb_test_oam[npc0 + 1] & (1u << 12)) != 0);
     assert((gb_test_oam[npc0 + 2] & 0x0C00) == (1u << 10));
+    assert((gb_test_oam[npc0 + 2] & 0x03FF) == 0x180u); /* logical 0xC0 bottom row */
     assert((gb_test_oam[npc1] & 0x00FF) == 43); /* top second */
     assert((gb_test_oam[npc1 + 1] & 0x01FF) == 90);
     assert((gb_test_oam[npc1 + 2] & 0x0C00) == (1u << 10));
+    assert((gb_test_oam[npc1 + 2] & 0x03FF) == 0x140u); /* logical 0xA0 top row */
 
     /* Actor at/above Player => priority 2, so lower OAM-index Player stays in front. */
     player.y = 90;
@@ -623,9 +696,12 @@ volatile u16 gb_test_obj_colors[256];
 volatile u16 gb_test_oam[512];
 volatile u16 gb_test_vram[0x18000 / 2];
 
-const u16 gb_actor_obj_palette[256] = {0};
-const u16 gb_player_obj_palette[16] = {0};
-const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0x1234};
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {0x1234};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
 const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS] = {0xBEEF};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 /* Future renderer asset; keeping this test declaration macro-free makes the RED
@@ -655,13 +731,17 @@ static void verify_fixed_four(int x, int y, int player_x, int player_y)
         assert((gb_test_oam[o] & 0x00FF) == (ys[i] & 0xFF));
         assert((gb_test_oam[o + 1] & 0x01FF) == (xs[i] & 0x1FF));
         assert((gb_test_oam[o + 2] & 0x0C00) == (2u << 10));
+        const u16 parked_tiles[4] = {0x2F8, 0x2FC, 0x338, 0x33C};
+        assert((gb_test_oam[o + 2] & 0x03FF) == parked_tiles[i]);
     }
 
     /* Normal Player follows the four fixed cells: bottom then top. */
     assert((gb_test_oam[4 * 4] & 0x00FF) == ((player_y - 16) & 0xFF));
     assert((gb_test_oam[4 * 4 + 1] & 0x01FF) == (player_x & 0x1FF));
+    assert((gb_test_oam[4 * 4 + 2] & 0x03FF) == 0x100u);
     assert((gb_test_oam[5 * 4] & 0x00FF) == ((player_y - 32) & 0xFF));
     assert((gb_test_oam[5 * 4 + 1] & 0x01FF) == (player_x & 0x1FF));
+    assert((gb_test_oam[5 * 4 + 2] & 0x03FF) == 0x0C0u);
 }
 
 int main(void)
@@ -695,17 +775,16 @@ int main(void)
     {
         assert((gb_test_oam[i * 4] & 0x00FF) == ride_ys[i]);
         assert((gb_test_oam[i * 4 + 1] & 0x01FF) == ride_xs[i]);
-        assert((gb_test_oam[i * 4 + 2] & 0x03FF) == i * 8);
+        const u16 ride_tiles[5] = {0x2A2, 0x2E0, 0x2E4, 0x320, 0x324};
+        assert((gb_test_oam[i * 4 + 2] & 0x03FF) == ride_tiles[i]);
         assert((gb_test_oam[i * 4 + 2] & 0x0C00) == (2u << 10));
     }
-    assert(gb_test_vram[0x10000 / 2] == 0xBEEF);
 
-    /* Leaving ride mode restores ordinary Player frame pixels before the
-       parked bicycle + normal Player draw path resumes. */
+    /* Leaving ride mode resumes ordinary Player draw while preserving the
+       original sparse 2D OBJ roots. */
     player.bicycle_mode = 0;
     clear_oam();
     gb_video_draw_player_state(&player, &story, 500, 470);
-    assert(gb_test_vram[0x10000 / 2] == 0x1234);
     verify_fixed_four(4, 6, 50, 80);
 
     level.level_id = 10;
@@ -993,9 +1072,11 @@ volatile u16 gb_test_obj_colors[256];
 volatile u16 gb_test_oam[512];
 volatile u16 gb_test_vram[0x18000 / 2];
 
-const u16 gb_actor_obj_palette[256] = {0};
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
 const u16 gb_player_obj_palette[16] = {0};
-const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {0};
 const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS] = {0};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{0,0}};
@@ -1103,9 +1184,12 @@ volatile u16 gb_test_obj_colors[256];
 volatile u16 gb_test_oam[512];
 volatile u16 gb_test_vram[0x18000 / 2];
 
-const u16 gb_actor_obj_palette[256] = {0};
-const u16 gb_player_obj_palette[16] = {0};
-const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {0};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 
 static const u16 level_palette[256] = {0};
@@ -1828,11 +1912,19 @@ typedef int32_t s32;
         self.assertIn('gb_actor_system_take_pending_sfx(&actors)', graveblood)
         self.assertIn('gb_audio_play_sfx((u8)actor_sfx)', graveblood)
         self.assertLess(graveblood.index('gb_actor_system_take_pending_sfx(&actors)'),
-                        graveblood.index('gb_story_try_level10_gate(&story'))
+                        graveblood.index('gb_story_try_level10_gate_physical_index('))
         self.assertIn('gb_story_on_level_load(story, actors);', graveblood)
         self.assertIn('gb_story_handle_interaction(&story, &actors, &interaction);', graveblood)
         self.assertIn('gb_story_update(&story, &actors, &input);', graveblood)
-        self.assertIn('gb_story_try_level10_gate(&story, world.assets, &player, &input)', graveblood)
+        self.assertIn('gb_video_gameplay_lighting_tick(0);', graveblood)
+        self.assertIn('gb_video_gameplay_lighting_tick(interaction_active ? 0 : 1);', graveblood)
+        self.assertIn('gb_video_gameplay_lighting_reset_cursor();', graveblood)
+        self.assertRegex(
+            graveblood,
+            r'(?s)if\(gb_story_ui_active\(&story\)\)\s*\{.*?'
+            r'gb_video_gameplay_lighting_tick\(0\);.*?gb_story_update\(&story, &actors, &input\);',
+        )
+        self.assertIn('gb_story_try_level10_gate_physical_index(', graveblood)
         self.assertIn('gb_video_draw_story_ui(&story);', graveblood)
         self.assertIn('gb_video_draw_gameplay_objects(&actors, &player, &story,', graveblood)
 
@@ -1933,7 +2025,8 @@ typedef int32_t s32;
 
     def test_story_level9_treetype20_bicycle_target_action(self):
         graveblood = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
-        self.assertIn('gb_story_try_level9_treetype20_action(world.assets, &player, &input)', graveblood)
+        self.assertIn('gb_story_try_level9_treetype20_action(', graveblood)
+        self.assertIn('physical_index == 11', graveblood)
 
         harness = r"""
 #include <assert.h>
@@ -2034,9 +2127,9 @@ int gb_audio_play_sfx(u8 sound_id)
 int main(void)
 {
     const GbPortal portals[] = {
-        { .x = 10, .y = 20, .width = 16, .height = 16, .target_level = 8, .num = 1 },
-        { .x = 40, .y = 20, .width = 16, .height = 16, .target_level = 7, .num = 1 },
-        { .x = 70, .y = 20, .width = 16, .height = 16, .target_level = 6, .num = 1 }
+        { .x = 10, .y = 20, .width = 16, .height = 16, .target_level = 8, .num = 1, .physical_index = 0 },
+        { .x = 40, .y = 20, .width = 16, .height = 16, .target_level = 7, .num = 1, .physical_index = 3 },
+        { .x = 70, .y = 20, .width = 16, .height = 16, .target_level = 6, .num = 1, .physical_index = 7 }
     };
     GbLevelAssets level = { 0 };
     level.level_id = 1;
@@ -2063,6 +2156,13 @@ int main(void)
     assert(played_count == 2);
     assert(gb_portal_try_activate(&level, &player, &fresh_a) == 6);
     assert(played_count == 3);
+    assert(gb_portal_try_activate_physical_index(&level, &player, &fresh_a, 6) == -1);
+    assert(played_count == 3);
+    assert(gb_portal_try_activate_physical_index(&level, &player, &fresh_a, 7) == 6);
+    assert(played_count == 4);
+    player.x = 12;
+    assert(gb_portal_try_activate_physical_index(&level, &player, &fresh_a, 0) == 8);
+    assert(played_count == 5);
     return 0;
 }
 """
@@ -2756,7 +2856,7 @@ typedef int32_t s32;
             ], check=True, cwd=ROOT)
             subprocess.run([str(exe)], check=True, cwd=ROOT)
 
-    def test_stream_ring_translates_and_updates_rows_and_columns(self):
+    def test_stream_ring_matches_rom_31x21_window_and_linear_edge_aliases(self):
         harness = r"""
 #include <graveblood/assets.h>
 #include <graveblood/stream.h>
@@ -2775,46 +2875,42 @@ static int require(int condition, const char* message)
 
 int main(void)
 {
-    static const u16 translation[25] = {
-        0,
-        0x0401, 0x0802, 0x0C03, 0x0004, 0x0005, 0x0006,
-        0x0007, 0x0008, 0x0009, 0x000A, 0x000B, 0x000C,
-        0x000D, 0x000E, 0x000F, 0x0010, 0x0011, 0x0012,
-        0x0013, 0x0014, 0x0015, 0x0016, 0x0017, 0x0018
-    };
-    static const u16 layer[24] = {
-         1,  2,  3,  4,  5,  6,
-         7,  8,  9, 10, 11, 12,
-        13, 14, 15, 16, 17, 18,
-        19, 20, 21, 22, 23, 24
-    };
+    static u16 translation[1024];
+    static u16 layer[40 * 30];
+    for(int i = 0; i < 1024; ++i) translation[i] = (u16)(0x1000u + (u16)i);
+    for(int i = 0; i < 40 * 30; ++i) layer[i] = (u16)(i & 1023);
+
     GbLevelAssets level = { 0 };
-    level.world_width_tiles = 6;
-    level.world_height_tiles = 4;
+    level.world_width_tiles = 40;
+    level.world_height_tiles = 30;
     level.translation = translation;
-    level.translation_count = 25;
+    level.translation_count = 1024;
+
+    /* 0x0800A330 forms one linear source pointer from y*width+x and does
+       not reject x=-1/x=width independently.  Those coordinates alias the
+       previous/next linear row while the overall cell remains in range. */
+    if(! require(gb_stream_entry(&level, layer, -1, 1) == translation[layer[39]],
+                "negative X must alias previous row tail")) return 1;
+    if(! require(gb_stream_entry(&level, layer, 40, 1) == translation[layer[80]],
+                "X==width must alias next row head")) return 1;
 
     u16 map[GB_STREAM_MAP_CELLS];
-    gb_stream_fill(&level, layer, -1, -1, map);
-    if(! require(map[0] == 0x0401, "world 0,0 must land at ring cell 0")) return 1;
-    if(! require(map[1] == 0x0802, "translation must preserve vflip")) return 1;
-    if(! require(map[2] == 0x0C03, "translation must preserve h/v flip bits")) return 1;
-    if(! require(map[31] == 0, "out-of-world left column must be blank")) return 1;
-    if(! require(map[31 * 32] == 0, "out-of-world top row must be blank")) return 1;
-
     for(int i = 0; i < GB_STREAM_MAP_CELLS; ++i) map[i] = 0x7777;
-    gb_stream_fill_column(&level, layer, 5, 0, map);
-    if(! require(map[5] == 0x0006, "column first cell")) return 1;
-    if(! require(map[32 + 5] == 0x000C, "column second cell")) return 1;
-    if(! require(map[4] == 0x7777, "column update must not touch neighbor")) return 1;
-    if(! require(map[4 * 32 + 5] == 0, "column out-of-world tail must blank")) return 1;
+    gb_stream_fill(&level, layer, 0, 0, map);
+    if(! require(map[30] != 0x7777, "full fill must include column +30")) return 1;
+    if(! require(map[31] == 0x7777, "full fill must not write column +31")) return 1;
+    if(! require(map[20 * 32 + 30] != 0x7777, "full fill must include row +20")) return 1;
+    if(! require(map[21 * 32] == 0x7777, "full fill must not write row +21")) return 1;
 
     for(int i = 0; i < GB_STREAM_MAP_CELLS; ++i) map[i] = 0x6666;
+    gb_stream_fill_column(&level, layer, 5, 0, map);
+    if(! require(map[20 * 32 + 5] != 0x6666, "column must include row +20")) return 1;
+    if(! require(map[21 * 32 + 5] == 0x6666, "column must stop before row +21")) return 1;
+
+    for(int i = 0; i < GB_STREAM_MAP_CELLS; ++i) map[i] = 0x5555;
     gb_stream_fill_row(&level, layer, 0, 3, map);
-    if(! require(map[3 * 32] == 0x0013, "row first cell")) return 1;
-    if(! require(map[3 * 32 + 5] == 0x0018, "row sixth cell")) return 1;
-    if(! require(map[2 * 32] == 0x6666, "row update must not touch neighbor")) return 1;
-    if(! require(map[3 * 32 + 6] == 0, "row out-of-world tail must blank")) return 1;
+    if(! require(map[3 * 32 + 30] != 0x5555, "row must include column +30")) return 1;
+    if(! require(map[3 * 32 + 31] == 0x5555, "row must stop before column +31")) return 1;
     return 0;
 }
 """
@@ -2897,17 +2993,17 @@ int main(void)
 
     gb_world_update_camera(&world, 144, 88);
     if(! require(full_count == 1 && column_count == 1, "one-tile x crossing must update one column")) return 1;
-    if(! require(last_a == 32 && last_b == 0, "right edge column must be new origin + 31")) return 1;
+    if(! require(last_a == 31 && last_b == 0, "right edge column must be new origin + 30")) return 1;
     if(! require(world.stream_tile_x == 1 && world.stream_tile_y == 0, "x origin update")) return 1;
 
     gb_world_update_camera(&world, 144, 109);
     if(! require(row_count == 1, "one-tile y crossing must update one row")) return 1;
-    if(! require(last_a == 1 && last_b == 32, "bottom row must use new origin + 31")) return 1;
+    if(! require(last_a == 1 && last_b == 21, "bottom row must use new origin + 20")) return 1;
     if(! require(world.stream_tile_x == 1 && world.stream_tile_y == 1, "y origin update")) return 1;
 
     gb_world_update_camera(&world, 200, 109);
-    if(! require(full_count == 2, "multi-tile jump must full-fill")) return 1;
-    if(! require(last_a == 8 && last_b == 1, "jump full-fill origin")) return 1;
+    if(! require(full_count == 1 && column_count == 8, "seven-tile move must stay incremental")) return 1;
+    if(! require(last_a == 38 && last_b == 1, "incremental stripe must end at new origin + 30")) return 1;
     if(! require(last_camera_x == 64 && last_camera_y == 8, "ROM dead-zone camera offsets must apply")) return 1;
     return 0;
 }
@@ -3299,9 +3395,12 @@ volatile u16 gb_test_obj_colors[256];
 volatile u16 gb_test_oam[512];
 volatile u16 gb_test_vram[0x18000 / 2];
 
-const u16 gb_actor_obj_palette[256] = {0};
-const u16 gb_player_obj_palette[16] = {0};
-const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * 128] = {0};
+const u16 gb_actor_obj_palette[GB_ACTOR_OBJ_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {0};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {0};
 
@@ -3412,7 +3511,7 @@ int main(void)
 
     gb_video_load_level(&gameplay_level);
     assert(gb_test_dispcnt ==
-           (MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON | OBJ_1D_MAP));
+           (MODE_0 | BG0_ON | BG1_ON | BG2_ON | BG3_ON | OBJ_ON));
     assert(gb_test_bgctrl[0] ==
            (BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) | SCREEN_BASE(27) | BG_PRIORITY(0)));
     assert(gb_test_bgctrl[3] ==

@@ -50,6 +50,17 @@ class WardrobeRuntimeEvidenceTests(unittest.TestCase):
         self.assertEqual(self.halfword(0x0800831C), 0xD101)
         self.assertEqual(self.halfword(0x0800831E) & 0xF800, 0xF000)
 
+    def test_player_lighting_pass_precedes_hidden_wardrobe_branch(self):
+        # Player_update computes/applies the four-entry OBJ lighting refresh at
+        # 0x08008312, then immediately checks exact B+SELECT (6) and branches
+        # into the hidden Wardrobe path.  Wardrobe therefore does not freeze
+        # the gameplay lighting clock/cursor while its modal UI is active.
+        self.assertEqual(self.halfword(0x08008312) & 0xF800, 0xF000)
+        self.assertEqual(self.halfword(0x08008316), 0x465B)
+        self.assertEqual(self.halfword(0x08008318), 0x681B)
+        self.assertEqual(self.halfword(0x0800831A), 0x2B06)
+        self.assertEqual(self.halfword(0x0800831E) & 0xF800, 0xF000)
+
     def test_exit_requests_gameplay_level7(self):
         self.assertEqual(self.halfword(0x08009672), 0x2200)
         self.assertEqual(self.halfword(0x08009674), 0x2107)
@@ -204,6 +215,16 @@ class WardrobeVideoSourceTests(unittest.TestCase):
         self.assertIn('gb_video_restore_gameplay_obj_assets', source)
         self.assertNotIn('0x0300103C', source)
 
+        load = source[source.index('void gb_video_load_wardrobe(void)'):source.index('static void gb_pda_text_clear(void)')]
+        self.assertNotIn('OBJ_1D_MAP', load, 'original Wardrobe stays in gameplay 2D OBJ mapping')
+        self.assertNotIn('REG_DISPCNT =', load, 'original Wardrobe path does not rewrite DISPCNT')
+        self.assertNotIn('gb_copy_u16(OBJ_COLORS', load, 'Wardrobe inherits the live gameplay OBJ palette')
+        self.assertNotIn('gb_video_level =', load, 'Wardrobe must preserve the active gameplay lighting source')
+        self.assertIn('#define GB_WARDROBE_PREVIEW_LOGICAL_BASE 0x62', source)
+        self.assertIn('gb_stage_8bpp_16x32(logical_root, gb_wardrobe_preview_tiles[i]);', source)
+        self.assertIn('(u16)(logical_root * 2u)', source)
+        self.assertIn('(u16)((logical_root + 32u) * 2u)', source)
+
 
 class WardrobeGameIntegrationTests(unittest.TestCase):
     def test_game_uses_exact_hidden_combo_suspends_gameplay_and_exits_to_level7_without_sfx11(self):
@@ -216,6 +237,14 @@ class WardrobeGameIntegrationTests(unittest.TestCase):
         self.assertIn('! gb_story_ui_active(&story)', game)
         self.assertIn('scene.active = GB_SCENE_WARDROBE;', game)
         self.assertIn('gb_video_load_wardrobe();', game)
+        wardrobe_branch = game[game.index('if(scene.active == GB_SCENE_WARDROBE)'):game.index('/* GameplayScene_update publishes/streams the camera')]
+        self.assertIn('gb_video_gameplay_lighting_tick(1);', wardrobe_branch,
+                      'active Wardrobe frames must retain Player_update lighting cadence')
+        combo_start = game.index('input.held == (KEY_B | KEY_SELECT)')
+        combo_end = game.index('gb_actor_system_update_environment', combo_start)
+        combo_branch = game[combo_start:combo_end]
+        self.assertIn('gb_video_gameplay_lighting_tick(1);', combo_branch,
+                      'Wardrobe entry frame must perform the Player lighting pass before opening')
         self.assertIn('gb_wardrobe_update(&wardrobe, &input)', game)
         self.assertIn('gb_video_draw_wardrobe(wardrobe.selector);', game)
         self.assertIn('gb_scene_request_gameplay(&scene, 7, 10);', game)

@@ -461,7 +461,7 @@ class EmulatorSelftestBuildWiringTests(unittest.TestCase):
         source_text = (ROOT / "reconstruction" / "source" / "game" / "emulator_selftest.c").read_text(encoding="utf-8")
         self.assertIn("#define GB_SELFTEST_OBJ_VRAM ((volatile u16*)0x06010000u)", source_text)
         self.assertIn("GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 16u] = 0x0001u;", source_text)
-        self.assertIn("GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 16u] = 0x0011u;", source_text)
+        self.assertIn("GB_SELFTEST_OBJ_VRAM[(u32)npc_tile * 16u] = 0x0202u;", source_text)
         self.assertNotIn("GB_SELFTEST_OBJ_VRAM[(u32)player_tile * 32u]", source_text)
 
     def test_audio_selftest_accepts_mgba_fifo_dma_normalized_readback(self):

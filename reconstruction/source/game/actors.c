@@ -603,28 +603,76 @@ void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* play
     }
 }
 
+static GbActor* gb_actor_system_physical_actor_at(GbActorSystem* system, u8 physical_index)
+{
+    if(! system || ! system->level || system->level->level_id >= 11)
+    {
+        return 0;
+    }
+
+    const u8 level_id = system->level->level_id;
+    const u8 player_index = gb_player_physical_indices[level_id];
+    if(physical_index == player_index)
+    {
+        return 0;
+    }
+
+    const GbActorLevelIndexSpan span = gb_actor_level_spans[level_id];
+    const u16 nonplayer_index = physical_index < player_index ?
+                                physical_index : (u16)(physical_index - 1);
+    if(nonplayer_index >= span.count)
+    {
+        return 0;
+    }
+
+    u8 physical_start = 0;
+    while(physical_start < system->count &&
+          system->actors[physical_start].story_overlay_index != GB_ACTOR_STORY_NONE)
+    {
+        ++physical_start;
+    }
+    const u16 actor_index = (u16)physical_start + nonplayer_index;
+    if(actor_index >= system->count)
+    {
+        return 0;
+    }
+    return &system->actors[actor_index];
+}
+
+int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer* player,
+                                           u8 physical_index)
+{
+    GbActor* actor = gb_actor_system_physical_actor_at(system, physical_index);
+    if(! actor || ! actor->active || ! actor->descriptor ||
+       actor->descriptor->actor_class != GB_ACTOR_NPC)
+    {
+        return 0;
+    }
+
+    gb_collision_apply_fixed_motion(system->level,
+                                    &actor->fixed_x, &actor->fixed_y,
+                                    &actor->request_x_fixed, &actor->request_y_fixed,
+                                    actor->collision_width_fixed,
+                                    actor->collision_height_fixed,
+                                    &actor->collision_status);
+    gb_actor_update_npc_special(system, actor, player);
+    if(actor->descriptor->state == 3)
+    {
+        gb_actor_update_route(actor);
+    }
+    return 1;
+}
+
 void gb_actor_system_update_physical_npcs(GbActorSystem* system, const GbPlayer* player)
 {
-    for(u8 i = 0; i < system->count; ++i)
+    if(! system || ! system->level || system->level->level_id >= 11)
     {
-        GbActor* actor = &system->actors[i];
-        if(! actor->active || ! actor->descriptor ||
-           actor->story_overlay_index != GB_ACTOR_STORY_NONE ||
-           actor->descriptor->actor_class != GB_ACTOR_NPC)
-        {
-            continue;
-        }
-        gb_collision_apply_fixed_motion(system->level,
-                                        &actor->fixed_x, &actor->fixed_y,
-                                        &actor->request_x_fixed, &actor->request_y_fixed,
-                                        actor->collision_width_fixed,
-                                        actor->collision_height_fixed,
-                                        &actor->collision_status);
-        gb_actor_update_npc_special(system, actor, player);
-        if(actor->descriptor->state == 3)
-        {
-            gb_actor_update_route(actor);
-        }
+        return;
+    }
+    const GbActorLevelIndexSpan span = gb_actor_level_spans[system->level->level_id];
+    for(u16 physical_index = 0; physical_index <= span.count; ++physical_index)
+    {
+        gb_actor_system_update_physical_npc_at(system, player, (u8)physical_index);
     }
 }
 
