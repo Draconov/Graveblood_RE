@@ -27,6 +27,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
 
     gb_world_load(world, assets);
     gb_player_spawn(player, assets->spawn_x, assets->spawn_y);
+    gb_player_music_reset(player, level_id == 10 ? 1 : 0);
     gb_video_gameplay_lighting_reset_cursor();
     /* GameplayScene's activation path (0x08005CFC..0x08005D06) copies
        current LevelRecord+0x3C to Player+0x1E0 before active rendering. */
@@ -39,7 +40,7 @@ static void gb_enter_level(GbWorld* world, GbPlayer* player, GbActorSystem* acto
     }
     gb_actor_system_load(actors, assets);
     gb_story_on_level_load(story, actors);
-    gb_audio_play_music(level_id == 10 ? 1 : 0);
+    gb_audio_play_music(player->music_selector_desired);
     gb_world_update_camera(world, player->x, player->y);
     gb_video_draw_gameplay_objects(actors, player, story, world->camera_x, world->camera_y);
     gb_video_draw_story_ui(story);
@@ -99,7 +100,9 @@ void gb_game_run(void)
 
         if(scene.active == GB_SCENE_PDA)
         {
-            gb_actor_system_update_environment(&actors, world.camera_x, world.camera_y);
+            (void)gb_actor_system_update_physical_leaves_at(
+                &actors, 0, world.camera_x, world.camera_y);
+            gb_actor_system_update_leaf_particles(&actors, world.camera_x, world.camera_y);
             const GbPdaTick pda_tick = gb_pda_update(&pda, &story.state, &input);
             if(pda_tick.stop_reserved_audio)
             {
@@ -117,7 +120,7 @@ void gb_game_run(void)
                 gb_video_load_level(world.assets);
                 world.stream_valid = 0;
                 gb_world_update_camera(&world, player.x, player.y);
-                gb_audio_play_music(world.assets->level_id == 10 ? 1 : 0);
+                gb_audio_play_music(player.music_selector_desired);
                 gb_video_draw_gameplay_objects(&actors, &player, &story,
                                                world.camera_x, world.camera_y);
                 gb_video_draw_story_ui(&story);
@@ -157,46 +160,14 @@ void gb_game_run(void)
                                        world.camera_x, world.camera_y);
         gb_video_draw_story_ui(&story);
 
-        if(! gb_story_ui_active(&story) &&
-           (input.pressed & KEY_START))
-        {
-            /* 0x03000678 is latched, but Player_update still enters its
-               ordinary control path after replaying the ending effect. */
-            if(story.state.final_effect_pending)
-            {
-                gb_video_apply_final_effect();
-            }
-            gb_audio_stop_channel(0);
-            gb_audio_stop_channel(1);
-            gb_audio_stop_channel(2);
-            gb_audio_play_sfx(6);
-            gb_pda_open(&pda);
-            scene.active = GB_SCENE_PDA;
-            gb_video_load_pda(world.assets, &pda, &story);
-            continue;
-        }
-
-        if(! gb_story_ui_active(&story) &&
-           input.held == (KEY_B | KEY_SELECT))
-        {
-            /* The original Player slot runs lighting before testing the exact
-               B+SELECT combination, so the modal entry frame gets one normal
-               clock/cursor update too. */
-            gb_video_gameplay_lighting_tick(1);
-            if(story.state.final_effect_pending)
-            {
-                gb_video_apply_final_effect();
-            }
-            gb_wardrobe_init(&wardrobe);
-            scene.active = GB_SCENE_WARDROBE;
-            gb_video_load_wardrobe();
-            continue;
-        }
-
-        gb_actor_system_update_environment(&actors, world.camera_x, world.camera_y);
-
         if(gb_story_ui_active(&story))
         {
+            /* All serialized Leaves emitters in the public demo are physical
+               slot 0.  They remain globally active while interaction UI pauses
+               ordinary Player/NPC control. */
+            (void)gb_actor_system_update_physical_leaves_at(
+                &actors, 0, world.camera_x, world.camera_y);
+
             /* Player_update tests 0x03000678 near its entry, invokes the effect
                when it is latched, then rejoins the normal Player path.  The
                terminal state-4 -5 handler also invokes 0x08004FE0 immediately,
@@ -211,6 +182,17 @@ void gb_game_run(void)
                refresh during interactions, while 0x03000610 pauses only the
                day/night clock itself. */
             gb_video_gameplay_lighting_tick(0);
+            {
+                const GbPlayerMusicAction music_action = gb_player_music_tick(&player);
+                if(music_action.set_volume)
+                {
+                    gb_audio_set_music_volume(music_action.volume);
+                }
+                if(music_action.replace_music)
+                {
+                    gb_audio_play_music(music_action.selector);
+                }
+            }
             gb_story_update(&story, &actors, &input);
             if(! final_effect_was_pending && story.state.final_effect_pending)
             {
@@ -247,24 +229,31 @@ void gb_game_run(void)
             }
 
             /* A fresh-A overlay can raise the interaction-active state before
-               the physical Player's update slot in this same frame.  The ROM
-               still advances Player+0x398 in that case, but does not advance
-               the day/night clock. */
+               the physical Player's update slot in this same frame. */
             const int interaction_active = gb_story_ui_active(&story);
-            gb_video_gameplay_lighting_tick(interaction_active ? 0 : 1);
 
             const u8 level_id = world.assets->level_id;
             const u8 player_physical_index = gb_player_physical_indices[level_id];
             const GbActorLevelIndexSpan physical_span = gb_actor_level_spans[level_id];
 
             /* The original object manager traverses serialized physical records
-               one-by-one.  Levels 1 and 8 have only generic portal Fgtiles before
-               Player; evaluate those exact ordinals against the previous-frame
-               Player position and keep traversing after a scene request. */
+               one-by-one.  Before-Player ordinary Fgtile patch controllers and
+               generic portals observe the previous-frame Player position at their
+               exact physical ordinals; queued scene requests do not stop traversal. */
             if(! interaction_active)
             {
                 for(u8 physical_index = 0; physical_index < player_physical_index; ++physical_index)
                 {
+                    (void)gb_actor_system_update_physical_leaves_at(
+                        &actors, physical_index, world.camera_x, world.camera_y);
+                    (void)gb_actor_system_update_physical_fgtile_music_at(
+                        &actors, &player, physical_index);
+                    u8 fgtile_patch = 0;
+                    if(gb_actor_system_update_physical_fgtile_at(
+                           &actors, &player, physical_index, &fgtile_patch))
+                    {
+                        gb_video_apply_fgtile_patch(fgtile_patch);
+                    }
                     const int pre_portal_target = gb_portal_try_activate_physical_index(
                         world.assets, &player, &input, physical_index);
                     if(gb_level_default_assets(pre_portal_target))
@@ -282,8 +271,45 @@ void gb_game_run(void)
                 gb_video_apply_final_effect();
             }
 
+            /* Player_update applies the palette-lighting pass at 0x08008312,
+               after earlier objects and before both hidden B+SELECT (0x08008318)
+               and fresh START/PDA (0x0800849E) handling. */
+            gb_video_gameplay_lighting_tick(interaction_active ? 0 : 1);
+
+            if(! interaction_active && input.held == (KEY_B | KEY_SELECT))
+            {
+                gb_wardrobe_init(&wardrobe);
+                scene.active = GB_SCENE_WARDROBE;
+                gb_video_load_wardrobe();
+                continue;
+            }
+
+            {
+                const GbPlayerMusicAction music_action = gb_player_music_tick(&player);
+                if(music_action.set_volume)
+                {
+                    gb_audio_set_music_volume(music_action.volume);
+                }
+                if(music_action.replace_music)
+                {
+                    gb_audio_play_music(music_action.selector);
+                }
+            }
+
             if(! interaction_active)
             {
+                if(input.pressed & KEY_START)
+                {
+                    gb_audio_stop_channel(0);
+                    gb_audio_stop_channel(1);
+                    gb_audio_stop_channel(2);
+                    gb_audio_play_sfx(6);
+                    gb_pda_open(&pda);
+                    scene.active = GB_SCENE_PDA;
+                    gb_video_load_pda(world.assets, &pda, &story);
+                    continue;
+                }
+
                 if(gb_player_try_level10_boundary(&player, world.assets->level_id))
                 {
                     gb_scene_request_gameplay(&scene, 10, 10);
@@ -305,6 +331,14 @@ void gb_game_run(void)
                 for(u16 index = (u16)player_physical_index + 1; index <= physical_span.count; ++index)
                 {
                     const u8 physical_index = (u8)index;
+                    (void)gb_actor_system_update_physical_fgtile_music_at(
+                        &actors, &player, physical_index);
+                    u8 fgtile_patch = 0;
+                    if(gb_actor_system_update_physical_fgtile_at(
+                           &actors, &player, physical_index, &fgtile_patch))
+                    {
+                        gb_video_apply_fgtile_patch(fgtile_patch);
+                    }
                     gb_actor_system_update_physical_npc_at(
                         &actors, &player, physical_index);
                     const int actor_sfx = gb_actor_system_take_pending_sfx(&actors);
@@ -330,6 +364,12 @@ void gb_game_run(void)
                 }
             }
         }
+
+        /* LeafParticle objects are appended to the object manager's live active
+           vector by Leaves_update.  The ROM reloads vector end after each object,
+           so newborn particles receive their first velocity step in this same
+           traversal, after the serialized object stream. */
+        gb_actor_system_update_leaf_particles(&actors, world.camera_x, world.camera_y);
 
         for(;;)
         {

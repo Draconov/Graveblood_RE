@@ -10,6 +10,7 @@
 void gb_video_init(void);
 void gb_video_wait_vblank(void);
 void gb_video_apply_final_effect(void);
+void gb_video_apply_fgtile_patch(u8 patch_index);
 void gb_video_load_title(void);
 void gb_video_title_set_animation(u8 state);
 void gb_video_title_set_prompt_visible(int visible);

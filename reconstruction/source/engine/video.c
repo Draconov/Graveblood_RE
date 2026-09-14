@@ -86,6 +86,55 @@ static void gb_clear_u16(volatile u16* dst, int count)
     }
 }
 
+typedef struct {
+    u16 destination_32;
+    u16 source_32;
+    u16 count_64;
+} GbFgtileTilePatch;
+
+/* 0x03000884 is part of the initialized-IWRAM image copied from
+   0x08A8D738 at boot.  Fgtile_update passes treetype / treetype+1 directly
+   to 0x08005C6C; each entry is {BG-VRAM offset/32, graphics-source
+   offset/32, byte-count/64}. */
+static const GbFgtileTilePatch gb_fgtile_tile_patches[GB_FGTILE_PATCH_COUNT] = {
+    { 906, 2710, 176 }, { 906, 1680, 176 },
+    { 906, 2710, 176 }, { 906, 3060, 176 },
+    { 184, 3594, 26 },  { 184, 3412, 26 },
+    { 456, 3466, 64 },  { 456, 3648, 64 },
+    { 906, 1680, 176 }, { 906, 3774, 176 },
+    { 584, 4126, 76 },  { 584, 4430, 76 },
+    { 584, 4430, 76 },  { 584, 4278, 76 },
+    { 742, 2084, 132 }, { 742, 2354, 132 },
+    { 736, 2348, 135 }, { 736, 1814, 135 },
+};
+
+void gb_video_apply_fgtile_patch(u8 patch_index)
+{
+    if(! gb_video_level || ! gb_video_level->bg_patch_source ||
+       patch_index >= GB_FGTILE_PATCH_COUNT)
+    {
+        return;
+    }
+
+    const GbFgtileTilePatch* patch = &gb_fgtile_tile_patches[patch_index];
+    if(patch->source_32 < GB_FGTILE_PATCH_SOURCE_BASE_32)
+    {
+        return;
+    }
+    const u32 source_halfword =
+        (u32)(patch->source_32 - GB_FGTILE_PATCH_SOURCE_BASE_32) * 16u;
+    const u32 count_halfwords = (u32)patch->count_64 * 32u;
+    if(source_halfword + count_halfwords > gb_video_level->bg_patch_source_halfwords)
+    {
+        return;
+    }
+
+    volatile u16* destination = (volatile u16*)CHAR_BASE_ADR(0);
+    destination += (u32)patch->destination_32 * 16u;
+    gb_copy_u16(destination, gb_video_level->bg_patch_source + source_halfword,
+                (int)count_halfwords);
+}
+
 static s16 gb_lighting_interpolate(s16 a, s16 b, s16 factor)
 {
     return (s16)(a + ((b - a) * factor) / 40);
@@ -1433,9 +1482,10 @@ static int gb_video_draw_player_state_at(const GbPlayer* player, const GbStoryRu
 {
     if(story && story->state.monster_render_enabled)
     {
-        int used = gb_video_draw_monster(player, camera_x, first_oam);
-        used += gb_video_draw_level_static_composite(camera_x, camera_y, first_oam + used);
-        return used;
+        /* Player_draw checks the fifth-sketch monster branch before the
+           Level-9/10 parked-bicycle branches, so the special monster
+           composite is exclusive of those static bicycle cells. */
+        return gb_video_draw_monster(player, camera_x, first_oam);
     }
     gb_monster_animation_counter = 0;
     if(player && player->bicycle_mode == 2)

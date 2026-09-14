@@ -255,6 +255,14 @@ void gb_audio_set_channel_volume(u8 channel, u16 volume)
     gb_audio_channels[channel].volume = volume;
 }
 
+void gb_audio_set_music_volume(u16 volume)
+{
+    if(gb_audio_music_channel < 0 || gb_audio_music_channel >= GB_AUDIO_CHANNEL_COUNT) {
+        return;
+    }
+    gb_audio_channels[gb_audio_music_channel].volume = volume;
+}
+
 void gb_audio_mix_block(s8* destination, u16 sample_count)
 {
     s16 mix[GB_AUDIO_BUFFER_SAMPLES];

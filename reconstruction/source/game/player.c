@@ -30,6 +30,68 @@ static void gb_player_animation_tick(GbPlayer* player)
     }
 }
 
+
+static const u16 gb_player_music_fade_table[75] = {
+    142, 140, 138, 136, 134, 132, 130, 128, 126, 124,
+    122, 120, 118, 116, 114, 112, 110, 108, 106, 104,
+    102, 100, 98, 96, 94, 92, 90, 88, 86, 84,
+    82, 80, 78, 76, 74, 72, 70, 68, 66, 64,
+    62, 60, 58, 56, 54, 52, 50, 48, 46, 44,
+    42, 40, 38, 36, 34, 32, 30, 28, 26, 24,
+    22, 20, 18, 16, 14, 12, 10, 8, 6, 4,
+    2, 0, 0, 0, 0,
+};
+
+void gb_player_music_reset(GbPlayer* player, u8 selector)
+{
+    if(! player)
+    {
+        return;
+    }
+    player->music_selector_desired = selector;
+    player->music_selector_applied = selector;
+    player->music_fade_counter = 0;
+}
+
+GbPlayerMusicAction gb_player_music_tick(GbPlayer* player)
+{
+    GbPlayerMusicAction action = {0};
+    if(! player)
+    {
+        return action;
+    }
+
+    /* Player_update 0x08008328 compares desired +0x1CC against applied
+       +0x1D0.  A mismatch advances the global fade counter and uses the
+       recovered 75-word volume table.  If desired returns to applied before
+       replacement, the counter is intentionally retained rather than reset. */
+    if(player->music_selector_desired != player->music_selector_applied &&
+       player->music_fade_counter <= 74)
+    {
+        ++player->music_fade_counter;
+        if(player->music_fade_counter < 75)
+        {
+            action.set_volume = 1;
+            action.volume = gb_player_music_fade_table[player->music_fade_counter];
+            return action;
+        }
+    }
+
+    if(player->music_fade_counter == 75)
+    {
+        /* The ROM indexes one word past the 75-word table at counter 75, then
+           immediately stops/restarts the reserved channel at volume 0x90.
+           There is no mixer boundary between those operations, so expose the
+           observable replacement without reproducing the invalid transient. */
+        action.replace_music = 1;
+        action.selector = player->music_selector_desired;
+        action.volume = 0x90;
+        player->music_selector_applied = player->music_selector_desired;
+        player->music_fade_counter = 0;
+    }
+    return action;
+}
+
 u8 gb_player_frame_index(const GbPlayer* player)
 {
     const u8 frame = player->animation_frame > 0 ? player->animation_frame : 1;
@@ -65,6 +127,7 @@ void gb_player_spawn(GbPlayer* player, s16 x, s16 y)
     player->script_mode = 0;
     player->script_counter = 0;
     player->bicycle_mode = 0;
+    gb_player_music_reset(player, 0);
     player->pending_sfx_id = -1;
     player->pending_sfx_volume = 0;
     player->facing_x = 0;

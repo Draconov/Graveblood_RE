@@ -1900,7 +1900,8 @@ typedef int32_t s32;
         self.assertIn('GbStoryRuntime story;', graveblood)
         self.assertIn('gb_audio_init();', graveblood)
         self.assertIn('gb_story_init(&story);', graveblood)
-        self.assertIn('gb_audio_play_music(level_id == 10 ? 1 : 0);', graveblood)
+        self.assertIn('gb_player_music_reset(player, level_id == 10 ? 1 : 0);', graveblood)
+        self.assertIn('gb_audio_play_music(player->music_selector_desired);', graveblood)
         self.assertNotIn('gb_audio_play_music(2)', graveblood)
         self.assertIn('gb_story_take_pending_sfx(&story)', graveblood)
         self.assertIn('gb_audio_play_sfx((u8)pending_sfx)', graveblood)
@@ -3370,7 +3371,7 @@ typedef int32_t s32;
         self.assertIn('pda_tick.return_requested', game)
         self.assertIn('scene.active = GB_SCENE_GAMEPLAY;', game)
         self.assertIn('world.stream_valid = 0;', game)
-        self.assertIn('gb_audio_play_music(world.assets->level_id == 10 ? 1 : 0);', game)
+        self.assertIn('gb_audio_play_music(player.music_selector_desired);', game)
 
     def test_title_video_loads_exact_layers_obj_assets_patches_prompt_and_restores_gameplay_display(self):
         header = (ROOT / 'reconstruction/include/graveblood/video.h').read_text(encoding='utf-8')

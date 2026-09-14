@@ -234,17 +234,19 @@ class WardrobeGameIntegrationTests(unittest.TestCase):
         self.assertIn('#include <graveblood/wardrobe.h>', game)
         self.assertIn('GbWardrobeRuntime wardrobe;', game)
         self.assertIn('input.held == (KEY_B | KEY_SELECT)', game)
-        self.assertIn('! gb_story_ui_active(&story)', game)
+        self.assertIn('const int interaction_active = gb_story_ui_active(&story);', game)
+        self.assertIn('if(! interaction_active)', game)
         self.assertIn('scene.active = GB_SCENE_WARDROBE;', game)
         self.assertIn('gb_video_load_wardrobe();', game)
         wardrobe_branch = game[game.index('if(scene.active == GB_SCENE_WARDROBE)'):game.index('/* GameplayScene_update publishes/streams the camera')]
         self.assertIn('gb_video_gameplay_lighting_tick(1);', wardrobe_branch,
                       'active Wardrobe frames must retain Player_update lighting cadence')
-        combo_start = game.index('input.held == (KEY_B | KEY_SELECT)')
-        combo_end = game.index('gb_actor_system_update_environment', combo_start)
-        combo_branch = game[combo_start:combo_end]
-        self.assertIn('gb_video_gameplay_lighting_tick(1);', combo_branch,
-                      'Wardrobe entry frame must perform the Player lighting pass before opening')
+        player_lighting = game.index(
+            'gb_video_gameplay_lighting_tick(interaction_active ? 0 : 1);')
+        combo_start = game.index('input.held == (KEY_B | KEY_SELECT)', player_lighting)
+        pda_start = game.index('if(input.pressed & KEY_START)', combo_start)
+        self.assertLess(player_lighting, combo_start)
+        self.assertLess(combo_start, pda_start)
         self.assertIn('gb_wardrobe_update(&wardrobe, &input)', game)
         self.assertIn('gb_video_draw_wardrobe(wardrobe.selector);', game)
         self.assertIn('gb_scene_request_gameplay(&scene, 7, 10);', game)

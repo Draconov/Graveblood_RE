@@ -21,6 +21,7 @@ int gb_audio_play_music(u8 sound_id);
 void gb_audio_stop_music(void);
 void gb_audio_stop_channel(u8 channel);
 void gb_audio_set_channel_volume(u8 channel, u16 volume);
+void gb_audio_set_music_volume(u16 volume);
 
 #if defined(GB_EMULATOR_SELFTEST) || defined(GB_DEVICE_SELFTEST)
 extern volatile u32 gb_audio_selftest_irq_count;

@@ -27,6 +27,7 @@ typedef struct {
     s16 height;
     u16 rom_order;
     u16 port_to;
+    s16 treetype;
     u16 num;
     u8 actor_class;
     u8 subtype;
@@ -129,12 +130,16 @@ typedef struct {
     s16 spawn_y;
     u8 player_idle_selector;
     u16 bg_tile_halfwords;
+    u32 bg_patch_source_halfwords;
     u16 translation_count;
     const u16* bg_palette;
     const u16* bg_tiles;
+    const u16* bg_patch_source;
     const u16* translation;
     const u16* layer_a;
     const u16* layer_b;
+    const u16* layer_a_guard;
+    const u16* layer_b_guard;
     const u16* fixed_map;
     const u16* collision;
     const u16* bg0_ui_tiles;
@@ -189,6 +194,8 @@ enum {
     GB_LEVEL_STATIC_SPRITE_COUNT = 4,
     GB_LEVEL_STATIC_SPRITE_HALFWORDS = 128,
     GB_BG0_UI_TILE_COUNT = 87,
+    GB_FGTILE_PATCH_COUNT = 18,
+    GB_FGTILE_PATCH_SOURCE_BASE_32 = 1680,
     GB_TITLE_MAP_WIDTH = 30,
     GB_TITLE_MAP_HEIGHT = 20,
     GB_TITLE_MAP_CELLS = 600,

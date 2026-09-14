@@ -146,12 +146,17 @@ int main(void) {
         self.assertIn('gb_world_track_camera(&world, player.x, player.y);', game)
         publish = game.index('gb_world_publish_camera(&world);')
         draw_actors = game.index('gb_video_draw_gameplay_objects(&actors, &player, &story,', publish)
-        env_update = game.index('gb_actor_system_update_environment(&actors, world.camera_x, world.camera_y);', draw_actors)
-        player_update = game.index('gb_player_update(&player, world.assets, &input);', env_update)
+        overlay_update = game.index(
+            'gb_actor_system_update_overlays(&actors, &player, &input, &interaction);', draw_actors)
+        pre_player_loop = game.index(
+            'for(u8 physical_index = 0; physical_index < player_physical_index; ++physical_index)',
+            overlay_update)
+        player_update = game.index('gb_player_update(&player, world.assets, &input);', pre_player_loop)
         track = game.index('gb_world_track_camera(&world, player.x, player.y);', player_update)
         self.assertLess(publish, draw_actors)
-        self.assertLess(draw_actors, env_update)
-        self.assertLess(env_update, player_update)
+        self.assertLess(draw_actors, overlay_update)
+        self.assertLess(overlay_update, pre_player_loop)
+        self.assertLess(pre_player_loop, player_update)
         self.assertLess(player_update, track)
         # The active-gameplay tail must not immediately publish the just-tracked camera.
         tail = game[track:game.index('\n    }\n}', track)]

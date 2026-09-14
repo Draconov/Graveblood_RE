@@ -20,7 +20,30 @@ u16 gb_stream_entry(const GbLevelAssets* level, const u16* layer, s16 world_x, s
     const int cell_count = (int)level->world_width_tiles * (int)level->world_height_tiles;
     if(cell < 0 || cell >= cell_count)
     {
-        return 0;
+        /* 0x0800A330 performs no source bounds check.  The camera clamp and
+           inclusive 31x21 stream rectangle can reach exactly cell -1 and
+           N..N+width.  Generated assets preserve the ROM-adjacent, already-
+           translated values for those cells so we match the hardware without
+           making an out-of-bounds C read. */
+        if(cell < -1 || cell > cell_count + (int)level->world_width_tiles)
+        {
+            return 0;
+        }
+        const u16* guard = 0;
+        if(layer == level->layer_a)
+        {
+            guard = level->layer_a_guard;
+        }
+        else if(layer == level->layer_b)
+        {
+            guard = level->layer_b_guard;
+        }
+        if(! guard)
+        {
+            return 0;
+        }
+        const int guard_index = cell < 0 ? 0 : cell - cell_count + 1;
+        return guard[guard_index];
     }
 
     const u16 source_id = layer[cell];

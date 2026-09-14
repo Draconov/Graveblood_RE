@@ -4,6 +4,8 @@
 static const s16 gb_leaf_x_offsets[6] = { 350, 250, 170, 0, 340, 290 };
 static const s16 gb_leaf_y_offsets[6] = { 40, 60, 80, 30, 20, 50 };
 
+static GbActor* gb_actor_system_physical_actor_at(GbActorSystem* system, u8 physical_index);
+
 static s32 gb_leaf_fixed_to_pixel(s32 value)
 {
     if(value >= 0)
@@ -71,6 +73,9 @@ static void gb_actor_init(GbActor* actor, const GbActorDescriptor* descriptor, u
     actor->consumed = 0;
     actor->story_visible = 1;
     actor->special_mover_latched = descriptor->port_to != 0;
+    actor->fgtile_x_offset = 0;
+    actor->fgtile_y_offset = 0;
+    actor->fgtile_pending = 0;
 }
 
 static void gb_actor_append(GbActorSystem* system, const GbActorDescriptor* descriptor, u8 overlay_index)
@@ -338,33 +343,8 @@ static int gb_actor_system_has_leaves(const GbActorSystem* system)
     return 0;
 }
 
-void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y)
+static void gb_actor_system_tick_leaf_emitter(GbActorSystem* system, s16 camera_x, s16 camera_y)
 {
-    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY; ++i)
-    {
-        GbLeafParticle* particle = &system->leaf_particles[i];
-        if(! particle->active)
-        {
-            continue;
-        }
-        particle->fixed_x += particle->velocity_x;
-        particle->fixed_y += particle->velocity_y;
-        if(particle->velocity_y > 0x400)
-        {
-            particle->velocity_y = 0x400;
-        }
-        const s32 x = gb_leaf_fixed_to_pixel(particle->fixed_x);
-        const s32 y = gb_leaf_fixed_to_pixel(particle->fixed_y);
-        if(x < (s32)camera_x - 30 || y > (s32)camera_y + 180)
-        {
-            particle->active = 0;
-        }
-    }
-
-    if(! gb_actor_system_has_leaves(system))
-    {
-        return;
-    }
     if(system->leaf_emitter_cooldown > 0)
     {
         --system->leaf_emitter_cooldown;
@@ -396,6 +376,56 @@ void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16
         }
     }
     system->leaf_emitter_cooldown = 23;
+}
+
+int gb_actor_system_update_physical_leaves_at(GbActorSystem* system, u8 physical_index,
+                                              s16 camera_x, s16 camera_y)
+{
+    GbActor* actor = gb_actor_system_physical_actor_at(system, physical_index);
+    if(! actor || ! actor->active || ! actor->descriptor ||
+       actor->descriptor->actor_class != GB_ACTOR_LEAVES)
+    {
+        return 0;
+    }
+    gb_actor_system_tick_leaf_emitter(system, camera_x, camera_y);
+    return 1;
+}
+
+void gb_actor_system_update_leaf_particles(GbActorSystem* system, s16 camera_x, s16 camera_y)
+{
+    for(int i = 0; i < GB_LEAF_PARTICLE_CAPACITY; ++i)
+    {
+        GbLeafParticle* particle = &system->leaf_particles[i];
+        if(! particle->active)
+        {
+            continue;
+        }
+        particle->fixed_x += particle->velocity_x;
+        particle->fixed_y += particle->velocity_y;
+        if(particle->velocity_y > 0x400)
+        {
+            particle->velocity_y = 0x400;
+        }
+        const s32 x = gb_leaf_fixed_to_pixel(particle->fixed_x);
+        const s32 y = gb_leaf_fixed_to_pixel(particle->fixed_y);
+        if(x < (s32)camera_x - 30 || y > (s32)camera_y + 180)
+        {
+            particle->active = 0;
+        }
+    }
+}
+
+void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y)
+{
+    /* Compatibility wrapper for subsystem/self-tests.  The active gameplay
+       scheduler calls the emitter at its serialized physical object slot and
+       then updates the live particle vector after serialized-object traversal.
+       Keep that same spawn-then-particle order here. */
+    if(gb_actor_system_has_leaves(system))
+    {
+        gb_actor_system_tick_leaf_emitter(system, camera_x, camera_y);
+    }
+    gb_actor_system_update_leaf_particles(system, camera_x, camera_y);
 }
 
 int gb_actor_npc_should_draw(const GbActor* actor)
@@ -637,6 +667,143 @@ static GbActor* gb_actor_system_physical_actor_at(GbActorSystem* system, u8 phys
         return 0;
     }
     return &system->actors[actor_index];
+}
+
+static int gb_fgtile_first_half_match(const GbActor* actor, u8 turn, s16 player_x, s16 player_y)
+{
+    const s16 actor_x = gb_actor_pixel_x(actor);
+    const s16 actor_y = gb_actor_pixel_y(actor);
+    const s16 left = (s16)(actor_x - 8 + actor->fgtile_x_offset);
+    const s16 top = (s16)(actor_y + 8 + actor->fgtile_y_offset);
+    if(turn == 0)
+    {
+        return player_x == left && player_y >= top && player_y < top + 90;
+    }
+    return player_x >= left && player_x < left + 45 &&
+           (player_y == top || player_y == top + 1);
+}
+
+static int gb_fgtile_second_half_match(const GbActor* actor, u8 turn, s16 player_x, s16 player_y)
+{
+    const s16 actor_x = gb_actor_pixel_x(actor);
+    const s16 actor_y = gb_actor_pixel_y(actor);
+    const s16 left = (s16)(actor_x - 8 + actor->fgtile_x_offset);
+    const s16 top = (s16)(actor_y + 8 + actor->fgtile_y_offset);
+    if(turn == 0)
+    {
+        return player_x == left + 1 && player_y >= top && player_y < top + 90;
+    }
+    return player_x >= left + 45 && player_x < left + 90 &&
+           (player_y == top || player_y == top + 1);
+}
+
+int gb_actor_system_update_physical_fgtile_at(GbActorSystem* system, const GbPlayer* player,
+                                              u8 physical_index, u8* patch_index)
+{
+    GbActor* actor = gb_actor_system_physical_actor_at(system, physical_index);
+    if(! actor || ! actor->active || ! actor->descriptor || ! player || ! patch_index ||
+       actor->descriptor->actor_class != GB_ACTOR_FGTILE)
+    {
+        return 0;
+    }
+
+    const GbActorDescriptor* descriptor = actor->descriptor;
+    /* Fgtile_update 0x08003B98 reaches 0x08005C6C only for the parser-default
+       portTo=33 controller path, ordinary turn 0/1 strips, and treetype pairs
+       other than the nonvisual default 1 / bicycle controller 20. */
+    if(descriptor->port_to != 33 || descriptor->turn > 1 ||
+       descriptor->treetype == 1 || descriptor->treetype == 20 ||
+       descriptor->treetype < 0 || descriptor->treetype + 1 >= GB_FGTILE_PATCH_COUNT)
+    {
+        return 0;
+    }
+
+    const u8 turn = descriptor->turn;
+    const s16 player_x = (s16)(player->x_fixed >> GB_ACTOR_FIXED_SHIFT);
+    const s16 player_y = (s16)((player->y_fixed >> GB_ACTOR_FIXED_SHIFT) + 16);
+    const int first_half = gb_fgtile_first_half_match(actor, turn, player_x, player_y);
+    const int fire = actor->fgtile_pending || first_half;
+    actor->fgtile_pending = 0;
+
+    if(fire)
+    {
+        const s16 actor_x = gb_actor_pixel_x(actor);
+        const s16 actor_y = gb_actor_pixel_y(actor);
+        s16 selected = descriptor->treetype;
+        if(turn == 0)
+        {
+            if(player_x < actor_x - 7)
+            {
+                actor->fgtile_x_offset = 0;
+            }
+            else
+            {
+                ++selected;
+                actor->fgtile_x_offset = -16;
+            }
+        }
+        else
+        {
+            if(player_y < actor_y - 7)
+            {
+                actor->fgtile_y_offset = 0;
+            }
+            else
+            {
+                ++selected;
+                actor->fgtile_y_offset = -16;
+            }
+        }
+        *patch_index = (u8)selected;
+    }
+
+    /* The original scan handles 90 points, services the pending latch, then
+       scans the remaining 90.  A hit in that second half therefore becomes
+       pending for the next update, after any hysteresis offset changed above. */
+    if(gb_fgtile_second_half_match(actor, turn, player_x, player_y))
+    {
+        actor->fgtile_pending = 1;
+    }
+    return fire;
+}
+
+int gb_actor_system_update_physical_fgtile_music_at(GbActorSystem* system, GbPlayer* player,
+                                                    u8 physical_index)
+{
+    GbActor* actor = gb_actor_system_physical_actor_at(system, physical_index);
+    if(! actor || ! actor->active || ! actor->descriptor || ! player ||
+       actor->descriptor->actor_class != GB_ACTOR_FGTILE)
+    {
+        return 0;
+    }
+
+    const GbActorDescriptor* descriptor = actor->descriptor;
+    /* Fgtile_update 0x08003BF2 is the public-demo turn=2 music-zone path.
+       The only serialized instances use parser-default portTo=33 and
+       treetype=1; keep that proven domain closed so dormant values cannot
+       index the two-entry Player music selector table. */
+    if(descriptor->port_to != 33 || descriptor->turn != 2 || descriptor->treetype != 1)
+    {
+        return 0;
+    }
+
+    const s16 player_x = (s16)(player->x_fixed >> GB_ACTOR_FIXED_SHIFT);
+    const s16 player_y = (s16)((player->y_fixed >> GB_ACTOR_FIXED_SHIFT) + 16);
+    const s16 left = (s16)(gb_actor_pixel_x(actor) - 8 + actor->fgtile_x_offset);
+    const s16 top = (s16)(gb_actor_pixel_y(actor) + 8 + actor->fgtile_y_offset);
+    if(player_x < left || player_x >= left + 2 ||
+       player_y < top || player_y >= top + 40)
+    {
+        return 0;
+    }
+
+    /* Contact compares Player+0x1CC with actor treetype.  A differing value
+       adopts treetype; an equal value writes zero.  There is deliberately no
+       edge latch: remaining on the exact two-pixel strip can toggle again. */
+    player->music_selector_desired =
+        player->music_selector_desired != (u8)descriptor->treetype ?
+        (u8)descriptor->treetype : 0;
+    return 1;
 }
 
 int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer* player,

@@ -67,8 +67,13 @@ int main(void)
     assert(system.leaf_emitter_cooldown == 23);
     assert(active_particles(&system) == 1);
     GbLeafParticle* p = &system.leaf_particles[0];
-    assert(p->fixed_x == (2100 + 260 + 250) * 256);
-    assert(p->fixed_y == (-80 + 60) * 256);
+    /* The compatibility wrapper preserves the ROM manager's live-vector order:
+       a freshly appended LeafParticle receives its first velocity step in the
+       same update as the Leaves emitter that created it. */
+    const s32 spawn_x = (2100 + 260 + 250) * 256;
+    const s32 spawn_y = (-80 + 60) * 256;
+    assert(p->fixed_x == spawn_x - 150);
+    assert(p->fixed_y == spawn_y + 150);
     assert(p->velocity_x == -150);
     assert(p->velocity_y == 150);
     assert(p->frame == 0);

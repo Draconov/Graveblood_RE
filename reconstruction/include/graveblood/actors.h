@@ -68,6 +68,9 @@ typedef struct {
     u8 consumed;
     u8 story_visible;
     u8 special_mover_latched;
+    s16 fgtile_x_offset;
+    s16 fgtile_y_offset;
+    u8 fgtile_pending;
 } GbActor;
 
 typedef struct {
@@ -89,6 +92,13 @@ void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* play
                                      const GbInput* input, GbInteractionEvent* event);
 int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer* player,
                                            u8 physical_index);
+int gb_actor_system_update_physical_fgtile_at(GbActorSystem* system, const GbPlayer* player,
+                                              u8 physical_index, u8* patch_index);
+int gb_actor_system_update_physical_fgtile_music_at(GbActorSystem* system, GbPlayer* player,
+                                                    u8 physical_index);
+int gb_actor_system_update_physical_leaves_at(GbActorSystem* system, u8 physical_index,
+                                              s16 camera_x, s16 camera_y);
+void gb_actor_system_update_leaf_particles(GbActorSystem* system, s16 camera_x, s16 camera_y);
 void gb_actor_system_update_physical_npcs(GbActorSystem* system, const GbPlayer* player);
 void gb_actor_system_update_environment(GbActorSystem* system, s16 camera_x, s16 camera_y);
 int gb_actor_npc_should_draw(const GbActor* actor);

@@ -58,6 +58,8 @@ OBJ_BASE_PALETTE_COUNT = 0x5B
 OBJ_LIGHTING_SOURCE_COUNT = 200
 OBJ_HIGH_PALETTE_SOURCE = 0x08652DB4
 OBJ_HIGH_PALETTE_COUNT = 32
+FGTILE_PATCH_SOURCE_BASE_32 = 1680
+FGTILE_PATCH_SOURCE_END_BYTES = 0x23CC0
 
 
 @dataclass(frozen=True)
@@ -100,9 +102,12 @@ class LevelSpec:
 class RuntimeBackground:
     palette: tuple[int, ...]
     tile_bytes: bytes
+    patch_source_bytes: bytes
     translation: tuple[int, ...]
     layer_a: tuple[int, ...]
     layer_b: tuple[int, ...]
+    layer_a_guard: tuple[int, ...]
+    layer_b_guard: tuple[int, ...]
     fixed_map: tuple[int, ...]
 
 
@@ -131,6 +136,7 @@ class ActorDescriptorSpec:
     height: int
     rom_order: int
     port_to: int
+    treetype: int
     actor_class: int
     subtype: int
     legs_color: int
@@ -572,7 +578,8 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
             width=_actor_number(row, 'width', minimum=-32768, maximum=32767),
             height=_actor_number(row, 'height', minimum=-32768, maximum=32767),
             rom_order=rom_order,
-            port_to=_actor_number(row, 'portTo', minimum=0, maximum=65535),
+            port_to=_actor_number(row, 'portTo', default=33 if actor_class == ACTOR_CLASS_FGTILE else 0, minimum=0, maximum=65535),
+            treetype=_actor_number(row, 'treetype', default=1, minimum=-32768, maximum=32767),
             actor_class=actor_class,
             subtype=subtype,
             legs_color=legs_color,
@@ -607,6 +614,7 @@ def build_actor_runtime_data(root: Path) -> ActorRuntimeData:
             height=_actor_number(row, 'height', minimum=-32768, maximum=32767),
             rom_order=0x8000 + overlay_index,
             port_to=_actor_number(row, 'portTo', minimum=0, maximum=65535),
+            treetype=_actor_number(row, 'treetype', default=1, minimum=-32768, maximum=32767),
             actor_class=actor_class,
             subtype=subtype,
             legs_color=legs_color,
@@ -731,6 +739,38 @@ def _read_u16_array(rom: bytes, addr: int, count: int) -> tuple[int, ...]:
     return struct.unpack_from(f'<{count}H', rom, off)
 
 
+def _stream_guard_entries(
+    rom: bytes,
+    layer_addr: int,
+    translation_addr: int,
+    world_cells: int,
+    world_width: int,
+) -> tuple[int, ...]:
+    """Recover the camera-reachable unchecked layer/translation overreads.
+
+    The original 0x0800A330 streamer fills an inclusive 31x21 window and does
+    no bounds checks on either the layer cell or translation lookup.  With the
+    clamped camera this can reach exactly cell -1 and cells N..N+width.  Store
+    the already-translated halfwords so the clean-room runtime can reproduce
+    those deterministic ROM-adjacent reads without invoking C undefined
+    behavior or embedding enormous sparse translation overruns.
+    """
+    cells = (-1, *range(world_cells, world_cells + world_width + 1))
+    out: list[int] = []
+    for cell in cells:
+        source_off = layer_addr - ROM_BASE + cell * 2
+        if source_off < 0 or source_off + 2 > len(rom):
+            raise ValueError(f'world stream guard source cell {cell} overruns ROM')
+        source_id = struct.unpack_from('<H', rom, source_off)[0]
+        translation_off = translation_addr - ROM_BASE + source_id * 2
+        if translation_off < 0 or translation_off + 2 > len(rom):
+            raise ValueError(
+                f'world stream guard translation source {source_id} overruns ROM'
+            )
+        out.append(struct.unpack_from('<H', rom, translation_off)[0])
+    return tuple(out)
+
+
 def load_runtime_background(
     root: Path,
     rom: bytes,
@@ -746,6 +786,11 @@ def load_runtime_background(
     tile_bytes = rom[tile_off:tile_off + 0xD800]
     if len(tile_bytes) != 0xD800:
         raise ValueError('background tile blob overruns ROM')
+    patch_start = FGTILE_PATCH_SOURCE_BASE_32 * 32
+    patch_source_bytes = rom[tile_off + patch_start:tile_off + FGTILE_PATCH_SOURCE_END_BYTES]
+    expected_patch_bytes = FGTILE_PATCH_SOURCE_END_BYTES - patch_start
+    if len(patch_source_bytes) != expected_patch_bytes:
+        raise ValueError('Fgtile background patch source overruns ROM')
 
     world_cells = spec.width * spec.height
     fixed_cells = spec.fixed_width * spec.fixed_height
@@ -756,12 +801,22 @@ def load_runtime_background(
     translation = _read_u16_array(rom, translation_addr, max_source + 1)
     palette = _read_u16_array(rom, palette_addr, 256)
 
+    layer_a_guard = _stream_guard_entries(
+        rom, spec.visual_a_addr, translation_addr, world_cells, spec.width
+    )
+    layer_b_guard = _stream_guard_entries(
+        rom, spec.visual_b_addr, translation_addr, world_cells, spec.width
+    )
+
     return RuntimeBackground(
         palette=palette,
         tile_bytes=tile_bytes,
+        patch_source_bytes=patch_source_bytes,
         translation=translation,
         layer_a=layer_a,
         layer_b=layer_b,
+        layer_a_guard=layer_a_guard,
+        layer_b_guard=layer_b_guard,
         fixed_map=fixed_map,
     )
 
@@ -982,6 +1037,7 @@ def _asset_c(
     portals = ',\n'.join(portal_rows) if portal_rows else '    { 0, 0, 0, 0, 0, 0, 0 }'
     name = _asset_symbol(level, variant)
     tile_words = _bytes_to_u16(runtime.tile_bytes)
+    patch_source_words = _bytes_to_u16(runtime.patch_source_bytes)
     ui_tiles = select_bg0_ui_tiles(runtime)
     return f"""#include <graveblood/assets.h>
 
@@ -991,6 +1047,10 @@ const u16 {name}_bg_palette[256] = {{
 
 const u16 {name}_bg_tiles[{len(tile_words)}] = {{
 {_c_values(tile_words, 12, 4)}
+}};
+
+const u16 {name}_bg_patch_source[{len(patch_source_words)}] = {{
+{_c_values(patch_source_words, 12, 4)}
 }};
 
 const u16 {name}_translation[{len(runtime.translation)}] = {{
@@ -1003,6 +1063,14 @@ const u16 {name}_layer_a[{len(runtime.layer_a)}] = {{
 
 const u16 {name}_layer_b[{len(runtime.layer_b)}] = {{
 {_c_values(runtime.layer_b, 20)}
+}};
+
+const u16 {name}_layer_a_guard[{len(runtime.layer_a_guard)}] = {{
+{_c_values(runtime.layer_a_guard, 16, 4)}
+}};
+
+const u16 {name}_layer_b_guard[{len(runtime.layer_b_guard)}] = {{
+{_c_values(runtime.layer_b_guard, 16, 4)}
 }};
 
 const u16 {name}_fixed_map[{len(runtime.fixed_map)}] = {{
@@ -1032,12 +1100,16 @@ const GbLevelAssets {name}_assets = {{
     .spawn_y = {spec.spawn[1]},
     .player_idle_selector = {spec.player_idle_selector},
     .bg_tile_halfwords = {len(tile_words)},
+    .bg_patch_source_halfwords = {len(patch_source_words)},
     .translation_count = {len(runtime.translation)},
     .bg_palette = {name}_bg_palette,
     .bg_tiles = {name}_bg_tiles,
+    .bg_patch_source = {name}_bg_patch_source,
     .translation = {name}_translation,
     .layer_a = {name}_layer_a,
     .layer_b = {name}_layer_b,
+    .layer_a_guard = {name}_layer_a_guard,
+    .layer_b_guard = {name}_layer_b_guard,
     .fixed_map = {name}_fixed_map,
     .collision = {name}_collision,
     .bg0_ui_tiles = {name}_bg0_ui_tiles,
@@ -1068,7 +1140,7 @@ const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER
 
 def _actor_descriptor_c(d: ActorDescriptorSpec) -> str:
     return (
-        f'{{ {d.x}, {d.y}, {d.width}, {d.height}, {d.rom_order}, {d.port_to}, '
+        f'{{ {d.x}, {d.y}, {d.width}, {d.height}, {d.rom_order}, {d.port_to}, {d.treetype}, '
         f'{d.num}, {d.actor_class}, {d.subtype}, {d.legs_color}, {d.state}, '
         f'{d.route}, {d.dial}, {d.turn}, {d.level}, {d.setglobal}, {d.visual_index} }}'
     )
@@ -1293,6 +1365,7 @@ typedef struct {{
     s16 height;
     u16 rom_order;
     u16 port_to;
+    s16 treetype;
     u16 num;
     u8 actor_class;
     u8 subtype;
@@ -1395,12 +1468,16 @@ typedef struct {{
     s16 spawn_y;
     u8 player_idle_selector;
     u16 bg_tile_halfwords;
+    u32 bg_patch_source_halfwords;
     u16 translation_count;
     const u16* bg_palette;
     const u16* bg_tiles;
+    const u16* bg_patch_source;
     const u16* translation;
     const u16* layer_a;
     const u16* layer_b;
+    const u16* layer_a_guard;
+    const u16* layer_b_guard;
     const u16* fixed_map;
     const u16* collision;
     const u16* bg0_ui_tiles;
@@ -1443,6 +1520,8 @@ enum {{
     GB_LEVEL_STATIC_SPRITE_COUNT = 4,
     GB_LEVEL_STATIC_SPRITE_HALFWORDS = 128,
     GB_BG0_UI_TILE_COUNT = 87,
+    GB_FGTILE_PATCH_COUNT = 18,
+    GB_FGTILE_PATCH_SOURCE_BASE_32 = 1680,
     GB_TITLE_MAP_WIDTH = 30,
     GB_TITLE_MAP_HEIGHT = 20,
     GB_TITLE_MAP_CELLS = 600,

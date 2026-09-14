@@ -344,6 +344,79 @@ int main(void)
         )
 
 
+    def test_fgtile_patch_copies_descriptor_relative_source_to_literal_bg_vram(self):
+        harness = r"""
+#define _GNU_SOURCE
+#include <assert.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <graveblood/video.h>
+
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {0};
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {0};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
+
+static u16 bg_palette[256];
+static u16 patch_source[46432]; /* (0x23CC0 - 0xD200) / 2 */
+
+static void map_region(unsigned long address, unsigned long size)
+{
+    void* mapped = mmap((void*)address, size, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    assert(mapped == (void*)address);
+    memset(mapped, 0, size);
+}
+
+int main(void)
+{
+    map_region(0x04000000u, 0x2000);
+    map_region(0x05000000u, 0x1000);
+    map_region(0x06000000u, 0x18000);
+    map_region(0x07000000u, 0x1000);
+
+    GbLevelAssets level = {0};
+    level.level_id = 0;
+    level.bg_palette = bg_palette;
+    level.bg_patch_source = patch_source;
+    level.bg_patch_source_halfwords = 46432;
+    gb_video_load_level(&level);
+
+    /* Patch 4 is {dest32=184, src32=3594, count64=26}. */
+    const unsigned source_halfword = (3594u - GB_FGTILE_PATCH_SOURCE_BASE_32) * 16u;
+    const unsigned count_halfwords = 26u * 32u;
+    for(unsigned i = 0; i < count_halfwords; ++i)
+    {
+        patch_source[source_halfword + i] = (u16)(0x4000u + i);
+    }
+    gb_video_apply_fgtile_patch(4);
+    volatile u16* bg_vram = (volatile u16*)0x06000000u;
+    const unsigned destination_halfword = 184u * 16u;
+    assert(bg_vram[destination_halfword] == 0x4000u);
+    assert(bg_vram[destination_halfword + 1] == 0x4001u);
+    assert(bg_vram[destination_halfword + count_halfwords - 1] ==
+           (u16)(0x4000u + count_halfwords - 1u));
+    assert(bg_vram[destination_halfword + count_halfwords] == 0);
+
+    /* Bounds/invalid index are fail-closed. */
+    bg_vram[0] = 0xABCD;
+    gb_video_apply_fgtile_patch(GB_FGTILE_PATCH_COUNT);
+    assert(bg_vram[0] == 0xABCD);
+    level.bg_patch_source_halfwords = 1;
+    gb_video_apply_fgtile_patch(4);
+    assert(bg_vram[destination_halfword] == 0x4000u);
+    return 0;
+}
+"""
+        self.compile_and_run(
+            "mapped_fgtile_patch",
+            harness,
+            [RECON / "source/engine/video.c"],
+        )
+
+
     def test_actor_grass_and_leaf_submission_use_literal_dynamic_obj_vram_and_oam(self):
         harness = r"""
 #define _GNU_SOURCE

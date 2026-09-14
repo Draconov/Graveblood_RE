@@ -12,6 +12,13 @@ enum {
 };
 
 typedef struct {
+    u16 volume;
+    u8 set_volume;
+    u8 replace_music;
+    u8 selector;
+} GbPlayerMusicAction;
+
+typedef struct {
     /* Public pixel anchors used by the clean-room renderer/story layer.
        The original Player object stores the authoritative coordinates at
        +0x08/+0x0C as 24.8 fixed-point; keep both so subpixel motion is not
@@ -40,6 +47,12 @@ typedef struct {
        closure proves no normal public-demo boot can create value 1. This
        state is separate from script_mode and value 2 survives the 9->10 load. */
     u8 bicycle_mode;
+    /* Original Player+0x1CC/+0x1D0 plus global fade counter +0x68.
+       Fgtile turn=2 controllers mutate desired; Player_update fades the
+       reserved music channel until desired becomes applied. */
+    u8 music_selector_desired;
+    u8 music_selector_applied;
+    u8 music_fade_counter;
     s8 pending_sfx_id;
     u16 pending_sfx_volume;
     s8 facing_x;
@@ -54,6 +67,8 @@ typedef struct {
 } GbPlayer;
 
 void gb_player_spawn(GbPlayer* player, s16 x, s16 y);
+void gb_player_music_reset(GbPlayer* player, u8 selector);
+GbPlayerMusicAction gb_player_music_tick(GbPlayer* player);
 void gb_player_queue_vertical_target(GbPlayer* player, s16 target_y);
 void gb_player_queue_social_alignment(GbPlayer* player, s16 anchor_x, s16 anchor_y);
 void gb_player_resolve_queued_motion(GbPlayer* player, const GbLevelAssets* level);
