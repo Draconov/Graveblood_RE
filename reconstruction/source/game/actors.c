@@ -807,6 +807,7 @@ int gb_actor_system_update_physical_fgtile_music_at(GbActorSystem* system, GbPla
 }
 
 int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer* player,
+                                           const GbInput* input, GbInteractionEvent* event,
                                            u8 physical_index)
 {
     GbActor* actor = gb_actor_system_physical_actor_at(system, physical_index);
@@ -827,6 +828,24 @@ int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer
     {
         gb_actor_update_route(actor);
     }
+
+    /* NPC_update owns the fresh-A interaction gate at the NPC's physical
+       object slot.  Keep an already-emitted event latched so overlapping NPCs
+       later in the same object traversal cannot replace the first one. */
+    if(input && event && event->type == GB_INTERACTION_NONE &&
+       (input->pressed & KEY_A) && gb_actor_player_in_interaction(actor, player))
+    {
+        const GbInteractionType type = gb_actor_interaction_type(actor->descriptor->state);
+        if(type != GB_INTERACTION_NONE)
+        {
+            event->type = type;
+            event->actor_index = (u8)(actor - system->actors);
+            event->state = actor->descriptor->state;
+            event->dial = actor->descriptor->dial;
+            event->actor_x = gb_actor_pixel_x(actor);
+            event->actor_y = gb_actor_pixel_y(actor);
+        }
+    }
     return 1;
 }
 
@@ -839,7 +858,7 @@ void gb_actor_system_update_physical_npcs(GbActorSystem* system, const GbPlayer*
     const GbActorLevelIndexSpan span = gb_actor_level_spans[system->level->level_id];
     for(u16 physical_index = 0; physical_index <= span.count; ++physical_index)
     {
-        gb_actor_system_update_physical_npc_at(system, player, (u8)physical_index);
+        gb_actor_system_update_physical_npc_at(system, player, 0, 0, (u8)physical_index);
     }
 }
 

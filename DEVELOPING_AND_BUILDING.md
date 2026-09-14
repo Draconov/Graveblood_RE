@@ -280,3 +280,14 @@ python3 tools/extract_wardrobe_runtime.py \
 
 This writes `reconstruction/data/wardrobe_assets.c` and `data/wardrobe_runtime_assets.csv`. Ordinary ROM builds use the checked-in C data and do not need the reference ROM. The reconstructed browser is browse/preview-only: exact B+SELECT entry, selectors 0..6, fresh-B Level-7 exit, no A-confirm/equip action, and no guessed SFX11 route.
 
+
+## Interactive runtime parity regression gate
+
+When changing gameplay interaction or presentation, include `tools/test_interactive_runtime_parity.py` in the focused gate.  It checks four regressions that were visible in playable-ROM comparison but were previously underrepresented by static asset audits:
+
+1. START closes an already-open PDA through the gameplay-return path.
+2. Normal dialogue uses the recovered 20x6 window / 18x4 interior and original border tile IDs 3/4/5.
+3. Gameplay lighting preserves OBJ pair 4/5 and pairs above 199 instead of overwriting them.
+4. A serialized physical state-2 NPC emits its dialogue event on fresh A while held-A alone does not retrigger it.
+
+Use the exact reference ROM through `GRAVEBLOOD_ROM` for ROM-backed suites.  The visual BG/OAM audits remain useful, but passing them does not substitute for interaction tests or playable-ROM comparison.

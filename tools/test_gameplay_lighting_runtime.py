@@ -177,17 +177,19 @@ int main(void) {{
     bg_palette[4] = 0x001F; bg_palette[5] = 0x03E0;
     bg_palette[200] = 0x7C00; bg_palette[201] = 0x4210;
     gb_video_init();
+    OBJ_COLORS[4] = 0x1357; OBJ_COLORS[5] = 0x2468;
+    OBJ_COLORS[200] = 0x369A; OBJ_COLORS[201] = 0x147B;
     gb_video_load_level(&level);
     assert(OBJ_COLORS[0] == 0x{expected0:04X});
-    assert(OBJ_COLORS[4] == 0x{expected4:04X});
-    assert(OBJ_COLORS[5] == 0x{expected5:04X});
-    assert(OBJ_COLORS[200] == 0x{expected200:04X});
+    assert(OBJ_COLORS[4] == 0x1357);
+    assert(OBJ_COLORS[5] == 0x2468);
+    assert(OBJ_COLORS[200] == 0x369A);
+    assert(OBJ_COLORS[201] == 0x147B);
     assert(OBJ_COLORS[248] == 0x1111); /* outside initial 0..247 transform */
     assert(OBJ_COLORS[255] == 0x2222);
-    OBJ_COLORS[4] = OBJ_COLORS[5] = 0;
     gb_video_gameplay_lighting_tick(1);
-    assert(OBJ_COLORS[4] == 0x{expected4_tick:04X});
-    assert(OBJ_COLORS[5] == 0x{expected5_tick:04X});
+    assert(OBJ_COLORS[4] == 0x1357);
+    assert(OBJ_COLORS[5] == 0x2468);
     return 0;
 }}
 '''
@@ -257,10 +259,10 @@ int main(void) {{
        constructor-zeroed, while the global day/night clock survives. */
     gb_video_load_level(&level);
     gb_video_gameplay_lighting_reset_cursor();
-    OBJ_COLORS[4] = 0;
+    OBJ_COLORS[4] = 0x5A5A;
     OBJ_COLORS[8] = 0x7777;
     gb_video_gameplay_lighting_tick(0);
-    assert(OBJ_COLORS[4] == 0x{expected4:04X});
+    assert(OBJ_COLORS[4] == 0x5A5A);
     assert(OBJ_COLORS[8] == 0x7777);
     return 0;
 }}
@@ -328,14 +330,14 @@ int main(void) {{
     gb_video_load_level(&level);
 
     /* Interaction-active Player_update pauses the world clock, but still
-       advances Player+0x398 and refreshes four OBJ palette entries. */
-    OBJ_COLORS[4] = 0;
+       advances Player+0x398. Pair 4/5 is a reference-ROM skipped OBJ write. */
+    OBJ_COLORS[4] = 0x5A5A;
     gb_video_gameplay_lighting_tick(0);
-    assert(OBJ_COLORS[4] == 0x{expected4:04X});
+    assert(OBJ_COLORS[4] == 0x5A5A);
 
-    /* Tick 62 reaches cursor 248 and updates only 248..251. */
+    /* Tick 62 reaches cursor 248; pairs above 199 are skipped too. */
     for(int i = 1; i < 62; ++i) gb_video_gameplay_lighting_tick(0);
-    assert(OBJ_COLORS[248] == 0x{expected248:04X});
+    assert(OBJ_COLORS[248] == 0x4210);
     assert(OBJ_COLORS[252] == 0x5555);
     assert(OBJ_COLORS[255] == 0x6666);
 

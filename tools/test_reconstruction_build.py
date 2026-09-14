@@ -2703,10 +2703,10 @@ int main(void) {
     tick = press(&pda, &story, KEY_B); assert(pda.active == 1 && !tick.return_requested && tick.sfx_id == -1);
     pda.page = GB_PDA_FRIENDS; pda.friends_cursor = 2; pda.friends_scroll = 3;
     tick = press(&pda, &story, KEY_START);
-    assert(pda.active == 1 && pda.page == GB_PDA_MESSAGES);
-    assert(pda.friends_cursor == 0 && pda.friends_scroll == 0);
-    assert(tick.rerender && tick.sfx_id == 6 && tick.stop_reserved_audio);
+    assert(pda.active == 0);
+    assert(tick.return_requested && !tick.rerender && tick.sfx_id == 7);
 
+    gb_pda_open(&pda);
     pda.return_pending = 1;
     tick = press(&pda, &story, 0);
     assert(tick.return_requested && tick.sfx_id == 7);
@@ -3351,7 +3351,7 @@ typedef int32_t s32;
         self.assertIn('tick.gameplay_level', game)
         self.assertNotIn('gb_enter_level(&world, &player, &actors, &story, GB_START_LEVEL);', game)
 
-    def test_game_pda_scene_opens_on_start_reopens_and_preserves_latent_return_path(self):
+    def test_game_pda_scene_opens_on_start_and_start_closes_through_return_path(self):
         scene_h = (ROOT / 'reconstruction/include/graveblood/scene.h').read_text(encoding='utf-8')
         game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
         self.assertIn('GB_SCENE_PDA', scene_h)

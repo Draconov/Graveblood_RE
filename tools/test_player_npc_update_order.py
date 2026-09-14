@@ -63,13 +63,13 @@ class PlayerNpcUpdateOrderTests(unittest.TestCase):
         compact = ' '.join(game.split())
         self.assertIn('gb_actor_system_update_overlays(&actors, &player, &input, &interaction);', game,
                       'scoped story-overlay update API is missing')
-        self.assertIn('gb_actor_system_update_physical_npc_at( &actors, &player, physical_index);', compact,
+        self.assertIn('gb_actor_system_update_physical_npc_at( &actors, &player, &input, &interaction, physical_index);', compact,
                       'exact physical-index NPC update API is missing')
         self.assertNotIn('gb_actor_system_update_physical_npcs(&actors, &player);', game,
                          'bulk physical-NPC bucket must not replace serialized traversal')
         player_update = compact.index('gb_player_update(&player, world.assets, &input);')
         overlay_update = compact.index('gb_actor_system_update_overlays(&actors, &player, &input, &interaction);')
-        physical_update = compact.index('gb_actor_system_update_physical_npc_at( &actors, &player, physical_index);')
+        physical_update = compact.index('gb_actor_system_update_physical_npc_at( &actors, &player, &input, &interaction, physical_index);')
         self.assertLess(overlay_update, player_update)
         self.assertLess(player_update, physical_update,
                         'physical NPC motion/proximity must consume same-frame Player state')

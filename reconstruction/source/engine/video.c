@@ -22,6 +22,21 @@
 #define GB_STORY_UI_MAP_Y 17
 #define GB_STORY_UI_WIDTH (GB_STORY_UI_COLUMNS * 8)
 #define GB_STORY_UI_HEIGHT (GB_STORY_UI_ROWS * 8)
+#define GB_DIALOGUE_WINDOW_MAP_X 1
+#define GB_DIALOGUE_WINDOW_MAP_Y 13
+#define GB_DIALOGUE_WINDOW_COLUMNS 20
+#define GB_DIALOGUE_WINDOW_ROWS 6
+#define GB_DIALOGUE_TEXT_COLUMNS 18
+#define GB_DIALOGUE_TEXT_ROWS 4
+#define GB_DIALOGUE_TEXT_MAP_X 2
+#define GB_DIALOGUE_TEXT_MAP_Y 14
+#define GB_DIALOGUE_TEXT_WIDTH (GB_DIALOGUE_TEXT_COLUMNS * 8)
+#define GB_DIALOGUE_TEXT_HEIGHT (GB_DIALOGUE_TEXT_ROWS * 8)
+#define GB_DIALOGUE_BORDER_VERTICAL_TILE 3
+#define GB_DIALOGUE_BORDER_CORNER_TILE 4
+#define GB_DIALOGUE_BORDER_HORIZONTAL_TILE 5
+#define GB_BG_MAP_HFLIP (1u << 10)
+#define GB_BG_MAP_VFLIP (1u << 11)
 #define GB_PDA_TEXT_MAP_Y 1
 #define GB_PDA_TEXT_WIDTH (GB_PDA_TEXT_COLUMNS * 8)
 #define GB_PDA_TEXT_HEIGHT (GB_PDA_TEXT_ROWS * 8)
@@ -42,6 +57,7 @@
 
 static const GbLevelAssets* gb_video_level;
 static u8 gb_story_ui_pixels[GB_STORY_UI_WIDTH * GB_STORY_UI_HEIGHT];
+static u8 gb_dialogue_text_pixels[GB_DIALOGUE_TEXT_WIDTH * GB_DIALOGUE_TEXT_HEIGHT];
 static u8 gb_pda_text_pixels[GB_PDA_TEXT_WIDTH * GB_PDA_TEXT_HEIGHT];
 static u8 gb_monster_animation_counter;
 
@@ -183,18 +199,6 @@ static u16 gb_gameplay_lighting_color(u16 source, const GbGameplayLighting* ligh
     return result;
 }
 
-static const u16* gb_gameplay_lighting_source_pair(u16 pair_index)
-{
-    /* 0x08005272..0x08005692: pair 4/5 and every pair starting above 199
-       source colors from the active graphics descriptor's BG palette.
-       All other pairs use the immutable OBJ source at 0x08366E58. */
-    if(gb_video_level && (pair_index == 4u || pair_index > 199u))
-    {
-        return gb_video_level->bg_palette;
-    }
-    return gb_actor_obj_lighting_source;
-}
-
 static void gb_video_transform_gameplay_obj_palette(u16 start, u16 count, u32 clock)
 {
     if(! gb_video_level)
@@ -209,11 +213,17 @@ static void gb_video_transform_gameplay_obj_palette(u16 start, u16 count, u32 cl
         {
             break;
         }
-        const u16* source = gb_gameplay_lighting_source_pair(pair);
-        OBJ_COLORS[pair] = gb_gameplay_lighting_color(source[pair], &light);
+        /* 0x08005272..0x08005692 jumps around the OBJ write for pair 4/5
+           and for every pair starting above 199.  These entries retain the
+           palette contents already staged by the active graphics object. */
+        if(pair == 4u || pair > 199u)
+        {
+            continue;
+        }
+        OBJ_COLORS[pair] = gb_gameplay_lighting_color(gb_actor_obj_lighting_source[pair], &light);
         if(pair < 255u)
         {
-            OBJ_COLORS[pair + 1u] = gb_gameplay_lighting_color(source[pair + 1u], &light);
+            OBJ_COLORS[pair + 1u] = gb_gameplay_lighting_color(gb_actor_obj_lighting_source[pair + 1u], &light);
         }
     }
 }
@@ -1178,6 +1188,128 @@ static void gb_story_ui_text(const char* text, int* x, int* y)
     }
 }
 
+static void gb_dialogue_ui_fill(u8 value)
+{
+    for(int i = 0; i < GB_DIALOGUE_TEXT_WIDTH * GB_DIALOGUE_TEXT_HEIGHT; ++i)
+    {
+        gb_dialogue_text_pixels[i] = value;
+    }
+}
+
+static void gb_dialogue_ui_put_glyph(int x, int y, unsigned code)
+{
+    if(code >= GB_FONT_GLYPH_COUNT || y < 0 || y + 8 > GB_DIALOGUE_TEXT_HEIGHT)
+    {
+        return;
+    }
+    const GbFontGlyph* glyph = &gb_font_glyphs[code];
+    for(int py = 0; py < 8; ++py)
+    {
+        const u16 mask = glyph->rows[py];
+        for(int px = 0; px < glyph->pixel_width; ++px)
+        {
+            const int dx = x + px;
+            if(dx >= 0 && dx < GB_DIALOGUE_TEXT_WIDTH)
+            {
+                gb_dialogue_text_pixels[(y + py) * GB_DIALOGUE_TEXT_WIDTH + dx] =
+                    (mask & (u16)(1u << px)) ? GB_TEXT_FOREGROUND_INDEX : GB_TEXT_BACKGROUND_INDEX;
+            }
+        }
+    }
+}
+
+static void gb_dialogue_ui_newline(int* x, int* y)
+{
+    *x = 0;
+    *y += 8;
+}
+
+static void gb_dialogue_ui_text(const char* text, int* x, int* y)
+{
+    if(! text)
+    {
+        return;
+    }
+    while(*text && *y < GB_DIALOGUE_TEXT_HEIGHT)
+    {
+        const unsigned code = (unsigned char)*text++;
+        if(code == '\n')
+        {
+            gb_dialogue_ui_newline(x, y);
+            continue;
+        }
+        const int width = gb_story_ui_glyph_width(code);
+        if(*x + width > GB_DIALOGUE_TEXT_WIDTH)
+        {
+            gb_dialogue_ui_newline(x, y);
+            if(*y >= GB_DIALOGUE_TEXT_HEIGHT)
+            {
+                break;
+            }
+        }
+        gb_dialogue_ui_put_glyph(*x, *y, code);
+        *x += width;
+    }
+}
+
+static void gb_dialogue_ui_upload(void)
+{
+    if(! gb_video_level || ! gb_video_level->bg0_ui_tiles)
+    {
+        return;
+    }
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+
+    /* Window 0x08009Cxx: (1,13), 20x6. Tiles 3/4/5 are the original
+       vertical edge, corner and horizontal edge artwork. */
+    map[GB_DIALOGUE_WINDOW_MAP_Y * 32 + GB_DIALOGUE_WINDOW_MAP_X] = GB_DIALOGUE_BORDER_CORNER_TILE;
+    map[GB_DIALOGUE_WINDOW_MAP_Y * 32 + GB_DIALOGUE_WINDOW_MAP_X + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP;
+    map[(GB_DIALOGUE_WINDOW_MAP_Y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 + GB_DIALOGUE_WINDOW_MAP_X] =
+        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_VFLIP;
+    map[(GB_DIALOGUE_WINDOW_MAP_Y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
+        GB_DIALOGUE_WINDOW_MAP_X + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP | GB_BG_MAP_VFLIP;
+
+    for(int col = 1; col < GB_DIALOGUE_WINDOW_COLUMNS - 1; ++col)
+    {
+        map[GB_DIALOGUE_WINDOW_MAP_Y * 32 + GB_DIALOGUE_WINDOW_MAP_X + col] =
+            GB_DIALOGUE_BORDER_HORIZONTAL_TILE;
+        map[(GB_DIALOGUE_WINDOW_MAP_Y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
+            GB_DIALOGUE_WINDOW_MAP_X + col] = GB_DIALOGUE_BORDER_HORIZONTAL_TILE | GB_BG_MAP_VFLIP;
+    }
+    for(int row = 1; row < GB_DIALOGUE_WINDOW_ROWS - 1; ++row)
+    {
+        map[(GB_DIALOGUE_WINDOW_MAP_Y + row) * 32 + GB_DIALOGUE_WINDOW_MAP_X] =
+            GB_DIALOGUE_BORDER_VERTICAL_TILE;
+        map[(GB_DIALOGUE_WINDOW_MAP_Y + row) * 32 +
+            GB_DIALOGUE_WINDOW_MAP_X + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+            GB_DIALOGUE_BORDER_VERTICAL_TILE | GB_BG_MAP_HFLIP;
+    }
+
+    for(int row = 0; row < GB_DIALOGUE_TEXT_ROWS; ++row)
+    {
+        for(int col = 0; col < GB_DIALOGUE_TEXT_COLUMNS; ++col)
+        {
+            const int slot = row * GB_DIALOGUE_TEXT_COLUMNS + col;
+            const u16 tile_id = gb_video_level->bg0_ui_tiles[slot];
+            volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
+            map[(GB_DIALOGUE_TEXT_MAP_Y + row) * 32 + GB_DIALOGUE_TEXT_MAP_X + col] = tile_id;
+            for(int py = 0; py < 8; ++py)
+            {
+                for(int pair = 0; pair < 4; ++pair)
+                {
+                    const int px = col * 8 + pair * 2;
+                    const int source_y = row * 8 + py;
+                    const u8 lo = gb_dialogue_text_pixels[source_y * GB_DIALOGUE_TEXT_WIDTH + px];
+                    const u8 hi = gb_dialogue_text_pixels[source_y * GB_DIALOGUE_TEXT_WIDTH + px + 1];
+                    tile[py * 4 + pair] = (u16)(lo | ((u16)hi << 8));
+                }
+            }
+        }
+    }
+}
+
 static void gb_story_ui_upload(void)
 {
     if(! gb_video_level || ! gb_video_level->bg0_ui_tiles)
@@ -1218,6 +1350,13 @@ void gb_video_clear_story_ui(void)
             map[(GB_STORY_UI_MAP_Y + row) * 32 + col] = 0;
         }
     }
+    for(int row = 0; row < GB_DIALOGUE_WINDOW_ROWS; ++row)
+    {
+        for(int col = 0; col < GB_DIALOGUE_WINDOW_COLUMNS; ++col)
+        {
+            map[(GB_DIALOGUE_WINDOW_MAP_Y + row) * 32 + GB_DIALOGUE_WINDOW_MAP_X + col] = 0;
+        }
+    }
 }
 
 static void gb_story_ui_begin(void)
@@ -1235,14 +1374,14 @@ static void gb_story_ui_draw_dialogue(const GbStoryRuntime* story)
     }
     int x = 0;
     int y = 0;
-    gb_story_ui_begin();
+    gb_dialogue_ui_fill(GB_TEXT_BACKGROUND_INDEX);
     if(record->speaker && record->speaker[0])
     {
-        gb_story_ui_text(record->speaker, &x, &y);
-        gb_story_ui_text(": ", &x, &y);
+        gb_dialogue_ui_text(record->speaker, &x, &y);
+        gb_dialogue_ui_newline(&x, &y);
     }
-    gb_story_ui_text(record->text, &x, &y);
-    gb_story_ui_upload();
+    gb_dialogue_ui_text(record->text, &x, &y);
+    gb_dialogue_ui_upload();
 }
 
 static const char* gb_story_ui_topic(const GbStoryRuntime* story)

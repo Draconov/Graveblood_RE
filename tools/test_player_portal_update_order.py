@@ -76,7 +76,7 @@ class PlayerPortalUpdateOrderTests(unittest.TestCase):
         self.assertNotIn('gb_actor_system_update_physical_npcs(&actors, &player)', compact)
         self.assertNotIn('GB_PORTAL_PHASE_POST_PLAYER', compact)
         self.assertIn('gb_player_physical_indices[level_id]', compact)
-        self.assertIn('gb_actor_system_update_physical_npc_at( &actors, &player, physical_index)', compact)
+        self.assertIn('gb_actor_system_update_physical_npc_at( &actors, &player, &input, &interaction, physical_index)', compact)
         self.assertIn('gb_portal_try_activate_physical_index( world.assets, &player, &input, physical_index)', compact)
 
 

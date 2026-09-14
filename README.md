@@ -1026,3 +1026,16 @@ This workspace intentionally separates:
 - **candidates** — plausible interpretations that still need another proof step.
 
 That distinction matters if this work later becomes the basis for a finished Graveblood reconstruction: recovered facts should not quietly turn into invented “original” design.
+
+## Interactive runtime parity checkpoint (2026-09-14)
+
+A direct comparison of the playable reconstruction against the public-demo ROM exposed several interaction/presentation gaps that isolated BG/OAM asset audits did not catch.  This checkpoint therefore treats the uploaded playable ROM and the canonical `0.0.1.1.5.2` demo as the acceptance target for the interactive shell.
+
+The runtime now restores four ROM-backed behaviors together:
+
+- **PDA START return:** pressing START while the PDA is already open exits back to gameplay through the existing return path and SFX 7 instead of reopening/resetting the PDA.
+- **Normal dialogue window:** normal dialogue uses the recovered `(1,13)` 20x6-tile window, with an 18x4-tile text interior and the original BG border tiles 3/4/5 plus hardware flip bits.  Speaker text occupies its own line before body text.
+- **Gameplay OBJ lighting skip ranges:** the palette-lighting pass leaves OBJ pair 4/5 and every pair starting above 199 untouched.  The reference branches around the OBJ write for these ranges; treating the level BG palette as a substitute OBJ source incorrectly recolored Player pixels.
+- **Physical NPC fresh-A interaction:** state 1/2/4 interaction emission is performed by the NPC at its serialized physical update slot.  The earlier physical-order refactor had preserved NPC motion but accidentally left interaction scanning in the obsolete bulk updater, so many normal NPCs could animate but never talk/socialize/collect.
+
+The Player sheet itself is not replaced in this checkpoint: the packed 24-frame sheet, initial bank-15 selection and initial source frame are already reference-derived.  The proven live Player presentation correction here is the OBJ-lighting skip behavior above.  Further appearance differences should be diagnosed from actual runtime state rather than by swapping artwork blindly.

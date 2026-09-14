@@ -71,10 +71,10 @@ GbPdaTick gb_pda_update(GbPdaRuntime* pda, const GbStoryState* story, const GbIn
     }
 
     if(input->pressed & KEY_START) {
-        gb_pda_open(pda);
-        tick.rerender = 1;
-        tick.stop_reserved_audio = 1;
-        tick.sfx_id = 6;
+        pda->active = 0;
+        pda->return_pending = 0;
+        tick.return_requested = 1;
+        tick.sfx_id = 7;
         return tick;
     }
 

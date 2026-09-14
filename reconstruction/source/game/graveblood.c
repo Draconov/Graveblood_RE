@@ -340,7 +340,24 @@ void gb_game_run(void)
                         gb_video_apply_fgtile_patch(fgtile_patch);
                     }
                     gb_actor_system_update_physical_npc_at(
-                        &actors, &player, physical_index);
+                        &actors, &player, &input, &interaction, physical_index);
+                    if(interaction.type != GB_INTERACTION_NONE)
+                    {
+                        if(interaction.type == GB_INTERACTION_SOCIAL)
+                        {
+                            gb_player_queue_social_alignment(&player, interaction.actor_x, interaction.actor_y);
+                            gb_player_resolve_queued_motion(&player, world.assets);
+                        }
+                        else if(interaction.type == GB_INTERACTION_DIALOGUE &&
+                                interaction.actor_index < actors.count &&
+                                actors.actors[interaction.actor_index].descriptor &&
+                                actors.actors[interaction.actor_index].descriptor->legs_color != 1)
+                        {
+                            gb_player_queue_vertical_target(&player, interaction.actor_y);
+                            gb_player_resolve_queued_motion(&player, world.assets);
+                        }
+                        gb_story_handle_interaction(&story, &actors, &interaction);
+                    }
                     const int actor_sfx = gb_actor_system_take_pending_sfx(&actors);
                     if(actor_sfx >= 0)
                     {

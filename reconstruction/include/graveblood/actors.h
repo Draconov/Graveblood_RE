@@ -91,6 +91,7 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
 void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* player,
                                      const GbInput* input, GbInteractionEvent* event);
 int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer* player,
+                                           const GbInput* input, GbInteractionEvent* event,
                                            u8 physical_index);
 int gb_actor_system_update_physical_fgtile_at(GbActorSystem* system, const GbPlayer* player,
                                               u8 physical_index, u8* patch_index);
