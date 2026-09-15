@@ -65,6 +65,13 @@
 #define GB_WARDROBE_BG_MAP_HEIGHT 8
 #define GB_WARDROBE_PREVIEW_Y 48
 #define GB_WARDROBE_PREVIEW_LOGICAL_BASE 0x62
+#define GB_WARDROBE_TEXT_COLUMNS 8
+#define GB_WARDROBE_TITLE_MAP_X 5
+#define GB_WARDROBE_TITLE_MAP_Y 2
+#define GB_WARDROBE_LABEL_MAP_X 3
+#define GB_WARDROBE_LABEL_MAP_Y 15
+#define GB_WARDROBE_EXIT_MAP_X 3
+#define GB_WARDROBE_EXIT_MAP_Y 18
 
 static const GbLevelAssets* gb_video_level;
 static u8 gb_story_ui_pixels[GB_STORY_UI_WIDTH * GB_STORY_UI_HEIGHT];
@@ -97,6 +104,8 @@ static const GbGameplayLighting gb_gameplay_lighting_table[13] = {
 static void gb_story_ui_begin(void);
 static void gb_story_ui_text(const char* text, int* x, int* y);
 static void gb_story_ui_newline(int* x, int* y);
+static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, u16 slot_base);
+static int gb_story_ui_glyph_width(unsigned code);
 
 static void gb_copy_u16(volatile u16* dst, const u16* src, int count)
 {
@@ -502,27 +511,55 @@ void gb_video_load_title(void)
     gb_video_title_set_prompt_visible(1);
 }
 
-static void gb_wardrobe_ui_upload(void)
+static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, u16 slot_base)
 {
-    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
-    for(int row = 0; row < GB_STORY_UI_ROWS; ++row)
+    if(! gb_video_level || ! gb_video_level->bg0_ui_tiles ||
+       slot_base + GB_WARDROBE_TEXT_COLUMNS > GB_BG0_UI_TILE_COUNT)
     {
-        for(int col = 0; col < GB_STORY_UI_COLUMNS; ++col)
+        return;
+    }
+
+    for(int i = 0; i < GB_SOCIAL_TEXT_WIDTH * 8; ++i)
+    {
+        gb_social_text_pixels[i] = 0;
+    }
+
+    int cursor_x = 0;
+    while(text && *text && cursor_x < GB_SOCIAL_TEXT_WIDTH)
+    {
+        const unsigned code = (unsigned char)*text++;
+        const int width = gb_story_ui_glyph_width(code);
+        if(code >= GB_FONT_GLYPH_COUNT || cursor_x + width > GB_SOCIAL_TEXT_WIDTH)
         {
-            const int slot = row * GB_STORY_UI_COLUMNS + col;
-            const u16 tile_id = (u16)(1 + slot);
-            volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
-            map[row * 32 + col] = tile_id;
-            for(int py = 0; py < 8; ++py)
+            break;
+        }
+        const GbFontGlyph* glyph = &gb_font_glyphs[code];
+        for(int py = 0; py < 8; ++py)
+        {
+            const u16 mask = glyph->rows[py];
+            for(int px = 0; px < glyph->pixel_width; ++px)
             {
-                for(int pair = 0; pair < 4; ++pair)
-                {
-                    const int px = col * 8 + pair * 2;
-                    const int source_y = row * 8 + py;
-                    const u8 lo = gb_story_ui_pixels[source_y * GB_STORY_UI_WIDTH + px];
-                    const u8 hi = gb_story_ui_pixels[source_y * GB_STORY_UI_WIDTH + px + 1];
-                    tile[py * 4 + pair] = (u16)(lo | ((u16)hi << 8));
-                }
+                gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + cursor_x + px] =
+                    (mask & (u16)(1u << px)) ? 6 : 0;
+            }
+        }
+        cursor_x += width;
+    }
+
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+    for(u16 col = 0; col < GB_WARDROBE_TEXT_COLUMNS; ++col)
+    {
+        const u16 tile_id = gb_video_level->bg0_ui_tiles[slot_base + col];
+        volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
+        map[map_y * 32 + map_x + col] = tile_id;
+        for(int py = 0; py < 8; ++py)
+        {
+            for(int pair = 0; pair < 4; ++pair)
+            {
+                const int px = col * 8 + pair * 2;
+                const u8 lo = gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + px];
+                const u8 hi = gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + px + 1];
+                tile[py * 4 + pair] = (u16)(lo | ((u16)hi << 8));
             }
         }
     }
@@ -551,15 +588,13 @@ void gb_video_draw_wardrobe(u8 selector)
         }
     }
 
-    gb_story_ui_begin();
-    int tx = 0;
-    int ty = 0;
-    gb_story_ui_text("Wardrobe", &tx, &ty);
-    gb_story_ui_newline(&tx, &ty);
-    gb_story_ui_text(gb_wardrobe_labels[selector], &tx, &ty);
-    gb_story_ui_newline(&tx, &ty);
-    gb_story_ui_text("(B) to exit", &tx, &ty);
-    gb_wardrobe_ui_upload();
+    gb_wardrobe_text_upload_row("Wardrobe", GB_WARDROBE_TITLE_MAP_X,
+                                GB_WARDROBE_TITLE_MAP_Y, 0);
+    gb_wardrobe_text_upload_row(gb_wardrobe_labels[selector],
+                                GB_WARDROBE_LABEL_MAP_X,
+                                GB_WARDROBE_LABEL_MAP_Y, 8);
+    gb_wardrobe_text_upload_row("(B) to exit", GB_WARDROBE_EXIT_MAP_X,
+                                GB_WARDROBE_EXIT_MAP_Y, 16);
 
     gb_video_hide_all_oam();
     for(int i = 0; i < GB_WARDROBE_CHOICE_COUNT; ++i)
@@ -1348,8 +1383,10 @@ static void gb_dialogue_ui_upload_at(int window_x, int window_y)
     }
     volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
 
-    /* Window 0x08009Cxx: (1,13), 20x6. Tiles 3/4/5 are the original
-       vertical edge, corner and horizontal edge artwork. */
+    /* Normal dialogue UI parity: fixed 20x6 BG0 window at map (1,13),
+       with the 18x4 text area beginning at (2,14).  Tiles 3/4/5 are the
+       original vertical edge, corner and horizontal edge artwork, and the
+       dialogue portrait starts immediately to the right at screen x=168. */
     map[window_y * 32 + window_x] = GB_DIALOGUE_BORDER_CORNER_TILE;
     map[window_y * 32 + window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
         GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP;

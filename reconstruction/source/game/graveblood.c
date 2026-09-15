@@ -144,10 +144,7 @@ void gb_game_run(void)
                 gb_scene_request_gameplay(&scene, 7, 10);
                 continue;
             }
-            if(wardrobe_tick.selector_changed)
-            {
-                gb_video_draw_wardrobe(wardrobe.selector);
-            }
+            gb_video_draw_wardrobe(wardrobe.selector);
             continue;
         }
 
