@@ -210,11 +210,25 @@ class WardrobeVideoSourceTests(unittest.TestCase):
         self.assertIn('gb_wardrobe_bg_pages[selector]', source)
         self.assertIn('gb_wardrobe_preview_tiles[i]', source)
         self.assertIn('gb_wardrobe_labels[selector]', source)
+        self.assertIn('#define GB_WARDROBE_TITLE_MAP_X 6', source)
+        self.assertIn('#define GB_WARDROBE_TITLE_MAP_Y 2', source)
+        self.assertIn('#define GB_WARDROBE_TITLE_COLUMNS 8', source)
+        self.assertIn('#define GB_WARDROBE_LABEL_MAP_X 5', source)
+        self.assertIn('#define GB_WARDROBE_LABEL_MAP_Y 14', source)
+        self.assertIn('#define GB_WARDROBE_LABEL_COLUMNS 15', source)
+        self.assertIn('#define GB_WARDROBE_EXIT_MAP_X 6', source)
+        self.assertIn('#define GB_WARDROBE_EXIT_MAP_Y 17', source)
+        self.assertIn('#define GB_WARDROBE_EXIT_COLUMNS 15', source)
+        self.assertIn('#define GB_WARDROBE_TEXT_FOREGROUND_INDEX 5', source)
         self.assertIn('gb_wardrobe_text_upload_row("Wardrobe"', source)
         self.assertIn('gb_wardrobe_text_upload_row(gb_wardrobe_labels[selector]', source)
         self.assertIn('gb_wardrobe_text_upload_row("(B) to exit"', source)
         wardrobe_draw = source[source.index('void gb_video_draw_wardrobe(u8 selector)'):source.index('void gb_video_load_wardrobe(void)')]
         self.assertNotIn('gb_story_ui_begin();', wardrobe_draw)
+        self.assertNotIn('GB_WARDROBE_BG_MAP_', wardrobe_draw)
+        self.assertIn('GB_WARDROBE_SELECTOR_LOGICAL_TILE 0x4A', source)
+        self.assertIn('const int selector_x = (selector + 1) * 16;', wardrobe_draw)
+        self.assertIn('GB_WARDROBE_CHOICE_COUNT * 2 + row', wardrobe_draw)
         self.assertIn('GB_WARDROBE_BG_PAGE_HALFWORDS', source)
         self.assertIn('GB_OBJ_256_COLOR', source)
         self.assertIn('gb_video_restore_gameplay_obj_assets', source)
@@ -223,12 +237,177 @@ class WardrobeVideoSourceTests(unittest.TestCase):
         load = source[source.index('void gb_video_load_wardrobe(void)'):source.index('static void gb_pda_text_clear(void)')]
         self.assertNotIn('OBJ_1D_MAP', load, 'original Wardrobe stays in gameplay 2D OBJ mapping')
         self.assertNotIn('REG_DISPCNT =', load, 'original Wardrobe path does not rewrite DISPCNT')
-        self.assertNotIn('gb_copy_u16(OBJ_COLORS', load, 'Wardrobe inherits the live gameplay OBJ palette')
+        self.assertNotIn('BGCTRL[', load, 'Wardrobe preserves live BG control state')
+        self.assertNotIn('BG_COLORS', load, 'Wardrobe preserves the live gameplay palette')
+        self.assertNotIn('gb_video_set_camera', load, 'Wardrobe preserves the live gameplay camera')
+        self.assertNotIn('gb_clear_u16', load, 'Wardrobe must not erase the live gameplay tilemaps')
         self.assertNotIn('gb_video_level =', load, 'Wardrobe must preserve the active gameplay lighting source')
         self.assertIn('#define GB_WARDROBE_PREVIEW_LOGICAL_BASE 0x62', source)
         self.assertIn('gb_stage_8bpp_16x32(logical_root, gb_wardrobe_preview_tiles[i]);', source)
         self.assertIn('(u16)(logical_root * 2u)', source)
         self.assertIn('(u16)((logical_root + 32u) * 2u)', source)
+
+
+    def test_hardware_style_wardrobe_preserves_scene_and_draws_choices_highlight_and_text(self):
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16;
+typedef uint32_t u32; typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512];
+extern volatile u16 gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)((volatile uint8_t*)gb_test_vram + 0x10000 + ((n) * 32)))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#endif
+"""
+        ui_values = ','.join(str(500 + i) for i in range(87))
+        harness = rf"""
+#include <assert.h>
+#include <string.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const u16 gb_actor_obj_lighting_source[GB_ACTOR_OBJ_LIGHTING_SOURCE_COUNT] = {{0}};
+const u16 gb_actor_obj_high_palette[GB_ACTOR_OBJ_HIGH_PALETTE_COUNT] = {{0}};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {{0}};
+const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {{0}};
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {{0}};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {{0}};
+const u16 gb_title_obj_tiles[GB_TITLE_OBJ_TILE_HALFWORDS] = {{
+    [0x4A * 32] = 0xBEEF,
+    [0x5A * 32] = 0xCAFE,
+}};
+const u16 gb_wardrobe_bg_pages[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_BG_PAGE_HALFWORDS] = {{
+    {{ [0] = 0xA111 }}, {{ [0] = 0xA222 }}, {{ [0] = 0xA333 }}, {{ [0] = 0xA444 }},
+    {{ [0] = 0xA555 }}, {{ [0] = 0xA666 }}, {{ [0] = 0xA777 }},
+}};
+const u16 gb_wardrobe_preview_tiles[GB_WARDROBE_CHOICE_COUNT][GB_WARDROBE_PREVIEW_HALFWORDS] = {{
+    {{ [0] = 0x1101 }}, {{ [0] = 0x1102 }}, {{ [0] = 0x1103 }}, {{ [0] = 0x1104 }},
+    {{ [0] = 0x1105 }}, {{ [0] = 0x1106 }}, {{ [0] = 0x1107 }},
+}};
+const char* const gb_wardrobe_labels[GB_WARDROBE_CHOICE_COUNT] = {{
+    "Favorite Skirt", "Not for demo", "Not for demo", "Not for demo",
+    "Not for demo", "Not for demo", "Not for demo"
+}};
+const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT] = {{
+    ['W'] = {{ 1, {{1,1,1,1,1,1,1,1}} }},
+    ['F'] = {{ 1, {{1,1,1,1,1,1,1,1}} }},
+    ['('] = {{ 1, {{1,1,1,1,1,1,1,1}} }},
+}};
+static const u16 ui_tiles[GB_BG0_UI_TILE_COUNT] = {{ {ui_values} }};
+static const u16 palette[256] = {{0}};
+
+int main(void)
+{{
+    GbLevelAssets level = {{0}};
+    level.level_id = 7;
+    level.bg_palette = palette;
+    level.bg0_ui_tiles = ui_tiles;
+    gb_video_load_level(&level);
+
+    volatile u16* map0 = (volatile u16*)MAP_BASE_ADR(27);
+    map0[4 * 32 + 7] = 0x5AA5;
+    map0[10 * 32 + 20] = 0x6BB6;
+    gb_test_bg_offset[0].x = 123;
+    gb_test_bg_offset[0].y = 45;
+    gb_test_bgctrl[0] = 0x1A2B;
+
+    gb_video_load_wardrobe();
+
+    /* Entering Wardrobe must preserve the live camera/BG state and room map. */
+    assert(gb_test_bg_offset[0].x == 123);
+    assert(gb_test_bg_offset[0].y == 45);
+    assert(gb_test_bgctrl[0] == 0x1A2B);
+    assert(map0[4 * 32 + 7] == 0x5AA5);
+    assert(map0[10 * 32 + 20] == 0x6BB6);
+
+    /* Selector 0 swaps only the 0x2000-byte BG graphics page at 0x06003000. */
+    assert(gb_test_vram[0x3000 / 2] == 0xA111);
+
+    /* Exact text windows: title 8 tiles, label 15, exit 15. */
+    assert(map0[2 * 32 + 6] == ui_tiles[0]);
+    assert(map0[2 * 32 + 13] == ui_tiles[7]);
+    assert(map0[14 * 32 + 5] == ui_tiles[8]);
+    assert(map0[14 * 32 + 19] == ui_tiles[22]);
+    assert(map0[17 * 32 + 6] == ui_tiles[23]);
+    assert(map0[17 * 32 + 20] == ui_tiles[37]);
+    assert(gb_test_vram[ui_tiles[0] * 32] == 0x0005); /* yellow index 5 */
+
+    /* Seven outfit choices are visible at x=16..112, y=48/64. */
+    for(int i = 0; i < 7; ++i)
+    {{
+        const int top = i * 2;
+        const int bottom = top + 1;
+        const u16 root = (u16)(0x62 + i * 2);
+        assert((gb_test_oam[top * 4] & 0x00FF) == 48);
+        assert((gb_test_oam[top * 4 + 1] & 0x01FF) == (u16)(16 + i * 16));
+        assert((gb_test_oam[top * 4 + 2] & 0x03FF) == root * 2u);
+        assert((gb_test_oam[bottom * 4] & 0x00FF) == 64);
+        assert((gb_test_oam[bottom * 4 + 1] & 0x01FF) == (u16)(16 + i * 16));
+        assert((gb_test_oam[bottom * 4 + 2] & 0x03FF) == (root + 32u) * 2u);
+    }}
+
+    /* Selector highlight is the reference baseline OBJ tile 0x4A, two cells. */
+    assert((gb_test_oam[14 * 4] & 0x00FF) == 48);
+    assert((gb_test_oam[15 * 4] & 0x00FF) == 64);
+    assert((gb_test_oam[14 * 4 + 1] & 0x01FF) == 16);
+    assert((gb_test_oam[15 * 4 + 1] & 0x01FF) == 16);
+    assert((gb_test_oam[14 * 4 + 2] & 0x03FF) == 0x4A * 2u);
+    assert((gb_test_oam[15 * 4 + 2] & 0x03FF) == 0x4A * 2u);
+    volatile u16* obj = gb_test_vram + 0x10000 / 2;
+    assert(obj[0x4A * 32] == 0xBEEF);
+    assert(obj[0x5A * 32] == 0xCAFE);
+
+    gb_video_draw_wardrobe(3);
+    assert(gb_test_vram[0x3000 / 2] == 0xA444);
+    assert((gb_test_oam[14 * 4 + 1] & 0x01FF) == 64);
+    assert((gb_test_oam[15 * 4 + 1] & 0x01FF) == 64);
+    return 0;
+}}
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'wardrobe_video.c').write_text(harness, encoding='utf-8')
+            exe = td / 'wardrobe_video'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(td / 'wardrobe_video.c'), '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
 
 
 class WardrobeGameIntegrationTests(unittest.TestCase):

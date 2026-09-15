@@ -58,25 +58,27 @@
 #define GB_TITLE_PROMPT_X 9
 #define GB_TITLE_PROMPT_Y 9
 #define GB_WARDROBE_BG_VRAM_OFFSET 0x3000
-#define GB_WARDROBE_BG_TILE_BASE (GB_WARDROBE_BG_VRAM_OFFSET / 64)
-#define GB_WARDROBE_BG_MAP_X 7
-#define GB_WARDROBE_BG_MAP_Y 4
-#define GB_WARDROBE_BG_MAP_WIDTH 16
-#define GB_WARDROBE_BG_MAP_HEIGHT 8
 #define GB_WARDROBE_PREVIEW_Y 48
 #define GB_WARDROBE_PREVIEW_LOGICAL_BASE 0x62
-#define GB_WARDROBE_TEXT_COLUMNS 8
-#define GB_WARDROBE_TITLE_MAP_X 5
+#define GB_WARDROBE_SELECTOR_LOGICAL_TILE 0x4A
+#define GB_WARDROBE_TEXT_COLUMNS_MAX 15
+#define GB_WARDROBE_TEXT_WIDTH (GB_WARDROBE_TEXT_COLUMNS_MAX * 8)
+#define GB_WARDROBE_TITLE_MAP_X 6
 #define GB_WARDROBE_TITLE_MAP_Y 2
-#define GB_WARDROBE_LABEL_MAP_X 3
-#define GB_WARDROBE_LABEL_MAP_Y 15
-#define GB_WARDROBE_EXIT_MAP_X 3
-#define GB_WARDROBE_EXIT_MAP_Y 18
+#define GB_WARDROBE_TITLE_COLUMNS 8
+#define GB_WARDROBE_LABEL_MAP_X 5
+#define GB_WARDROBE_LABEL_MAP_Y 14
+#define GB_WARDROBE_LABEL_COLUMNS 15
+#define GB_WARDROBE_EXIT_MAP_X 6
+#define GB_WARDROBE_EXIT_MAP_Y 17
+#define GB_WARDROBE_EXIT_COLUMNS 15
+#define GB_WARDROBE_TEXT_FOREGROUND_INDEX 5
 
 static const GbLevelAssets* gb_video_level;
 static u8 gb_story_ui_pixels[GB_STORY_UI_WIDTH * GB_STORY_UI_HEIGHT];
 static u8 gb_dialogue_text_pixels[GB_DIALOGUE_TEXT_WIDTH * GB_DIALOGUE_TEXT_HEIGHT];
 static u8 gb_social_text_pixels[GB_SOCIAL_TEXT_WIDTH * 8];
+static u8 gb_wardrobe_text_pixels[GB_WARDROBE_TEXT_WIDTH * 8];
 static u8 gb_pda_text_pixels[GB_PDA_TEXT_WIDTH * GB_PDA_TEXT_HEIGHT];
 static u8 gb_monster_animation_counter;
 
@@ -104,7 +106,7 @@ static const GbGameplayLighting gb_gameplay_lighting_table[13] = {
 static void gb_story_ui_begin(void);
 static void gb_story_ui_text(const char* text, int* x, int* y);
 static void gb_story_ui_newline(int* x, int* y);
-static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, u16 slot_base);
+static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, u16 columns, u16 slot_base);
 static int gb_story_ui_glyph_width(unsigned code);
 
 static void gb_copy_u16(volatile u16* dst, const u16* src, int count)
@@ -511,25 +513,28 @@ void gb_video_load_title(void)
     gb_video_title_set_prompt_visible(1);
 }
 
-static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, u16 slot_base)
+static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y,
+                                        u16 columns, u16 slot_base)
 {
-    if(! gb_video_level || ! gb_video_level->bg0_ui_tiles ||
-       slot_base + GB_WARDROBE_TEXT_COLUMNS > GB_BG0_UI_TILE_COUNT)
+    if(! gb_video_level || ! gb_video_level->bg0_ui_tiles || columns == 0 ||
+       columns > GB_WARDROBE_TEXT_COLUMNS_MAX ||
+       slot_base + columns > GB_BG0_UI_TILE_COUNT)
     {
         return;
     }
 
-    for(int i = 0; i < GB_SOCIAL_TEXT_WIDTH * 8; ++i)
+    for(int i = 0; i < GB_WARDROBE_TEXT_WIDTH * 8; ++i)
     {
-        gb_social_text_pixels[i] = 0;
+        gb_wardrobe_text_pixels[i] = 0;
     }
 
+    const int width_pixels = columns * 8;
     int cursor_x = 0;
-    while(text && *text && cursor_x < GB_SOCIAL_TEXT_WIDTH)
+    while(text && *text && cursor_x < width_pixels)
     {
         const unsigned code = (unsigned char)*text++;
         const int width = gb_story_ui_glyph_width(code);
-        if(code >= GB_FONT_GLYPH_COUNT || cursor_x + width > GB_SOCIAL_TEXT_WIDTH)
+        if(code >= GB_FONT_GLYPH_COUNT || cursor_x + width > width_pixels)
         {
             break;
         }
@@ -539,15 +544,15 @@ static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, 
             const u16 mask = glyph->rows[py];
             for(int px = 0; px < glyph->pixel_width; ++px)
             {
-                gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + cursor_x + px] =
-                    (mask & (u16)(1u << px)) ? 6 : 0;
+                gb_wardrobe_text_pixels[py * GB_WARDROBE_TEXT_WIDTH + cursor_x + px] =
+                    (mask & (u16)(1u << px)) ? GB_WARDROBE_TEXT_FOREGROUND_INDEX : 0;
             }
         }
         cursor_x += width;
     }
 
     volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
-    for(u16 col = 0; col < GB_WARDROBE_TEXT_COLUMNS; ++col)
+    for(u16 col = 0; col < columns; ++col)
     {
         const u16 tile_id = gb_video_level->bg0_ui_tiles[slot_base + col];
         volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
@@ -557,12 +562,24 @@ static void gb_wardrobe_text_upload_row(const char* text, s16 map_x, s16 map_y, 
             for(int pair = 0; pair < 4; ++pair)
             {
                 const int px = col * 8 + pair * 2;
-                const u8 lo = gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + px];
-                const u8 hi = gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + px + 1];
+                const u8 lo = gb_wardrobe_text_pixels[py * GB_WARDROBE_TEXT_WIDTH + px];
+                const u8 hi = gb_wardrobe_text_pixels[py * GB_WARDROBE_TEXT_WIDTH + px + 1];
                 tile[py * 4 + pair] = (u16)(lo | ((u16)hi << 8));
             }
         }
     }
+}
+
+static void gb_stage_wardrobe_selector_tiles(void)
+{
+    /* Wardrobe highlight uses logical 8bpp root 0x4A from the canonical
+       0x8000-byte baseline OBJ upload (same ROM source as gb_title_obj_tiles).
+       A 16x16 sprite in 2D mapping consists of roots 0x4A/0x4B and 0x5A/0x5B. */
+    const u16* baseline = gb_title_obj_tiles;
+    gb_copy_u16(gb_obj_logical_tile_ptr(GB_WARDROBE_SELECTOR_LOGICAL_TILE),
+                baseline + GB_WARDROBE_SELECTOR_LOGICAL_TILE * 32u, 64);
+    gb_copy_u16(gb_obj_logical_tile_ptr((u16)(GB_WARDROBE_SELECTOR_LOGICAL_TILE + 16u)),
+                baseline + (GB_WARDROBE_SELECTOR_LOGICAL_TILE + 16u) * 32u, 64);
 }
 
 void gb_video_draw_wardrobe(u8 selector)
@@ -573,28 +590,24 @@ void gb_video_draw_wardrobe(u8 selector)
     }
 
     volatile u16* char_mem = (volatile u16*)CHAR_BASE_ADR(0);
-    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
     volatile u16* oam = (volatile u16*)OAM;
 
+    /* Original 0x08004F6C swaps only 0x2000 bytes of BG character graphics at
+       0x06003000.  It does NOT install a new tilemap rectangle: the existing
+       gameplay/Level-7 maps remain visible underneath the Wardrobe browser. */
     gb_copy_u16(char_mem + GB_WARDROBE_BG_VRAM_OFFSET / 2,
                 gb_wardrobe_bg_pages[selector], GB_WARDROBE_BG_PAGE_HALFWORDS);
 
-    for(int y = 0; y < GB_WARDROBE_BG_MAP_HEIGHT; ++y)
-    {
-        for(int x = 0; x < GB_WARDROBE_BG_MAP_WIDTH; ++x)
-        {
-            map[(GB_WARDROBE_BG_MAP_Y + y) * 32 + GB_WARDROBE_BG_MAP_X + x] =
-                (u16)(GB_WARDROBE_BG_TILE_BASE + y * GB_WARDROBE_BG_MAP_WIDTH + x);
-        }
-    }
-
     gb_wardrobe_text_upload_row("Wardrobe", GB_WARDROBE_TITLE_MAP_X,
-                                GB_WARDROBE_TITLE_MAP_Y, 0);
+                                GB_WARDROBE_TITLE_MAP_Y,
+                                GB_WARDROBE_TITLE_COLUMNS, 0);
     gb_wardrobe_text_upload_row(gb_wardrobe_labels[selector],
                                 GB_WARDROBE_LABEL_MAP_X,
-                                GB_WARDROBE_LABEL_MAP_Y, 8);
+                                GB_WARDROBE_LABEL_MAP_Y,
+                                GB_WARDROBE_LABEL_COLUMNS, 8);
     gb_wardrobe_text_upload_row("(B) to exit", GB_WARDROBE_EXIT_MAP_X,
-                                GB_WARDROBE_EXIT_MAP_Y, 16);
+                                GB_WARDROBE_EXIT_MAP_Y,
+                                GB_WARDROBE_EXIT_COLUMNS, 23);
 
     gb_video_hide_all_oam();
     for(int i = 0; i < GB_WARDROBE_CHOICE_COUNT; ++i)
@@ -603,8 +616,8 @@ void gb_video_draw_wardrobe(u8 selector)
         const int x = 16 + i * 16;
         gb_stage_8bpp_16x32(logical_root, gb_wardrobe_preview_tiles[i]);
 
-        /* 0x08008F26..0x08008F4E submits each 16x32 preview as two
-           16x16 8bpp sprites in the gameplay 2D OBJ grid. */
+        /* 0x08008F26..0x08008F4E submits the seven 16x32 outfit previews as
+           two 16x16 8bpp cells each at x=16..112, y=48/64. */
         const int top_oam = i * 2;
         const int bottom_oam = top_oam + 1;
         oam[top_oam * 4] = (u16)GB_WARDROBE_PREVIEW_Y | GB_OBJ_256_COLOR;
@@ -616,21 +629,25 @@ void gb_video_draw_wardrobe(u8 selector)
         oam[bottom_oam * 4 + 2] = (u16)((logical_root + 32u) * 2u);
         oam[bottom_oam * 4 + 3] = 0;
     }
+
+    /* 0x080092CE..0x080092F0: two selector cells use the baseline tile 0x4A
+       at the selected column, one over each half of the 16x32 thumbnail. */
+    gb_stage_wardrobe_selector_tiles();
+    const int selector_x = (selector + 1) * 16;
+    for(int row = 0; row < 2; ++row)
+    {
+        const int index = GB_WARDROBE_CHOICE_COUNT * 2 + row;
+        oam[index * 4] = (u16)(GB_WARDROBE_PREVIEW_Y + row * 16) | GB_OBJ_256_COLOR;
+        oam[index * 4 + 1] = (u16)selector_x | GB_OBJ_SIZE_1;
+        oam[index * 4 + 2] = (u16)(GB_WARDROBE_SELECTOR_LOGICAL_TILE * 2u);
+        oam[index * 4 + 3] = 0;
+    }
 }
 
 void gb_video_load_wardrobe(void)
 {
-    /* The hidden Wardrobe is modal inside Player_update.  Its UI uses the
-       Level-7 backdrop palette, but the active gameplay graphics descriptor
-       remains the source for the continuing OBJ-lighting pass. */
-    gb_video_set_camera(0, 0);
-    BGCTRL[0] = BG_SIZE_0 | BG_256_COLOR | CHAR_BASE(0) |
-                SCREEN_BASE(GB_BG0_SCREENBLOCK) | BG_PRIORITY(0);
-    gb_copy_u16(BG_COLORS, gb_level07_assets.bg_palette, 256);
-    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK), GB_STREAM_MAP_CELLS);
-    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG1_SCREENBLOCK), GB_STREAM_MAP_CELLS);
-    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG2_SCREENBLOCK), GB_STREAM_MAP_CELLS);
-    gb_clear_u16((volatile u16*)MAP_BASE_ADR(GB_BG3_SCREENBLOCK), GB_STREAM_MAP_CELLS);
+    /* Wardrobe is an in-Player_update modal branch in the reference.  It does
+       not reset the camera, BG control state, palette, or gameplay maps. */
     gb_video_hide_all_oam();
     gb_video_draw_wardrobe(0);
 }
@@ -1387,21 +1404,22 @@ static void gb_dialogue_ui_upload_at(int window_x, int window_y)
        with the 18x4 text area beginning at (2,14).  Tiles 3/4/5 are the
        original vertical edge, corner and horizontal edge artwork, and the
        dialogue portrait starts immediately to the right at screen x=168. */
-    map[window_y * 32 + window_x] = GB_DIALOGUE_BORDER_CORNER_TILE;
-    map[window_y * 32 + window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
-        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP;
-    map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 + window_x] =
+    map[window_y * 32 + window_x] =
         GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_VFLIP;
+    map[window_y * 32 + window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP | GB_BG_MAP_VFLIP;
+    map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 + window_x] =
+        GB_DIALOGUE_BORDER_CORNER_TILE;
     map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
         window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
-        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP | GB_BG_MAP_VFLIP;
+        GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP;
 
     for(int col = 1; col < GB_DIALOGUE_WINDOW_COLUMNS - 1; ++col)
     {
         map[window_y * 32 + window_x + col] =
-            GB_DIALOGUE_BORDER_HORIZONTAL_TILE;
+            GB_DIALOGUE_BORDER_HORIZONTAL_TILE | GB_BG_MAP_VFLIP;
         map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
-            window_x + col] = GB_DIALOGUE_BORDER_HORIZONTAL_TILE | GB_BG_MAP_VFLIP;
+            window_x + col] = GB_DIALOGUE_BORDER_HORIZONTAL_TILE;
     }
     for(int row = 1; row < GB_DIALOGUE_WINDOW_ROWS - 1; ++row)
     {
@@ -1707,6 +1725,20 @@ static void gb_stage_dialogue_portrait_bank(u8 bank_index)
     gb_copy_u16(gb_obj_logical_tile_ptr(0x50),
                 source + GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS,
                 GB_DIALOGUE_PORTRAIT_TAIL_HALFWORDS);
+}
+
+static void gb_restage_active_dialogue_portrait(const GbStoryRuntime* story)
+{
+    if(! story || ! story->dialogue.active)
+    {
+        return;
+    }
+    const GbDialogueRecord* record = gb_story_dialogue_record(story);
+    if(record && record->opcode >= 0 && record->argument >= 0 &&
+       record->argument < GB_DIALOGUE_PORTRAIT_BANK_COUNT)
+    {
+        gb_stage_dialogue_portrait_bank((u8)record->argument);
+    }
 }
 
 static int gb_video_draw_dialogue_portrait(const GbStoryRuntime* story, int first_oam)
@@ -2140,4 +2172,11 @@ void gb_video_draw_gameplay_objects(GbActorSystem* system, const GbPlayer* playe
     gb_video_draw_actor_range(system, player, camera_x, camera_y, player_insert,
                               system->count, &cursor);
     gb_video_draw_leaf_particles(system, camera_x, camera_y, &cursor);
+
+    /* Player_draw can submit the portrait before later physical actors in the
+       object-manager order.  Those actors may dynamically stage into low OBJ
+       roots on crowded/edge-screen frames.  The reference dialogue bank is a
+       persistent loader state, so restore its selected bank after all dynamic
+       staging while leaving OAM order untouched. */
+    gb_restage_active_dialogue_portrait(story);
 }

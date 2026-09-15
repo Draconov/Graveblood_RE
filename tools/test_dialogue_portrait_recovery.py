@@ -193,6 +193,135 @@ int main(void)
             run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_full_gameplay_traversal_restages_portrait_after_late_low_root_npc_upload(self):
+        gba_h = r"""
+#ifndef GBA_H
+#define GBA_H
+#include <stdint.h>
+typedef uint8_t u8; typedef int8_t s8; typedef uint16_t u16; typedef int16_t s16;
+typedef uint32_t u32; typedef int32_t s32;
+typedef struct { volatile u16 x; volatile u16 y; } GbTestBgOffset;
+extern volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+extern volatile GbTestBgOffset gb_test_bg_offset[4];
+extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512];
+extern volatile u16 gb_test_vram[0x18000 / 2];
+#define REG_VCOUNT gb_test_vcount
+#define REG_DISPCNT gb_test_dispcnt
+#define BGCTRL gb_test_bgctrl
+#define BG_OFFSET gb_test_bg_offset
+#define BG_COLORS gb_test_bg_colors
+#define OBJ_COLORS gb_test_obj_colors
+#define OAM gb_test_oam
+#define MAP_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x800 / 2)))
+#define CHAR_BASE_ADR(n) ((void*)(gb_test_vram + ((n) * 0x4000 / 2)))
+#define SPR_VRAM(n) ((void*)((volatile uint8_t*)gb_test_vram + 0x10000 + ((n) * 32)))
+#define MODE_0 0u
+#define BG0_ON (1u << 8)
+#define BG1_ON (1u << 9)
+#define BG2_ON (1u << 10)
+#define BG3_ON (1u << 11)
+#define OBJ_ON (1u << 12)
+#define OBJ_1D_MAP (1u << 6)
+#define BG_SIZE_0 0u
+#define BG_256_COLOR (1u << 7)
+#define CHAR_BASE(n) ((u16)((n) << 2))
+#define SCREEN_BASE(n) ((u16)((n) << 8))
+#define BG_PRIORITY(n) ((u16)(n))
+#endif
+"""
+        harness = r"""
+#include <assert.h>
+#include <graveblood/video.h>
+
+volatile u16 gb_test_vcount, gb_test_dispcnt, gb_test_bgctrl[4];
+volatile GbTestBgOffset gb_test_bg_offset[4];
+volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam[512];
+volatile u16 gb_test_vram[0x18000 / 2];
+
+const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = { {24, 0} };
+const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = { [0] = 0xDEAD };
+const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
+const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
+const u16 gb_player_obj_tiles[GB_PLAYER_FRAME_COUNT * GB_PLAYER_FRAME_HALFWORDS] = {0};
+const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER_BICYCLE_FRAME_HALFWORDS] = {0};
+const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
+const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {0};
+const u16 gb_social_action_obj_icons[GB_SOCIAL_ACTION_ICON_COUNT * GB_SOCIAL_ACTION_ICON_HALFWORDS] = {0};
+const u16 gb_social_reaction_obj_faces[GB_SOCIAL_REACTION_FACE_COUNT * GB_SOCIAL_REACTION_FACE_HALFWORDS] = {0};
+const u16 gb_social_selector_maps[GB_SOCIAL_SELECTOR_STATE_COUNT * GB_SOCIAL_SELECTOR_MAP_CELLS] = {0};
+const u8 gb_player_physical_indices[11] = {0};
+
+int gb_actor_npc_should_draw(const GbActor* actor) { (void)actor; return 1; }
+u8 gb_actor_npc_frame_for_draw(GbActor* actor) { (void)actor; return 1; }
+int gb_actor_grass_draw_state(const GbActor* actor, s16 y, GbGrassDrawState* out)
+{ (void)actor; (void)y; (void)out; return 0; }
+u8 gb_leaf_particle_frame_for_draw(GbLeafParticle* p) { (void)p; return 0; }
+s16 gb_leaf_particle_pixel_x(const GbLeafParticle* p) { (void)p; return 0; }
+s16 gb_leaf_particle_pixel_y(const GbLeafParticle* p) { (void)p; return 0; }
+s16 gb_actor_pixel_x(const GbActor* a) { return (s16)(a->fixed_x / 256); }
+s16 gb_actor_pixel_y(const GbActor* a) { return (s16)(a->fixed_y / 256); }
+u8 gb_player_frame_index(const GbPlayer* p) { (void)p; return 0; }
+
+static const GbDialogueRecord record = { "Vika", "I wish I had more games to play", 0, 1 };
+const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story)
+{ return story && story->dialogue.active ? &record : 0; }
+
+static void init_npc(GbActor* actor, const GbActorDescriptor* desc, int x)
+{
+    actor->descriptor = desc;
+    actor->fixed_x = x * 256;
+    actor->fixed_y = 8 * 256; /* bottom cell visible, top cell offscreen */
+    actor->visual_legs_color = 24;
+    actor->active = 1;
+    actor->story_overlay_index = GB_ACTOR_STORY_NONE;
+}
+
+int main(void)
+{
+    const GbActorDescriptor desc = {
+        .actor_class = GB_ACTOR_NPC, .legs_color = 24, .subtype = 0, .num = 1, .setglobal = 0
+    };
+    GbLevelAssets level = { .level_id = 0 };
+    GbActorSystem system = {0};
+    GbPlayer player = {0};
+    GbStoryRuntime story = {0};
+    system.level = &level;
+    system.count = 17;
+    for(int i = 0; i < 17; ++i) init_npc(&system.actors[i], &desc, 8 + i * 12);
+    player.x = 120; player.y = 80;
+    player.x_fixed = 120 * 256; player.y_fixed = 80 * 256;
+    story.dialogue.active = 1;
+
+    /* The 17th post-Player NPC uses dynamic slot 16 -> logical OBJ root 0,
+       which would overwrite the portrait head with 0xDEAD without the final restage. */
+    gb_video_draw_gameplay_objects(&system, &player, &story, 0, 0);
+
+    volatile u16* obj = gb_test_vram + 0x10000 / 2;
+    const u16* bank1 = gb_dialogue_portrait_obj_banks + GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS;
+    assert(bank1[0] != 0xDEAD);
+    assert(obj[0] == bank1[0]);
+    assert(obj[1] == bank1[1]);
+    assert(obj[0x1400 / 2] == bank1[GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS]);
+    return 0;
+}
+"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / 'gba.h').write_text(gba_h, encoding='utf-8')
+            (td / 'portrait_restage.c').write_text(harness, encoding='utf-8')
+            exe = td / 'portrait_restage'
+            proc = subprocess.run([
+                'cc', '-std=c11', '-O0', '-Wall', '-Wextra', '-Werror',
+                '-ffunction-sections', '-fdata-sections',
+                '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
+                str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/dialogue_portrait_assets.c'),
+                str(td / 'portrait_restage.c'), '-Wl,--gc-sections', '-o', str(exe),
+            ], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()
