@@ -146,8 +146,7 @@ int main(void) {
         self.assertIn('gb_world_track_camera(&world, player.x, player.y);', game)
         publish = game.index('gb_world_publish_camera(&world);')
         draw_actors = game.index('gb_video_draw_gameplay_objects(&actors, &player, &story,', publish)
-        overlay_update = game.index(
-            'gb_actor_system_update_overlays(&actors, &player, &input, &interaction);', draw_actors)
+        overlay_update = game.index('gb_actor_system_update_overlays(', draw_actors)
         pre_player_loop = game.index(
             'for(u8 physical_index = 0; physical_index < player_physical_index; ++physical_index)',
             overlay_update)

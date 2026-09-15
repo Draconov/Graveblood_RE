@@ -26,6 +26,7 @@ static void gb_story_clear_social(GbStoryRuntime* story)
     story->social.action_index = 0;
     story->social.topic_index = 0;
     story->social.topic_count = 0;
+    story->social.depth = 0;
     story->social.followup_armed = 0;
     story->social.post_countdown = 0;
     story->social.response_text = 0;
@@ -492,6 +493,8 @@ static void gb_story_social_dispatch(GbStoryRuntime* story)
         story->social.response_text = gb_story_lookup_social_response(3, topic, topic_class, variant);
         profile->score = (s16)(profile->score + 2 * (2 - topic_class));
     }
+    /* All four TALK leaves rejoin the shared Player+0x382 response-handshake setter. */
+    story->social.followup_armed = 1;
     story->social.state = GB_SOCIAL_RESPONSE;
 }
 
@@ -546,6 +549,7 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
             /* Original branch-confirm returns through state 0, whose selector
                setup clears Player+0x1E4 before presenting the child page. */
             story->social.selected_quadrant = 0;
+            story->social.depth = 0;
             return;
         }
         if(action->node_type != 1)
@@ -562,6 +566,7 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
         }
         /* Every node_type==1 record enters state 2, including the thirteen
            leaves whose recovered secondary-topic count is zero. */
+        story->social.depth = 1;
         story->social.state = GB_SOCIAL_SECONDARY;
         return;
     }
@@ -578,6 +583,7 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
             story->social.action_index = 0;
             story->social.topic_index = 0;
             story->social.topic_count = 0;
+            story->social.depth = 0;
             story->social.followup_armed = 0;
             story->social.response_text = 0;
             gb_story_queue_sfx(story, 7);
@@ -589,7 +595,7 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
             gb_story_queue_sfx(story, 4);
             return;
         }
-        if((input->pressed & KEY_DOWN) && story->social.topic_index + 1 < story->social.topic_count)
+        if((input->pressed & KEY_DOWN) && story->social.topic_index < 8)
         {
             ++story->social.topic_index;
             gb_story_queue_sfx(story, 4);
@@ -600,7 +606,7 @@ static void gb_story_update_social(GbStoryRuntime* story, const GbInput* input)
             /* 0x0800960E gates state-2 A by page base.  Only TALK (base 4)
                reaches original interaction state 3; bases 8/12/16 return
                from Player_update without committing any invented action. */
-            if(story->social.page_base == 4)
+            if(story->social.page_base == 4 && story->social.depth > 0)
             {
                 story->social.state = GB_SOCIAL_POST_DELAY;
                 story->social.post_countdown = 150;
@@ -701,7 +707,7 @@ static GbStoryGateResult gb_story_try_level10_gate_record(const GbStoryRuntime* 
                                                             GbPlayer* player,
                                                             const GbInput* input, u8 gate_index)
 {
-    if(! story || ! player || ! input || gate_index >= 4 || ! (input->pressed & KEY_A))
+    if(! story || ! player || ! input || gate_index >= 4)
     {
         return GB_STORY_GATE_NONE;
     }
@@ -709,6 +715,14 @@ static GbStoryGateResult gb_story_try_level10_gate_record(const GbStoryRuntime* 
     const GbStoryLevel10Gate* gate = &gb_story_level10_gates[gate_index];
     const int grid_contact = gb_story_level10_gate_grid_contact(player, gate);
     const int portal_rect = gb_story_level10_gate_portal_rect(player, gate);
+    if(grid_contact)
+    {
+        player->interaction_available = 1;
+    }
+    if(! (input->pressed & KEY_A))
+    {
+        return GB_STORY_GATE_NONE;
+    }
     if(! grid_contact && ! portal_rect)
     {
         return GB_STORY_GATE_NONE;
@@ -761,8 +775,7 @@ GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* lev
                                                         GbPlayer* player,
                                                         const GbInput* input)
 {
-    if(! level || ! player || ! input || level->level_id != 9 ||
-       ! (input->pressed & KEY_A))
+    if(! level || ! player || ! input || level->level_id != 9)
     {
         return GB_STORY_GATE_NONE;
     }
@@ -778,9 +791,13 @@ GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* lev
     if(contact_x >= 62 && contact_x <= 63 &&
        contact_y >= 55 && contact_y <= 56)
     {
-        gb_player_queue_vertical_target(player, 512);
-        player->bicycle_mode = 2;
-        return GB_STORY_GATE_TRAVERSED;
+        player->interaction_available = 1;
+        if(input->pressed & KEY_A)
+        {
+            gb_player_queue_vertical_target(player, 512);
+            player->bicycle_mode = 2;
+            return GB_STORY_GATE_TRAVERSED;
+        }
     }
 
     return GB_STORY_GATE_NONE;
@@ -788,7 +805,25 @@ GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* lev
 
 int gb_story_ui_active(const GbStoryRuntime* story)
 {
-    return story->dialogue.active || story->social.state != GB_SOCIAL_INACTIVE;
+    if(! story)
+    {
+        return 0;
+    }
+    return story->dialogue.active ||
+           (story->social.state != GB_SOCIAL_INACTIVE &&
+            story->social.state != GB_SOCIAL_POST_DELAY);
+}
+
+int gb_story_player_controls_locked(const GbStoryRuntime* story)
+{
+    return story && (story->dialogue.active || story->social.state != GB_SOCIAL_INACTIVE);
+}
+
+int gb_story_world_traversal_continues(const GbStoryRuntime* story)
+{
+    /* GameplayScene always runs ObjectManager::update; interactions gate Player controls,
+       not the serialized world traversal. */
+    return story && (story->dialogue.active || story->social.state != GB_SOCIAL_INACTIVE);
 }
 
 const char* gb_story_social_profile_name(const GbStoryRuntime* story)

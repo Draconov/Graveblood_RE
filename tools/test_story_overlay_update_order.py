@@ -50,7 +50,7 @@ class StoryOverlayUpdateOrderTests(unittest.TestCase):
 
     def test_clean_room_keeps_story_overlay_phase_before_player(self):
         game = (ROOT / 'reconstruction/source/game/graveblood.c').read_text(encoding='utf-8')
-        overlay = game.index('gb_actor_system_update_overlays(&actors, &player, &input, &interaction);')
+        overlay = game.index('gb_actor_system_update_overlays(')
         player = game.index('gb_player_update(&player, world.assets, &input);')
         self.assertLess(overlay, player,
                         'story overlays are inserted before the physical list and must update before Player')

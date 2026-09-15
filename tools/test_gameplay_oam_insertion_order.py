@@ -165,6 +165,7 @@ int main(void)
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(td / 'oam_order.c'), '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)

@@ -72,7 +72,7 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('void gb_video_apply_final_effect(void)', video)
         self.assertIn('gb_ending_apply_argument0((volatile u8*)0x06000000)', video)
         self.assertIn('void gb_video_apply_final_effect(void);', video_h)
-        self.assertIn('if(story.state.final_effect_pending)', game)
+        self.assertIn('const int final_effect_was_pending = story.state.final_effect_pending;', game)
         self.assertIn('gb_video_apply_final_effect();', game)
         draw_index = game.index('gb_video_draw_gameplay_objects(&actors, &player, &story,')
         effect_index = game.index('gb_video_apply_final_effect();', draw_index)
@@ -283,7 +283,8 @@ class ReconstructionBuildScaffoldTests(unittest.TestCase):
         self.assertIn('GbActorSystem actors;', game)
         self.assertIn('GbInteractionEvent interaction;', game)
         self.assertIn('gb_actor_system_load(actors, assets)', game)
-        self.assertIn('gb_actor_system_update_overlays(&actors, &player, &input, &interaction)', game)
+        self.assertIn('gb_actor_system_update_overlays(', game)
+        self.assertIn('player_locked ? 0 : &input', game)
         self.assertIn('gb_actor_system_update_physical_npc_at(', game)
         self.assertIn('gb_video_draw_gameplay_objects(&actors, &player, &story,', game)
         self.assertGreaterEqual(game.count('gb_enter_level(&world, &player, &actors,'), 2)
@@ -674,6 +675,7 @@ extern volatile u16 gb_test_vram[0x18000 / 2];
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(ROOT / 'reconstruction/source/game/actors.c'),
                 str(td / 'oam_parity_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),
@@ -858,6 +860,7 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(td / 'level_static_oam_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
@@ -1050,6 +1053,7 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(ROOT / 'reconstruction/source/game/actors.c'),
                 str(td / 'npc_cull_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),
@@ -1148,6 +1152,7 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(td / 'monster_oam_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
@@ -1295,6 +1300,7 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(ROOT / 'reconstruction/source/game/pda.c'),
                 str(ROOT / 'reconstruction/data/pda_assets.c'),
                 str(ROOT / 'reconstruction/data/font_data.c'),
@@ -1917,13 +1923,15 @@ typedef int32_t s32;
         self.assertIn('gb_story_on_level_load(story, actors);', graveblood)
         self.assertIn('gb_story_handle_interaction(&story, &actors, &interaction);', graveblood)
         self.assertIn('gb_story_update(&story, &actors, &input);', graveblood)
-        self.assertIn('gb_video_gameplay_lighting_tick(0);', graveblood)
-        self.assertIn('gb_video_gameplay_lighting_tick(interaction_active ? 0 : 1);', graveblood)
+        self.assertIn('const int interaction_clock_paused = story.dialogue.active ||', graveblood)
+        self.assertIn('story.social.state == GB_SOCIAL_ROOT_SELECTOR ||', graveblood)
+        self.assertIn('story.social.state == GB_SOCIAL_SECONDARY;', graveblood)
+        self.assertIn('gb_video_gameplay_lighting_tick(interaction_clock_paused ? 0 : 1);', graveblood)
         self.assertIn('gb_video_gameplay_lighting_reset_cursor();', graveblood)
+        self.assertIn('int player_locked = gb_story_player_controls_locked(&story);', graveblood)
         self.assertRegex(
             graveblood,
-            r'(?s)if\(gb_story_ui_active\(&story\)\)\s*\{.*?'
-            r'gb_video_gameplay_lighting_tick\(0\);.*?gb_story_update\(&story, &actors, &input\);',
+            r'(?s)if\(player_locked\)\s*\{.*?gb_story_update\(&story, &actors, &input\);',
         )
         self.assertIn('gb_story_try_level10_gate_physical_index(', graveblood)
         self.assertIn('gb_video_draw_story_ui(&story);', graveblood)
@@ -3581,6 +3589,7 @@ extern volatile u16 gb_test_vram[0x18000 / 2];
                 '-ffunction-sections', '-fdata-sections',
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
+                str(ROOT / 'reconstruction/data/social_selector_assets.c'),
                 str(ROOT / 'reconstruction/data/title_assets.c'),
                 str(td / 'title_video_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),

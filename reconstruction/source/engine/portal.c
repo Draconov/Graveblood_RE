@@ -24,11 +24,11 @@ static u8 gb_portal_pre_player_count(const GbLevelAssets* level)
 }
 
 static int gb_portal_try_activate_range(const GbLevelAssets* level,
-                                        const GbPlayer* player,
+                                        GbPlayer* player,
                                         const GbInput* input,
                                         u8 begin, u8 end)
 {
-    if(! level || ! player || ! input || ! (input->pressed & KEY_A))
+    if(! level || ! player || ! input)
     {
         return -1;
     }
@@ -43,8 +43,12 @@ static int gb_portal_try_activate_range(const GbLevelAssets* level,
         if(player->x >= portal->x && player->x < portal->x + portal->width &&
            player->y >= portal->y && player->y < portal->y + portal->height)
         {
-            gb_audio_play_sfx(5);
-            return portal->target_level;
+            player->interaction_available = 1;
+            if(input->pressed & KEY_A)
+            {
+                gb_audio_play_sfx(5);
+                return portal->target_level;
+            }
         }
     }
 
@@ -52,7 +56,7 @@ static int gb_portal_try_activate_range(const GbLevelAssets* level,
 }
 
 
-int gb_portal_try_activate_physical_index(const GbLevelAssets* level, const GbPlayer* player,
+int gb_portal_try_activate_physical_index(const GbLevelAssets* level, GbPlayer* player,
                                           const GbInput* input, u8 physical_index)
 {
     if(! level)
@@ -69,7 +73,7 @@ int gb_portal_try_activate_physical_index(const GbLevelAssets* level, const GbPl
     return -1;
 }
 
-int gb_portal_try_activate_phase(const GbLevelAssets* level, const GbPlayer* player,
+int gb_portal_try_activate_phase(const GbLevelAssets* level, GbPlayer* player,
                                  const GbInput* input, GbPortalPhase phase)
 {
     if(! level)
@@ -84,7 +88,7 @@ int gb_portal_try_activate_phase(const GbLevelAssets* level, const GbPlayer* pla
     return gb_portal_try_activate_range(level, player, input, split, level->portal_count);
 }
 
-int gb_portal_try_activate(const GbLevelAssets* level, const GbPlayer* player, const GbInput* input)
+int gb_portal_try_activate(const GbLevelAssets* level, GbPlayer* player, const GbInput* input)
 {
     if(! level)
     {

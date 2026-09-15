@@ -16,6 +16,7 @@
 #define GB_NPC_OBJ_SLOT_COUNT 24
 #define GB_PLAYER_TOP_LOGICAL_TILE 0x60
 #define GB_PLAYER_BOTTOM_LOGICAL_TILE 0x80
+#define GB_PLAYER_INTERACTION_LOGICAL_TILE 0x4E
 #define GB_GRASS_LOGICAL_TILE 0x48
 #define GB_STORY_UI_COLUMNS 29
 #define GB_STORY_UI_ROWS 3
@@ -24,6 +25,16 @@
 #define GB_STORY_UI_HEIGHT (GB_STORY_UI_ROWS * 8)
 #define GB_DIALOGUE_WINDOW_MAP_X 1
 #define GB_DIALOGUE_WINDOW_MAP_Y 13
+#define GB_SOCIAL_RESPONSE_WINDOW_MAP_X 5
+#define GB_SOCIAL_RESPONSE_WINDOW_MAP_Y 13
+#define GB_SOCIAL_SELECTOR_MAP_X 1
+#define GB_SOCIAL_SELECTOR_MAP_Y 9
+#define GB_SOCIAL_TOPIC_CLEAR_X 5
+#define GB_SOCIAL_TOPIC_CLEAR_Y 1
+#define GB_SOCIAL_TOPIC_CLEAR_WIDTH 14
+#define GB_SOCIAL_TOPIC_CLEAR_HEIGHT 12
+#define GB_SOCIAL_TEXT_COLUMNS 8
+#define GB_SOCIAL_TEXT_WIDTH (GB_SOCIAL_TEXT_COLUMNS * 8)
 #define GB_DIALOGUE_WINDOW_COLUMNS 20
 #define GB_DIALOGUE_WINDOW_ROWS 6
 #define GB_DIALOGUE_TEXT_COLUMNS 18
@@ -58,6 +69,7 @@
 static const GbLevelAssets* gb_video_level;
 static u8 gb_story_ui_pixels[GB_STORY_UI_WIDTH * GB_STORY_UI_HEIGHT];
 static u8 gb_dialogue_text_pixels[GB_DIALOGUE_TEXT_WIDTH * GB_DIALOGUE_TEXT_HEIGHT];
+static u8 gb_social_text_pixels[GB_SOCIAL_TEXT_WIDTH * 8];
 static u8 gb_pda_text_pixels[GB_PDA_TEXT_WIDTH * GB_PDA_TEXT_HEIGHT];
 static u8 gb_monster_animation_counter;
 
@@ -1070,6 +1082,42 @@ void gb_video_draw_actors(GbActorSystem* system, const GbPlayer* player, s16 cam
     gb_video_draw_leaf_particles(system, camera_x, camera_y, &cursor);
 }
 
+static const s8 gb_player_prompt_bob[32] = {
+    0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 4, 4,
+    5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 2, 2, 1, 1, 1,
+};
+
+static int gb_video_story_suppresses_prompt(const GbStoryRuntime* story)
+{
+    return story && (story->dialogue.active || story->social.state != GB_SOCIAL_INACTIVE);
+}
+
+static int gb_video_draw_interaction_prompt(const GbPlayer* player, const GbStoryRuntime* story,
+                                            s16 camera_x, s16 camera_y, int first_oam)
+{
+    if(! player || ! player->interaction_available || gb_video_story_suppresses_prompt(story))
+    {
+        return 0;
+    }
+    const s16 sx = (s16)(player->x - camera_x + 20);
+    const s16 sy = (s16)(player->y - camera_y - 32 +
+                         gb_player_prompt_bob[player->prompt_bob_phase & 31u]);
+    volatile u16* oam = (volatile u16*)OAM;
+    if(gb_video_sprite_visible_16(sx, sy))
+    {
+        const int o = first_oam * 4;
+        oam[o] = (u16)(sy & 0x00FF) | GB_OBJ_256_COLOR;
+        oam[o + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_1;
+        oam[o + 2] = (u16)(GB_PLAYER_INTERACTION_LOGICAL_TILE * 2u);
+        oam[o + 3] = 0;
+    }
+    else
+    {
+        gb_video_hide_oam_entry(oam, first_oam);
+    }
+    return 1;
+}
+
 static void gb_video_draw_player_oam(const GbPlayer* player, s16 camera_x, s16 camera_y, int first_oam)
 {
     const s16 sx = (s16)(player->x - camera_x);
@@ -1224,19 +1272,59 @@ static void gb_dialogue_ui_newline(int* x, int* y)
     *y += 8;
 }
 
+static int gb_dialogue_ui_word_width(const char* text)
+{
+    int width = 0;
+    while(text && *text && *text != ' ' && *text != '\n')
+    {
+        width += gb_story_ui_glyph_width((unsigned char)*text++);
+    }
+    return width;
+}
+
 static void gb_dialogue_ui_text(const char* text, int* x, int* y)
 {
     if(! text)
     {
         return;
     }
+    int at_word_start = 1;
     while(*text && *y < GB_DIALOGUE_TEXT_HEIGHT)
     {
+        /* The ROM's TextObject writer measures the complete upcoming word at
+           its first glyph.  If it cannot fit, move the whole word before any
+           pixels are emitted; a space that would lead the new row is dropped. */
+        if(at_word_start && *text != ' ' && *text != '\n')
+        {
+            const int word_width = gb_dialogue_ui_word_width(text);
+            if(*x > 0 && *x + word_width > GB_DIALOGUE_TEXT_WIDTH)
+            {
+                gb_dialogue_ui_newline(x, y);
+                if(*y >= GB_DIALOGUE_TEXT_HEIGHT)
+                {
+                    break;
+                }
+            }
+        }
+
         const unsigned code = (unsigned char)*text++;
         if(code == '\n')
         {
             gb_dialogue_ui_newline(x, y);
+            at_word_start = 1;
             continue;
+        }
+        if(code == ' ')
+        {
+            at_word_start = 1;
+            if(*x == 0)
+            {
+                continue;
+            }
+        }
+        else
+        {
+            at_word_start = 0;
         }
         const int width = gb_story_ui_glyph_width(code);
         if(*x + width > GB_DIALOGUE_TEXT_WIDTH)
@@ -1252,7 +1340,7 @@ static void gb_dialogue_ui_text(const char* text, int* x, int* y)
     }
 }
 
-static void gb_dialogue_ui_upload(void)
+static void gb_dialogue_ui_upload_at(int window_x, int window_y)
 {
     if(! gb_video_level || ! gb_video_level->bg0_ui_tiles)
     {
@@ -1262,28 +1350,28 @@ static void gb_dialogue_ui_upload(void)
 
     /* Window 0x08009Cxx: (1,13), 20x6. Tiles 3/4/5 are the original
        vertical edge, corner and horizontal edge artwork. */
-    map[GB_DIALOGUE_WINDOW_MAP_Y * 32 + GB_DIALOGUE_WINDOW_MAP_X] = GB_DIALOGUE_BORDER_CORNER_TILE;
-    map[GB_DIALOGUE_WINDOW_MAP_Y * 32 + GB_DIALOGUE_WINDOW_MAP_X + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+    map[window_y * 32 + window_x] = GB_DIALOGUE_BORDER_CORNER_TILE;
+    map[window_y * 32 + window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
         GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP;
-    map[(GB_DIALOGUE_WINDOW_MAP_Y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 + GB_DIALOGUE_WINDOW_MAP_X] =
+    map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 + window_x] =
         GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_VFLIP;
-    map[(GB_DIALOGUE_WINDOW_MAP_Y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
-        GB_DIALOGUE_WINDOW_MAP_X + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+    map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
+        window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
         GB_DIALOGUE_BORDER_CORNER_TILE | GB_BG_MAP_HFLIP | GB_BG_MAP_VFLIP;
 
     for(int col = 1; col < GB_DIALOGUE_WINDOW_COLUMNS - 1; ++col)
     {
-        map[GB_DIALOGUE_WINDOW_MAP_Y * 32 + GB_DIALOGUE_WINDOW_MAP_X + col] =
+        map[window_y * 32 + window_x + col] =
             GB_DIALOGUE_BORDER_HORIZONTAL_TILE;
-        map[(GB_DIALOGUE_WINDOW_MAP_Y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
-            GB_DIALOGUE_WINDOW_MAP_X + col] = GB_DIALOGUE_BORDER_HORIZONTAL_TILE | GB_BG_MAP_VFLIP;
+        map[(window_y + GB_DIALOGUE_WINDOW_ROWS - 1) * 32 +
+            window_x + col] = GB_DIALOGUE_BORDER_HORIZONTAL_TILE | GB_BG_MAP_VFLIP;
     }
     for(int row = 1; row < GB_DIALOGUE_WINDOW_ROWS - 1; ++row)
     {
-        map[(GB_DIALOGUE_WINDOW_MAP_Y + row) * 32 + GB_DIALOGUE_WINDOW_MAP_X] =
+        map[(window_y + row) * 32 + window_x] =
             GB_DIALOGUE_BORDER_VERTICAL_TILE;
-        map[(GB_DIALOGUE_WINDOW_MAP_Y + row) * 32 +
-            GB_DIALOGUE_WINDOW_MAP_X + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
+        map[(window_y + row) * 32 +
+            window_x + GB_DIALOGUE_WINDOW_COLUMNS - 1] =
             GB_DIALOGUE_BORDER_VERTICAL_TILE | GB_BG_MAP_HFLIP;
     }
 
@@ -1294,7 +1382,7 @@ static void gb_dialogue_ui_upload(void)
             const int slot = row * GB_DIALOGUE_TEXT_COLUMNS + col;
             const u16 tile_id = gb_video_level->bg0_ui_tiles[slot];
             volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
-            map[(GB_DIALOGUE_TEXT_MAP_Y + row) * 32 + GB_DIALOGUE_TEXT_MAP_X + col] = tile_id;
+            map[((window_y + 1) + row) * 32 + (window_x + 1) + col] = tile_id;
             for(int py = 0; py < 8; ++py)
             {
                 for(int pair = 0; pair < 4; ++pair)
@@ -1308,6 +1396,11 @@ static void gb_dialogue_ui_upload(void)
             }
         }
     }
+}
+
+static void gb_dialogue_ui_upload(void)
+{
+    gb_dialogue_ui_upload_at(GB_DIALOGUE_WINDOW_MAP_X, GB_DIALOGUE_WINDOW_MAP_Y);
 }
 
 static void gb_story_ui_upload(void)
@@ -1350,11 +1443,29 @@ void gb_video_clear_story_ui(void)
             map[(GB_STORY_UI_MAP_Y + row) * 32 + col] = 0;
         }
     }
+    for(int row = 0; row < GB_SOCIAL_SELECTOR_MAP_HEIGHT; ++row)
+    {
+        for(int col = 0; col < GB_SOCIAL_SELECTOR_MAP_WIDTH; ++col)
+        {
+            map[(GB_SOCIAL_SELECTOR_MAP_Y + row) * 32 +
+                GB_SOCIAL_SELECTOR_MAP_X + col] = 0;
+        }
+    }
+    for(int row = 0; row < GB_SOCIAL_TOPIC_CLEAR_HEIGHT; ++row)
+    {
+        for(int col = 0; col < GB_SOCIAL_TOPIC_CLEAR_WIDTH; ++col)
+        {
+            map[(GB_SOCIAL_TOPIC_CLEAR_Y + row) * 32 +
+                GB_SOCIAL_TOPIC_CLEAR_X + col] = 0;
+        }
+    }
     for(int row = 0; row < GB_DIALOGUE_WINDOW_ROWS; ++row)
     {
         for(int col = 0; col < GB_DIALOGUE_WINDOW_COLUMNS; ++col)
         {
             map[(GB_DIALOGUE_WINDOW_MAP_Y + row) * 32 + GB_DIALOGUE_WINDOW_MAP_X + col] = 0;
+            map[(GB_SOCIAL_RESPONSE_WINDOW_MAP_Y + row) * 32 +
+                GB_SOCIAL_RESPONSE_WINDOW_MAP_X + col] = 0;
         }
     }
 }
@@ -1378,73 +1489,294 @@ static void gb_story_ui_draw_dialogue(const GbStoryRuntime* story)
     if(record->speaker && record->speaker[0])
     {
         gb_dialogue_ui_text(record->speaker, &x, &y);
-        gb_dialogue_ui_newline(&x, &y);
+        gb_dialogue_ui_text(":                              ", &x, &y);
     }
     gb_dialogue_ui_text(record->text, &x, &y);
     gb_dialogue_ui_upload();
 }
 
-static const char* gb_story_ui_topic(const GbStoryRuntime* story)
+static void gb_story_ui_draw_social_response(const GbStoryRuntime* story)
 {
-    const u8 action = story->social.action_index;
-    const u8 topic = story->social.topic_index;
-    if(action == 4 && topic < GB_SOCIAL_SUBJECT_TOPIC_COUNT)
+    int x = 0;
+    int y = 0;
+    gb_dialogue_ui_fill(GB_TEXT_BACKGROUND_INDEX);
+    const char* profile = gb_story_social_profile_name(story);
+    if(profile)
     {
-        return gb_social_subject_topics[topic];
+        gb_dialogue_ui_text(profile, &x, &y);
+        gb_dialogue_ui_text(":                              ", &x, &y);
     }
-    if(action == 5 && topic < GB_SOCIAL_ASK_TOPIC_COUNT)
+    if(story->social.response_text)
     {
-        return gb_social_ask_topics[topic];
+        gb_dialogue_ui_text(story->social.response_text, &x, &y);
     }
-    if(action == 7 && topic < GB_SOCIAL_CRITICIZE_TOPIC_COUNT)
+    gb_dialogue_ui_upload_at(GB_SOCIAL_RESPONSE_WINDOW_MAP_X,
+                             GB_SOCIAL_RESPONSE_WINDOW_MAP_Y);
+}
+
+static void gb_social_text_upload_row(const char* text, s16 map_x, s16 map_y,
+                                      u8 background, u8 foreground, u16 slot_base)
+{
+    if(! gb_video_level || ! gb_video_level->bg0_ui_tiles ||
+       slot_base + GB_SOCIAL_TEXT_COLUMNS > GB_BG0_UI_TILE_COUNT)
     {
-        return gb_social_criticize_topics[topic];
+        return;
+    }
+    for(int i = 0; i < GB_SOCIAL_TEXT_WIDTH * 8; ++i)
+    {
+        gb_social_text_pixels[i] = background;
+    }
+    int cursor_x = 0;
+    while(text && *text && cursor_x < GB_SOCIAL_TEXT_WIDTH)
+    {
+        const unsigned code = (unsigned char)*text++;
+        const int width = gb_story_ui_glyph_width(code);
+        if(code >= GB_FONT_GLYPH_COUNT || cursor_x + width > GB_SOCIAL_TEXT_WIDTH)
+        {
+            break;
+        }
+        const GbFontGlyph* glyph = &gb_font_glyphs[code];
+        for(int py = 0; py < 8; ++py)
+        {
+            const u16 mask = glyph->rows[py];
+            for(int px = 0; px < glyph->pixel_width; ++px)
+            {
+                gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + cursor_x + px] =
+                    (mask & (u16)(1u << px)) ? foreground : background;
+            }
+        }
+        cursor_x += width;
+    }
+
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+    for(u16 col = 0; col < GB_SOCIAL_TEXT_COLUMNS; ++col)
+    {
+        const u16 tile_id = gb_video_level->bg0_ui_tiles[slot_base + col];
+        volatile u16* tile = (volatile u16*)CHAR_BASE_ADR(0) + tile_id * 32;
+        map[map_y * 32 + map_x + col] = tile_id;
+        for(int py = 0; py < 8; ++py)
+        {
+            for(int pair = 0; pair < 4; ++pair)
+            {
+                const int px = col * 8 + pair * 2;
+                const u8 lo = gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + px];
+                const u8 hi = gb_social_text_pixels[py * GB_SOCIAL_TEXT_WIDTH + px + 1];
+                tile[py * 4 + pair] = (u16)(lo | ((u16)hi << 8));
+            }
+        }
+    }
+}
+
+static void gb_social_selector_upload_map(const GbStoryRuntime* story)
+{
+    if(! story || story->social.selected_quadrant >= GB_SOCIAL_SELECTOR_STATE_COUNT)
+    {
+        return;
+    }
+    volatile u16* map = (volatile u16*)MAP_BASE_ADR(GB_BG0_SCREENBLOCK);
+    const u16* source = gb_social_selector_maps +
+                        (u32)story->social.selected_quadrant * GB_SOCIAL_SELECTOR_MAP_CELLS;
+    for(u16 y = 0; y < GB_SOCIAL_SELECTOR_MAP_HEIGHT; ++y)
+    {
+        for(u16 x = 0; x < GB_SOCIAL_SELECTOR_MAP_WIDTH; ++x)
+        {
+            map[(GB_SOCIAL_SELECTOR_MAP_Y + y) * 32 + GB_SOCIAL_SELECTOR_MAP_X + x] =
+                source[y * GB_SOCIAL_SELECTOR_MAP_WIDTH + x];
+        }
+    }
+}
+
+static void gb_social_selector_upload_label(const GbStoryRuntime* story)
+{
+    if(! story || story->social.selected_quadrant >= 4)
+    {
+        return;
+    }
+    const u8 action_index = (u8)(story->social.page_base + story->social.selected_quadrant);
+    if(action_index >= GB_SOCIAL_ACTION_COUNT)
+    {
+        return;
+    }
+    static const s16 label_x[4] = { 8, 11, 8, 5 };
+    static const s16 label_y[4] = { 10, 13, 16, 13 };
+    gb_social_text_upload_row(gb_social_actions[action_index].label,
+                              label_x[story->social.selected_quadrant],
+                              label_y[story->social.selected_quadrant],
+                              9, 2, 0);
+}
+
+static const char* gb_social_selector_topic_text(u8 action_index, u8 topic_index)
+{
+    if(action_index == 4 && topic_index < GB_SOCIAL_SUBJECT_TOPIC_COUNT)
+    {
+        return gb_social_subject_topics[topic_index];
+    }
+    if(action_index == 5 && topic_index < GB_SOCIAL_ASK_TOPIC_COUNT)
+    {
+        return gb_social_ask_topics[topic_index];
+    }
+    if(action_index == 7 && topic_index < GB_SOCIAL_CRITICIZE_TOPIC_COUNT)
+    {
+        return gb_social_criticize_topics[topic_index];
     }
     return 0;
 }
 
-static void gb_story_ui_draw_social(const GbStoryRuntime* story)
+static void gb_social_selector_upload_topics(const GbStoryRuntime* story)
 {
-    int x = 0;
-    int y = 0;
-    gb_story_ui_begin();
-    const char* profile = gb_story_social_profile_name(story);
-    if(profile)
+    if(! story || story->social.selected_quadrant >= 4)
     {
-        gb_story_ui_text(profile, &x, &y);
-        gb_story_ui_newline(&x, &y);
+        return;
+    }
+    const u8 quadrant = story->social.selected_quadrant;
+    const u8 action_index = (u8)(story->social.page_base + quadrant);
+    if(action_index >= GB_SOCIAL_ACTION_COUNT)
+    {
+        return;
+    }
+    u8 topic_count = story->social.topic_count;
+    if(topic_count > 9)
+    {
+        topic_count = 9;
+    }
+    static const s16 label_x[4] = { 8, 11, 8, 5 };
+    static const s16 label_y[4] = { 10, 13, 16, 13 };
+    for(u8 i = 0; i < topic_count; ++i)
+    {
+        const char* text = gb_social_selector_topic_text(action_index, i);
+        if(! text)
+        {
+            continue;
+        }
+        const s16 map_y = (s16)(label_y[quadrant] - topic_count + i);
+        const int selected = i == story->social.topic_index;
+        gb_social_text_upload_row(text, label_x[quadrant], map_y,
+                                  selected ? 7 : 9, selected ? 6 : 2,
+                                  8u + (u16)i * GB_SOCIAL_TEXT_COLUMNS);
+    }
+}
+
+static int gb_video_draw_social_reaction(const GbPlayer* player,
+                                         const GbStoryRuntime* story,
+                                         s16 camera_x, s16 camera_y, int first_oam)
+{
+    if(! player || ! story || story->social.state != GB_SOCIAL_POST_DELAY ||
+       (story->social.selected_quadrant != 0 && story->social.selected_quadrant != 3) ||
+       story->social.profile_selector >= GB_SOCIAL_PROFILE_COUNT ||
+       story->social.topic_index >= 9)
+    {
+        return 0;
     }
 
-    if(story->social.state == GB_SOCIAL_ROOT_SELECTOR)
+    s16 reaction_class = story->state.social_profiles[story->social.profile_selector]
+                             .topic_class[story->social.topic_index];
+    if(reaction_class < 0 || reaction_class >= GB_SOCIAL_REACTION_FACE_COUNT)
     {
-        const u8 base = story->social.page_base;
-        if(base + 3 < GB_SOCIAL_ACTION_COUNT)
+        return 0;
+    }
+    if(story->social.selected_quadrant == 3)
+    {
+        reaction_class = (s16)(4 - reaction_class);
+    }
+
+    const u16 logical_root = (u16)reaction_class * 2u;
+    gb_stage_8bpp_16x16(
+        logical_root,
+        gb_social_reaction_obj_faces + (u32)reaction_class * GB_SOCIAL_REACTION_FACE_HALFWORDS
+    );
+
+    const s16 sx = (s16)((player->x_fixed >> 8) - camera_x - 20 +
+                         (player->facing_right ? 40 : 0));
+    const s16 sy = (s16)(((player->y_fixed - player->collision_height_fixed + 1) >> 8) -
+                         camera_y - 37);
+    volatile u16* oam = (volatile u16*)OAM;
+    if(gb_video_sprite_visible_16(sx, sy))
+    {
+        const int o = first_oam * 4;
+        oam[o] = (u16)(sy & 0x00FF) | GB_OBJ_256_COLOR;
+        oam[o + 1] = (u16)(sx & 0x01FF) | GB_OBJ_SIZE_1;
+        oam[o + 2] = (u16)(logical_root * 2u); /* priority 0 */
+        oam[o + 3] = 0;
+    }
+    else
+    {
+        gb_video_hide_oam_entry(oam, first_oam);
+    }
+    return 1;
+}
+
+static void gb_social_selector_stage_icons(const GbStoryRuntime* story)
+{
+    if(! story || (story->social.state != GB_SOCIAL_ROOT_SELECTOR &&
+                   story->social.state != GB_SOCIAL_SECONDARY))
+    {
+        return;
+    }
+    const u8 base = story->social.page_base;
+    if((u16)base + 3u >= GB_SOCIAL_ACTION_COUNT)
+    {
+        return;
+    }
+    static const u16 roots[4] = { 0, 2, 4, 6 };
+    for(u16 i = 0; i < 4; ++i)
+    {
+        const u8 action_index = (u8)(base + i);
+        gb_stage_8bpp_16x16(
+            roots[i],
+            gb_social_action_obj_icons + (u32)action_index * GB_SOCIAL_ACTION_ICON_HALFWORDS
+        );
+    }
+}
+
+static int gb_video_draw_social_action_icons(const GbStoryRuntime* story, int first_oam)
+{
+    if(! story || (story->social.state != GB_SOCIAL_ROOT_SELECTOR &&
+                   story->social.state != GB_SOCIAL_SECONDARY))
+    {
+        return 0;
+    }
+    gb_social_selector_stage_icons(story);
+    static const s16 xs[4] = { 40, 64, 40, 16 };
+    static const s16 ys[4] = { 80, 104, 128, 104 };
+    static const u16 roots[4] = { 0, 2, 4, 6 };
+    volatile u16* oam = (volatile u16*)OAM;
+    int used = 0;
+    for(int i = 0; i < 4; ++i)
+    {
+        /* Player_draw helper 0x080065A8 suppresses the Right cell when the
+           selected quadrant is Left (Player+0x1E4 == 3). */
+        if(i == 1 && story->social.selected_quadrant == 3)
         {
-            gb_story_ui_text("^", &x, &y);
-            gb_story_ui_text(gb_social_actions[base].label, &x, &y);
-            gb_story_ui_text("  >", &x, &y);
-            gb_story_ui_text(gb_social_actions[base + 1].label, &x, &y);
-            gb_story_ui_newline(&x, &y);
-            gb_story_ui_text("v", &x, &y);
-            gb_story_ui_text(gb_social_actions[base + 2].label, &x, &y);
-            gb_story_ui_text("  <", &x, &y);
-            gb_story_ui_text(gb_social_actions[base + 3].label, &x, &y);
+            continue;
         }
+        const int index = first_oam + used++;
+        oam[index * 4] = (u16)(ys[i] & 0x00FF) | GB_OBJ_256_COLOR;
+        oam[index * 4 + 1] = (u16)(xs[i] & 0x01FF) | GB_OBJ_SIZE_1;
+        oam[index * 4 + 2] = (u16)(roots[i] * 2u);
+        oam[index * 4 + 3] = 0;
     }
-    else if(story->social.state == GB_SOCIAL_SECONDARY)
+    return used;
+}
+
+static void gb_story_ui_draw_social(const GbStoryRuntime* story)
+{
+    if(story->social.state == GB_SOCIAL_RESPONSE)
     {
-        if(story->social.action_index < GB_SOCIAL_ACTION_COUNT)
+        gb_story_ui_draw_social_response(story);
+        return;
+    }
+    if(story->social.state == GB_SOCIAL_ROOT_SELECTOR ||
+       story->social.state == GB_SOCIAL_SECONDARY)
+    {
+        gb_social_selector_upload_map(story);
+        gb_social_selector_upload_label(story);
+        if(story->social.state == GB_SOCIAL_SECONDARY)
         {
-            gb_story_ui_text(gb_social_actions[story->social.action_index].label, &x, &y);
-            gb_story_ui_newline(&x, &y);
+            gb_social_selector_upload_topics(story);
         }
-        gb_story_ui_text(gb_story_ui_topic(story), &x, &y);
+        return;
     }
-    else if(story->social.state == GB_SOCIAL_RESPONSE)
-    {
-        gb_story_ui_text(story->social.response_text, &x, &y);
-    }
-    gb_story_ui_upload();
+    gb_video_clear_story_ui();
 }
 
 void gb_video_draw_story_ui(const GbStoryRuntime* story)
@@ -1632,8 +1964,16 @@ static int gb_video_draw_player_state_at(const GbPlayer* player, const GbStoryRu
         return gb_video_draw_player_bicycle(player, camera_x, camera_y, first_oam);
     }
     const int static_count = gb_video_draw_level_static_composite(camera_x, camera_y, first_oam);
-    gb_video_draw_player_oam(player, camera_x, camera_y, first_oam + static_count);
-    return static_count + 2;
+    const int social_count = gb_video_draw_social_action_icons(story, first_oam + static_count);
+    const int reaction_count = gb_video_draw_social_reaction(
+        player, story, camera_x, camera_y, first_oam + static_count + social_count);
+    const int prompt_count = gb_video_draw_interaction_prompt(
+        player, story, camera_x, camera_y,
+        first_oam + static_count + social_count + reaction_count);
+    gb_video_draw_player_oam(
+        player, camera_x, camera_y,
+        first_oam + static_count + social_count + reaction_count + prompt_count);
+    return static_count + social_count + reaction_count + prompt_count + 2;
 }
 
 void gb_video_draw_player_state(const GbPlayer* player, const GbStoryRuntime* story,

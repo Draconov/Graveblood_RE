@@ -234,15 +234,15 @@ class WardrobeGameIntegrationTests(unittest.TestCase):
         self.assertIn('#include <graveblood/wardrobe.h>', game)
         self.assertIn('GbWardrobeRuntime wardrobe;', game)
         self.assertIn('input.held == (KEY_B | KEY_SELECT)', game)
-        self.assertIn('const int interaction_active = gb_story_ui_active(&story);', game)
-        self.assertIn('if(! interaction_active)', game)
+        self.assertIn('int player_locked = gb_story_player_controls_locked(&story);', game)
+        self.assertIn('if(! player_locked && input.held == (KEY_B | KEY_SELECT))', game)
         self.assertIn('scene.active = GB_SCENE_WARDROBE;', game)
         self.assertIn('gb_video_load_wardrobe();', game)
         wardrobe_branch = game[game.index('if(scene.active == GB_SCENE_WARDROBE)'):game.index('/* GameplayScene_update publishes/streams the camera')]
         self.assertIn('gb_video_gameplay_lighting_tick(1);', wardrobe_branch,
                       'active Wardrobe frames must retain Player_update lighting cadence')
         player_lighting = game.index(
-            'gb_video_gameplay_lighting_tick(interaction_active ? 0 : 1);')
+            'gb_video_gameplay_lighting_tick(interaction_clock_paused ? 0 : 1);')
         combo_start = game.index('input.held == (KEY_B | KEY_SELECT)', player_lighting)
         pda_start = game.index('if(input.pressed & KEY_START)', combo_start)
         self.assertLess(player_lighting, combo_start)

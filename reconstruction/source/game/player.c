@@ -137,6 +137,8 @@ void gb_player_spawn(GbPlayer* player, s16 x, s16 y)
     player->animation_state = GB_PLAYER_ANIM_IDLE;
     player->animation_frame = 1;
     player->animation_countdown = 5;
+    player->interaction_available = 0;
+    player->prompt_bob_phase = 0;
 }
 
 
@@ -235,6 +237,17 @@ static void gb_player_sync_external_pixel_position(GbPlayer* player)
 void gb_player_update(GbPlayer* player, const GbLevelAssets* level, const GbInput* input)
 {
     gb_player_sync_external_pixel_position(player);
+
+    /* Player_update 0x08008344 advances Player+0xF0 through 0..31; the
+       copied 32-dword table at ROM 0x08019820 supplies prompt vertical bob. */
+    if(player->prompt_bob_phase >= 31)
+    {
+        player->prompt_bob_phase = 0;
+    }
+    else
+    {
+        ++player->prompt_bob_phase;
+    }
 
     if(player->motion_reset_x)
     {

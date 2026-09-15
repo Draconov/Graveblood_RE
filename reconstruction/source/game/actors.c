@@ -244,6 +244,22 @@ static GbInteractionType gb_actor_interaction_type(u8 state)
     return GB_INTERACTION_NONE;
 }
 
+static void gb_actor_face_player_for_interaction(GbActor* actor, const GbPlayer* player,
+                                                 GbInteractionType type)
+{
+    if(! actor || ! player ||
+       (type != GB_INTERACTION_SOCIAL && type != GB_INTERACTION_DIALOGUE))
+    {
+        return;
+    }
+
+    /* NPC fresh-A interaction bootstraps at 0x08002B40/0x08002D96 compare
+       actor X against Player X, then write actor+0x4C before entering the
+       social/dialogue path.  Collection/state-4 does not share this facing
+       write. */
+    actor->facing_right = (u8)(gb_actor_pixel_x(actor) < player->x);
+}
+
 static int gb_actor_player_in_interaction(const GbActor* actor, const GbPlayer* player)
 {
     const int size = gb_actor_interaction_size(actor->descriptor);
@@ -508,7 +524,7 @@ s16 gb_leaf_particle_pixel_y(const GbLeafParticle* particle)
     return (s16)gb_leaf_fixed_to_pixel(particle->fixed_y);
 }
 
-void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
+void gb_actor_system_update(GbActorSystem* system, GbPlayer* player,
                             const GbInput* input, GbInteractionEvent* event)
 {
     event->type = GB_INTERACTION_NONE;
@@ -541,16 +557,21 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
         {
             gb_actor_update_route(actor);
         }
+        if(gb_actor_player_in_interaction(actor, player) &&
+           gb_actor_interaction_type(actor->descriptor->state) != GB_INTERACTION_NONE)
+        {
+            player->interaction_available = 1;
+        }
     }
 
-    if(! (input->pressed & KEY_A))
+    if(! input || ! (input->pressed & KEY_A))
     {
         return;
     }
 
     for(u8 i = 0; i < system->count; ++i)
     {
-        const GbActor* actor = &system->actors[i];
+        GbActor* actor = &system->actors[i];
         if(! actor->active || ! actor->descriptor || ! gb_actor_player_in_interaction(actor, player))
         {
             continue;
@@ -560,6 +581,7 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
         {
             continue;
         }
+        gb_actor_face_player_for_interaction(actor, player, type);
         event->type = type;
         event->actor_index = i;
         event->state = actor->descriptor->state;
@@ -570,7 +592,7 @@ void gb_actor_system_update(GbActorSystem* system, const GbPlayer* player,
     }
 }
 
-void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* player,
+void gb_actor_system_update_overlays(GbActorSystem* system, GbPlayer* player,
                                      const GbInput* input, GbInteractionEvent* event)
 {
     event->type = GB_INTERACTION_NONE;
@@ -602,16 +624,21 @@ void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* play
         {
             gb_actor_update_route(actor);
         }
+        if(gb_actor_player_in_interaction(actor, player) &&
+           gb_actor_interaction_type(actor->descriptor->state) != GB_INTERACTION_NONE)
+        {
+            player->interaction_available = 1;
+        }
     }
 
-    if(! (input->pressed & KEY_A))
+    if(! input || ! (input->pressed & KEY_A))
     {
         return;
     }
 
     for(u8 i = 0; i < system->count; ++i)
     {
-        const GbActor* actor = &system->actors[i];
+        GbActor* actor = &system->actors[i];
         if(! actor->active || ! actor->descriptor ||
            actor->story_overlay_index == GB_ACTOR_STORY_NONE ||
            ! gb_actor_player_in_interaction(actor, player))
@@ -623,6 +650,7 @@ void gb_actor_system_update_overlays(GbActorSystem* system, const GbPlayer* play
         {
             continue;
         }
+        gb_actor_face_player_for_interaction(actor, player, type);
         event->type = type;
         event->actor_index = i;
         event->state = actor->descriptor->state;
@@ -806,7 +834,7 @@ int gb_actor_system_update_physical_fgtile_music_at(GbActorSystem* system, GbPla
     return 1;
 }
 
-int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer* player,
+int gb_actor_system_update_physical_npc_at(GbActorSystem* system, GbPlayer* player,
                                            const GbInput* input, GbInteractionEvent* event,
                                            u8 physical_index)
 {
@@ -829,15 +857,22 @@ int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer
         gb_actor_update_route(actor);
     }
 
+    const int in_interaction = gb_actor_player_in_interaction(actor, player);
+    if(in_interaction && gb_actor_interaction_type(actor->descriptor->state) != GB_INTERACTION_NONE)
+    {
+        player->interaction_available = 1;
+    }
+
     /* NPC_update owns the fresh-A interaction gate at the NPC's physical
        object slot.  Keep an already-emitted event latched so overlapping NPCs
        later in the same object traversal cannot replace the first one. */
     if(input && event && event->type == GB_INTERACTION_NONE &&
-       (input->pressed & KEY_A) && gb_actor_player_in_interaction(actor, player))
+       (input->pressed & KEY_A) && in_interaction)
     {
         const GbInteractionType type = gb_actor_interaction_type(actor->descriptor->state);
         if(type != GB_INTERACTION_NONE)
         {
+            gb_actor_face_player_for_interaction(actor, player, type);
             event->type = type;
             event->actor_index = (u8)(actor - system->actors);
             event->state = actor->descriptor->state;
@@ -849,7 +884,7 @@ int gb_actor_system_update_physical_npc_at(GbActorSystem* system, const GbPlayer
     return 1;
 }
 
-void gb_actor_system_update_physical_npcs(GbActorSystem* system, const GbPlayer* player)
+void gb_actor_system_update_physical_npcs(GbActorSystem* system, GbPlayer* player)
 {
     if(! system || ! system->level || system->level->level_id >= 11)
     {

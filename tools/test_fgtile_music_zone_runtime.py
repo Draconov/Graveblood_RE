@@ -290,9 +290,9 @@ class FgtileMusicZoneRuntimeTests(unittest.TestCase):
         self.assertLess(pda, player)
         self.assertGreater(post_music, player)
 
-        interaction = game.index('if(gb_story_ui_active(&story))')
-        interaction_end = game.index("else\n        {", interaction)
-        self.assertIn('gb_player_music_tick(&player)', game[interaction:interaction_end])
+        player_lock_branch = game.index('if(player_locked)', music_tick)
+        self.assertLess(music_tick, player_lock_branch)
+        self.assertLess(player_lock_branch, player)
 
 
 if __name__ == '__main__':

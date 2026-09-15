@@ -60,6 +60,14 @@ OBJ_HIGH_PALETTE_SOURCE = 0x08652DB4
 OBJ_HIGH_PALETTE_COUNT = 32
 FGTILE_PATCH_SOURCE_BASE_32 = 1680
 FGTILE_PATCH_SOURCE_END_BYTES = 0x23CC0
+SOCIAL_SELECTOR_TRANSLATION = 0x0864825C
+SOCIAL_SELECTOR_MAP_SOURCES = (0x08655364, 0x08654554, 0x08654EB4, 0x08654A04)
+SOCIAL_SELECTOR_MAP_SOURCE_WIDTH = 30
+SOCIAL_SELECTOR_MAP_SOURCE_CELLS = 600
+SOCIAL_SELECTOR_MAP_X = 1
+SOCIAL_SELECTOR_MAP_Y = 9
+SOCIAL_SELECTOR_WIDTH = 19
+SOCIAL_SELECTOR_HEIGHT = 10
 
 
 @dataclass(frozen=True)
@@ -428,6 +436,83 @@ def pack_level_static_obj_bank(rom: bytes) -> PackedActorSpriteBank:
     palette = _pack_actor_base_palette(rom)
     return PackedActorSpriteBank(
         len(LEVEL_STATIC_TILE_ARGS), palette, pack_actor_obj_lighting_source(rom), pack_actor_obj_high_palette(rom), bytes(packed)
+    )
+
+
+def pack_social_action_icons(rom: bytes, root: Path) -> bytes:
+    """Pack the twenty ROM-authored 16x16 social action icons.
+
+    Each action record's +0x1C visual selector is biased by +0x200 logical
+    8bpp OBJ tiles by the original 0x08004D88 staging helper.  The helper
+    then copies the two top tiles and the pair one 2D-OBJ row (+16 logical
+    tiles) below into the selector's temporary roots.
+    """
+    source_base = OBJ_TILES_SOURCE - ROM_BASE
+    source_bytes = OBJ_PALETTE_SOURCE - OBJ_TILES_SOURCE
+    source = rom[source_base:source_base + source_bytes]
+    if len(source) != source_bytes:
+        raise ValueError('OBJ source truncated while packing social icons')
+    rows = _read_csv(root / 'data' / 'player_interaction_action_table.csv')
+    if len(rows) != 20:
+        raise ValueError(f'expected 20 social actions, got {len(rows)}')
+    out = bytearray()
+    for index, row in enumerate(rows):
+        if int(row['index']) != index:
+            raise ValueError('social action table is not in canonical index order')
+        logical_root = 0x200 + int(row['visual_selector'])
+        for logical in (logical_root, logical_root + 1, logical_root + 16, logical_root + 17):
+            off = logical * 64
+            blob = source[off:off + 64]
+            if len(blob) != 64:
+                raise ValueError(f'social action {index} tile {logical} overruns OBJ source')
+            out.extend(blob)
+    return bytes(out)
+
+
+def pack_social_reaction_faces(rom: bytes) -> bytes:
+    """Pack the five 16x16 reaction faces loaded from OBJ source +0x9800.
+
+    State-3 social teardown calls 0x08004C60, which copies the 0x800-byte
+    temporary face bank into OBJ VRAM.  During the 150-frame pending-response
+    countdown Player_update submits logical roots 0,2,4,6,8.
+    """
+    source_base = OBJ_TILES_SOURCE - ROM_BASE + 0x9800
+    bank = rom[source_base:source_base + 0x800]
+    if len(bank) != 0x800:
+        raise ValueError('social reaction OBJ bank truncated')
+    out = bytearray()
+    for logical_root in (0, 2, 4, 6, 8):
+        for logical in (logical_root, logical_root + 1, logical_root + 16, logical_root + 17):
+            off = logical * 64
+            blob = bank[off:off + 64]
+            if len(blob) != 64:
+                raise ValueError(f'social reaction root {logical_root} tile {logical} truncated')
+            out.extend(blob)
+    return bytes(out)
+
+
+def pack_social_selector_maps(rom: bytes) -> tuple[tuple[int, ...], ...]:
+    """Recover the four 19x10 BG0 selector maps consumed by 0x0800A620."""
+    sources = [
+        _read_u16_array(rom, addr, SOCIAL_SELECTOR_MAP_SOURCE_CELLS)
+        for addr in SOCIAL_SELECTOR_MAP_SOURCES
+    ]
+    max_source = max(
+        source[(SOCIAL_SELECTOR_MAP_Y + y) * SOCIAL_SELECTOR_MAP_SOURCE_WIDTH +
+               SOCIAL_SELECTOR_MAP_X + x]
+        for source in sources
+        for y in range(SOCIAL_SELECTOR_HEIGHT)
+        for x in range(SOCIAL_SELECTOR_WIDTH)
+    )
+    translation = _read_u16_array(rom, SOCIAL_SELECTOR_TRANSLATION, max_source + 1)
+    return tuple(
+        tuple(
+            translation[source[(SOCIAL_SELECTOR_MAP_Y + y) * SOCIAL_SELECTOR_MAP_SOURCE_WIDTH +
+                               SOCIAL_SELECTOR_MAP_X + x]]
+            for y in range(SOCIAL_SELECTOR_HEIGHT)
+            for x in range(SOCIAL_SELECTOR_WIDTH)
+        )
+        for source in sources
     )
 
 
@@ -821,7 +906,7 @@ def load_runtime_background(
     )
 
 
-def select_bg0_ui_tiles(runtime: RuntimeBackground, count: int = BG0_UI_TILE_COUNT) -> tuple[int, ...]:
+def select_bg0_ui_tiles(runtime: RuntimeBackground, count: int = BG0_UI_TILE_COUNT, reserved_tiles: Iterable[int] = ()) -> tuple[int, ...]:
     """Return world-unreferenced 8bpp tile IDs below screenblock 27."""
     used_sources = set(runtime.layer_a) | set(runtime.layer_b) | set(runtime.fixed_map)
     used_tiles = {
@@ -829,7 +914,14 @@ def select_bg0_ui_tiles(runtime: RuntimeBackground, count: int = BG0_UI_TILE_COU
         for source in used_sources
         if source < len(runtime.translation)
     }
-    safe = tuple(tile for tile in range(864) if tile not in used_tiles)
+    # Normal dialogue reuses original BG character tiles 3/4/5 as the
+    # vertical edge, corner, and horizontal edge.  Dynamic UI glyph uploads
+    # must never overwrite those persistent border characters.
+    reserved_ui_tiles = {3, 4, 5} | {int(tile) & 0x03FF for tile in reserved_tiles}
+    safe = tuple(
+        tile for tile in range(864)
+        if tile not in used_tiles and tile not in reserved_ui_tiles
+    )
     if len(safe) < count:
         raise ValueError(f'need {count} BG0 UI tiles, only {len(safe)} world-safe IDs exist')
     return safe[:count]
@@ -1030,6 +1122,7 @@ def _asset_c(
     spec: LevelSpec,
     runtime: RuntimeBackground,
     collision: tuple[int, ...],
+    reserved_ui_tiles: Iterable[int] = (),
 ) -> str:
     portal_rows = []
     for p in spec.portals:
@@ -1038,7 +1131,7 @@ def _asset_c(
     name = _asset_symbol(level, variant)
     tile_words = _bytes_to_u16(runtime.tile_bytes)
     patch_source_words = _bytes_to_u16(runtime.patch_source_bytes)
-    ui_tiles = select_bg0_ui_tiles(runtime)
+    ui_tiles = select_bg0_ui_tiles(runtime, reserved_tiles=reserved_ui_tiles)
     return f"""#include <graveblood/assets.h>
 
 const u16 {name}_bg_palette[256] = {{
@@ -1305,6 +1398,24 @@ const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT] = {{
 """
 
 
+def _social_selector_c(icons: bytes, reaction_faces: bytes, maps: tuple[tuple[int, ...], ...]) -> str:
+    flattened_maps = [value for selector_map in maps for value in selector_map]
+    return f"""#include <graveblood/assets.h>
+
+const u16 gb_social_action_obj_icons[GB_SOCIAL_ACTION_ICON_COUNT * GB_SOCIAL_ACTION_ICON_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(icons), 12, 4)}
+}};
+
+const u16 gb_social_reaction_obj_faces[GB_SOCIAL_REACTION_FACE_COUNT * GB_SOCIAL_REACTION_FACE_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(reaction_faces), 12, 4)}
+}};
+
+const u16 gb_social_selector_maps[GB_SOCIAL_SELECTOR_STATE_COUNT * GB_SOCIAL_SELECTOR_MAP_CELLS] = {{
+{_c_values(flattened_maps, 10, 4)}
+}};
+"""
+
+
 def _font_data_c(font: CanonicalFont) -> str:
     rows = ',\n'.join(
         f'    {{ {glyph.pixel_width}, {{ ' + ', '.join(f'0x{row:04X}' for row in glyph.rows) + ' } }'
@@ -1514,6 +1625,14 @@ enum {{
     GB_SOCIAL_ASK_TOPIC_COUNT = 5,
     GB_SOCIAL_CRITICIZE_TOPIC_COUNT = 9,
     GB_SOCIAL_RESPONSE_COUNT = 216,
+    GB_SOCIAL_ACTION_ICON_COUNT = 20,
+    GB_SOCIAL_ACTION_ICON_HALFWORDS = 128,
+    GB_SOCIAL_REACTION_FACE_COUNT = 5,
+    GB_SOCIAL_REACTION_FACE_HALFWORDS = 128,
+    GB_SOCIAL_SELECTOR_STATE_COUNT = 4,
+    GB_SOCIAL_SELECTOR_MAP_WIDTH = 19,
+    GB_SOCIAL_SELECTOR_MAP_HEIGHT = 10,
+    GB_SOCIAL_SELECTOR_MAP_CELLS = GB_SOCIAL_SELECTOR_MAP_WIDTH * GB_SOCIAL_SELECTOR_MAP_HEIGHT,
     GB_FONT_GLYPH_COUNT = 127,
     GB_MONSTER_SPRITE_COUNT = 5,
     GB_MONSTER_SPRITE_HALFWORDS = 128,
@@ -1573,6 +1692,9 @@ extern const char* const gb_social_subject_topics[GB_SOCIAL_SUBJECT_TOPIC_COUNT]
 extern const char* const gb_social_ask_topics[GB_SOCIAL_ASK_TOPIC_COUNT];
 extern const char* const gb_social_criticize_topics[GB_SOCIAL_CRITICIZE_TOPIC_COUNT];
 extern const GbSocialResponseData gb_social_responses[GB_SOCIAL_RESPONSE_COUNT];
+extern const u16 gb_social_action_obj_icons[GB_SOCIAL_ACTION_ICON_COUNT * GB_SOCIAL_ACTION_ICON_HALFWORDS];
+extern const u16 gb_social_reaction_obj_faces[GB_SOCIAL_REACTION_FACE_COUNT * GB_SOCIAL_REACTION_FACE_HALFWORDS];
+extern const u16 gb_social_selector_maps[GB_SOCIAL_SELECTOR_STATE_COUNT * GB_SOCIAL_SELECTOR_MAP_CELLS];
 extern const GbFontGlyph gb_font_glyphs[GB_FONT_GLYPH_COUNT];
 extern const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS];
 extern const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS];
@@ -1723,6 +1845,10 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     actor_sprites = pack_actor_sprite_bank(rom, actor_data.visuals)
     foreground_sprites = pack_foreground_sprite_bank(rom)
     story_data = build_story_runtime_data(root)
+    social_action_icons = pack_social_action_icons(rom, root)
+    social_reaction_faces = pack_social_reaction_faces(rom)
+    social_selector_maps = pack_social_selector_maps(rom)
+    social_selector_tiles = {entry & 0x03FF for state in social_selector_maps for entry in state}
     font = extract_canonical_font(rom)
     monster = pack_monster_sprite_bank(rom)
     level_static = pack_level_static_obj_bank(rom)
@@ -1733,7 +1859,7 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
         runtime = load_runtime_background(root, rom, spec, variant)
         collision = _read_collision(rom, spec)
         (out / 'data' / _asset_filename(level, variant)).write_text(
-            _asset_c(level, variant, spec, runtime, collision), encoding='utf-8'
+            _asset_c(level, variant, spec, runtime, collision, social_selector_tiles), encoding='utf-8'
         )
 
     # These compact Tiled helper files are editor conveniences, not runtime assets.
@@ -1753,6 +1879,9 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     (out / 'data' / 'actor_routes.c').write_text(_actor_routes_c(actor_data), encoding='utf-8')
     (out / 'data' / 'actor_sprite_data.c').write_text(_actor_sprite_c(actor_data, actor_sprites, foreground_sprites), encoding='utf-8')
     (out / 'data' / 'story_data.c').write_text(_story_data_c(story_data), encoding='utf-8')
+    (out / 'data' / 'social_selector_assets.c').write_text(
+        _social_selector_c(social_action_icons, social_reaction_faces, social_selector_maps), encoding='utf-8'
+    )
     (out / 'data' / 'font_data.c').write_text(_font_data_c(font), encoding='utf-8')
     (out / 'data' / 'monster_sprite.c').write_text(_monster_sprite_c(monster, level_static), encoding='utf-8')
     (out / 'data' / 'ending' / 'argument0_copy1.bin').write_bytes(ending_copy1)

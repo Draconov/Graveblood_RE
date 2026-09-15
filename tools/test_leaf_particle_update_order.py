@@ -192,7 +192,7 @@ class LeafParticleUpdateOrderTests(unittest.TestCase):
         self.assertNotIn('gb_actor_system_update_environment(&actors', game)
 
         pre_start = game.index('for(u8 physical_index = 0; physical_index < player_physical_index; ++physical_index)')
-        pre_end = game.index('/* The latched ending flag', pre_start)
+        pre_end = game.index('const int final_effect_was_pending', pre_start)
         pre = game[pre_start:pre_end]
         leaves = pre.index('gb_actor_system_update_physical_leaves_at(')
         fgtile = pre.index('gb_actor_system_update_physical_fgtile_at(')
@@ -200,12 +200,11 @@ class LeafParticleUpdateOrderTests(unittest.TestCase):
         self.assertLess(leaves, fgtile)
         self.assertLess(fgtile, portal)
 
-        interaction = game.index('if(gb_story_ui_active(&story))')
-        interaction_end = game.index("else\n        {", interaction)
-        self.assertIn("gb_actor_system_update_physical_leaves_at(\n                &actors, 0, world.camera_x, world.camera_y);",
-                      game[interaction:interaction_end])
+        player_lock_branch = game.index('if(player_locked)', pre_end)
+        self.assertLess(pre_start, player_lock_branch)
+        self.assertIn('gb_actor_system_update_physical_leaves_at(', pre)
 
-        post_loop = game.index('for(u16 index = (u16)player_physical_index + 1;', interaction_end)
+        post_loop = game.index('for(u16 index = (u16)player_physical_index + 1;', player_lock_branch)
         particle_update = game.index('gb_actor_system_update_leaf_particles(', post_loop)
         sfx_drain = game.index('for(;;)', post_loop)
         self.assertLess(post_loop, particle_update)
@@ -216,7 +215,7 @@ class LeafParticleUpdateOrderTests(unittest.TestCase):
         # Wardrobe/PDA gates are inside Player_update in the ROM.  Level 0/6/9/10
         # all serialize Leaves at physical slot 0 before Player, so the clean-room
         # modal entry frame must run that pre-Player slot before either gate.
-        overlay = game.index('gb_actor_system_update_overlays(&actors, &player, &input, &interaction);')
+        overlay = game.index('gb_actor_system_update_overlays(')
         pre_loop = game.index(
             'for(u8 physical_index = 0; physical_index < player_physical_index; ++physical_index)')
         leaves = game.index('gb_actor_system_update_physical_leaves_at(', pre_loop)

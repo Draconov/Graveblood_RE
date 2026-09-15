@@ -57,6 +57,8 @@ typedef struct {
     u8 action_index;
     u8 topic_index;
     u8 topic_count;
+    /* Observable Player+0x38C social-depth latch: selector pages=0, leaf page=1. */
+    u8 depth;
     u8 followup_armed;
     u16 post_countdown;
     const char* response_text;
@@ -94,6 +96,8 @@ GbStoryGateResult gb_story_try_level9_treetype20_action(const GbLevelAssets* lev
                                                         const GbInput* input);
 
 int gb_story_ui_active(const GbStoryRuntime* story);
+int gb_story_player_controls_locked(const GbStoryRuntime* story);
+int gb_story_world_traversal_continues(const GbStoryRuntime* story);
 const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story);
 const GbMessageRecord* gb_story_message_primary(const GbStoryRuntime* story);
 const GbMessageRecord* gb_story_message_auxiliary(const GbStoryRuntime* story, u8 slot);

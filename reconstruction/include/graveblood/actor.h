@@ -64,6 +64,10 @@ typedef struct {
     u8 animation_state;
     u8 animation_frame;
     u8 animation_countdown;
+    /* Original Player+0x1C0 contact advertisement consumed by Player_draw. */
+    u8 interaction_available;
+    /* Original Player+0xF0 indexes the 32-entry vertical prompt bob table. */
+    u8 prompt_bob_phase;
 } GbPlayer;
 
 void gb_player_spawn(GbPlayer* player, s16 x, s16 y);
