@@ -113,6 +113,8 @@ s16 gb_leaf_particle_pixel_y(const GbLeafParticle* p) { (void)p; return 0; }
 s16 gb_actor_pixel_x(const GbActor* a) { return (s16)(a->fixed_x / 256); }
 s16 gb_actor_pixel_y(const GbActor* a) { return (s16)(a->fixed_y / 256); }
 u8 gb_player_frame_index(const GbPlayer* p) { (void)p; return 0; }
+const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story)
+{ (void)story; return 0; }
 
 static void init_npc(GbActor* actor, const GbActorDescriptor* desc, int x, u8 overlay)
 {
@@ -166,6 +168,7 @@ int main(void)
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
                 str(ROOT / 'reconstruction/data/social_selector_assets.c'),
+                str(ROOT / 'reconstruction/data/dialogue_portrait_assets.c'),
                 str(td / 'oam_order.c'), '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)

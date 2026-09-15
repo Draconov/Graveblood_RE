@@ -1656,6 +1656,85 @@ static void gb_social_selector_upload_topics(const GbStoryRuntime* story)
     }
 }
 
+static void gb_stage_dialogue_portrait_bank(u8 bank_index)
+{
+    if(bank_index >= GB_DIALOGUE_PORTRAIT_BANK_COUNT)
+    {
+        return;
+    }
+    const u16* source = gb_dialogue_portrait_obj_banks +
+                        (u32)bank_index * GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS;
+    /* Original 0x08005720 copies 0x1200 bytes to OBJ VRAM +0x0000,
+       leaves +0x1200..+0x13FF untouched, then copies 0x0200 bytes to +0x1400. */
+    gb_copy_u16(gb_obj_logical_tile_ptr(0), source, GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS);
+    gb_copy_u16(gb_obj_logical_tile_ptr(0x50),
+                source + GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS,
+                GB_DIALOGUE_PORTRAIT_TAIL_HALFWORDS);
+}
+
+static int gb_video_draw_dialogue_portrait(const GbStoryRuntime* story, int first_oam)
+{
+    if(! story || ! story->dialogue.active)
+    {
+        return 0;
+    }
+    const GbDialogueRecord* record = gb_story_dialogue_record(story);
+    if(! record || record->opcode < 0 || record->argument < 0 ||
+       record->argument >= GB_DIALOGUE_PORTRAIT_BANK_COUNT)
+    {
+        return 0;
+    }
+
+    gb_stage_dialogue_portrait_bank((u8)record->argument);
+
+    /* Exact fixed-screen compositor at 0x080080BC.  It builds the portrait
+       from 17 16x16 and 11 8x8 cells after 0x08005720 stages the selected bank. */
+    static const s16 x16[17] = {
+        168, 184, 200, 216, 168, 184, 200, 216,
+        176, 192, 208, 176, 192, 208, 176, 192, 208,
+    };
+    static const s16 y16[17] = {
+        120, 120, 120, 120, 136, 136, 136, 136,
+        72, 72, 72, 88, 88, 88, 104, 104, 104,
+    };
+    static const u16 tile16[17] = {
+        8, 10, 12, 14, 40, 42, 44, 46,
+        0, 2, 4, 32, 34, 36, 64, 66, 68,
+    };
+    static const s16 x8[11] = {
+        232, 232, 232, 232, 232,
+        224, 224, 224, 224, 224, 224,
+    };
+    static const s16 y8[11] = {
+        112, 120, 128, 136, 144,
+        72, 80, 88, 96, 104, 112,
+    };
+    static const u16 tile8[11] = {
+        7, 23, 39, 55, 71,
+        6, 22, 38, 54, 70, 86,
+    };
+
+    volatile u16* oam = (volatile u16*)OAM;
+    int used = 0;
+    for(int i = 0; i < 17; ++i)
+    {
+        const int index = first_oam + used++;
+        oam[index * 4] = (u16)(y16[i] & 0x00FF) | GB_OBJ_256_COLOR;
+        oam[index * 4 + 1] = (u16)(x16[i] & 0x01FF) | GB_OBJ_SIZE_1;
+        oam[index * 4 + 2] = (u16)(tile16[i] * 2u); /* priority 0 */
+        oam[index * 4 + 3] = 0;
+    }
+    for(int i = 0; i < 11; ++i)
+    {
+        const int index = first_oam + used++;
+        oam[index * 4] = (u16)(y8[i] & 0x00FF) | GB_OBJ_256_COLOR;
+        oam[index * 4 + 1] = (u16)(x8[i] & 0x01FF);
+        oam[index * 4 + 2] = (u16)(tile8[i] * 2u); /* priority 0 */
+        oam[index * 4 + 3] = 0;
+    }
+    return used;
+}
+
 static int gb_video_draw_social_reaction(const GbPlayer* player,
                                          const GbStoryRuntime* story,
                                          s16 camera_x, s16 camera_y, int first_oam)
@@ -1951,29 +2030,35 @@ static int gb_video_draw_level_static_composite(s16 camera_x, s16 camera_y, int 
 static int gb_video_draw_player_state_at(const GbPlayer* player, const GbStoryRuntime* story,
                                          s16 camera_x, s16 camera_y, int first_oam)
 {
+    const int portrait_count = gb_video_draw_dialogue_portrait(story, first_oam);
+    const int player_first_oam = first_oam + portrait_count;
     if(story && story->state.monster_render_enabled)
     {
         /* Player_draw checks the fifth-sketch monster branch before the
            Level-9/10 parked-bicycle branches, so the special monster
            composite is exclusive of those static bicycle cells. */
-        return gb_video_draw_monster(player, camera_x, first_oam);
+        return portrait_count + gb_video_draw_monster(player, camera_x, player_first_oam);
     }
     gb_monster_animation_counter = 0;
     if(player && player->bicycle_mode == 2)
     {
-        return gb_video_draw_player_bicycle(player, camera_x, camera_y, first_oam);
+        return portrait_count +
+               gb_video_draw_player_bicycle(player, camera_x, camera_y, player_first_oam);
     }
-    const int static_count = gb_video_draw_level_static_composite(camera_x, camera_y, first_oam);
-    const int social_count = gb_video_draw_social_action_icons(story, first_oam + static_count);
+    const int static_count = gb_video_draw_level_static_composite(
+        camera_x, camera_y, player_first_oam);
+    const int social_count = gb_video_draw_social_action_icons(
+        story, player_first_oam + static_count);
     const int reaction_count = gb_video_draw_social_reaction(
-        player, story, camera_x, camera_y, first_oam + static_count + social_count);
+        player, story, camera_x, camera_y,
+        player_first_oam + static_count + social_count);
     const int prompt_count = gb_video_draw_interaction_prompt(
         player, story, camera_x, camera_y,
-        first_oam + static_count + social_count + reaction_count);
+        player_first_oam + static_count + social_count + reaction_count);
     gb_video_draw_player_oam(
         player, camera_x, camera_y,
-        first_oam + static_count + social_count + reaction_count + prompt_count);
-    return static_count + social_count + reaction_count + prompt_count + 2;
+        player_first_oam + static_count + social_count + reaction_count + prompt_count);
+    return portrait_count + static_count + social_count + reaction_count + prompt_count + 2;
 }
 
 void gb_video_draw_player_state(const GbPlayer* player, const GbStoryRuntime* story,

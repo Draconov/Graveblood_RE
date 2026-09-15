@@ -181,6 +181,10 @@ enum {
     GB_LEAF_FRAME_HALFWORDS = 32,
     GB_DIALOGUE_SCRIPT_COUNT = 7,
     GB_DIALOGUE_RECORD_COUNT = 58,
+    GB_DIALOGUE_PORTRAIT_BANK_COUNT = 5,
+    GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS = 0x1200 / 2,
+    GB_DIALOGUE_PORTRAIT_TAIL_HALFWORDS = 0x0200 / 2,
+    GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS = GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS + GB_DIALOGUE_PORTRAIT_TAIL_HALFWORDS,
     GB_MESSAGE_RECORD_COUNT = 6,
     GB_SOCIAL_PROFILE_COUNT = 2,
     GB_SOCIAL_ACTION_COUNT = 20,
@@ -248,6 +252,7 @@ extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES
 extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
 extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
 extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
+extern const u16 gb_dialogue_portrait_obj_banks[GB_DIALOGUE_PORTRAIT_BANK_COUNT * GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS];
 extern const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT];
 extern const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT];
 extern const GbSocialActionData gb_social_actions[GB_SOCIAL_ACTION_COUNT];

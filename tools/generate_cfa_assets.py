@@ -68,6 +68,12 @@ SOCIAL_SELECTOR_MAP_X = 1
 SOCIAL_SELECTOR_MAP_Y = 9
 SOCIAL_SELECTOR_WIDTH = 19
 SOCIAL_SELECTOR_HEIGHT = 10
+DIALOGUE_PORTRAIT_SOURCE = 0x086493F0
+DIALOGUE_PORTRAIT_BANK_COUNT = 5
+DIALOGUE_PORTRAIT_BANK_STRIDE = 0x1800
+DIALOGUE_PORTRAIT_HEAD_BYTES = 0x1200
+DIALOGUE_PORTRAIT_TAIL_SOURCE_OFFSET = 0x1400
+DIALOGUE_PORTRAIT_TAIL_BYTES = 0x200
 
 
 @dataclass(frozen=True)
@@ -489,6 +495,39 @@ def pack_social_reaction_faces(rom: bytes) -> bytes:
                 raise ValueError(f'social reaction root {logical_root} tile {logical} truncated')
             out.extend(blob)
     return bytes(out)
+
+
+def pack_dialogue_portrait_banks(rom: bytes) -> bytes:
+    """Pack the five live dialogue portrait OBJ banks used by 0x08005720.
+
+    Each 0x1800-byte ROM bank has two graphics spans that the original copies
+    into OBJ VRAM: 0x1200 bytes at logical tile 0 and 0x200 bytes from source
+    +0x1400 at logical tile 0x50.  The 0x200-byte gap remains untouched.
+    """
+    out = bytearray()
+    source_base = DIALOGUE_PORTRAIT_SOURCE - ROM_BASE
+    for bank_index in range(DIALOGUE_PORTRAIT_BANK_COUNT):
+        bank = source_base + bank_index * DIALOGUE_PORTRAIT_BANK_STRIDE
+        head = rom[bank:bank + DIALOGUE_PORTRAIT_HEAD_BYTES]
+        tail_start = bank + DIALOGUE_PORTRAIT_TAIL_SOURCE_OFFSET
+        tail = rom[tail_start:tail_start + DIALOGUE_PORTRAIT_TAIL_BYTES]
+        if len(head) != DIALOGUE_PORTRAIT_HEAD_BYTES or len(tail) != DIALOGUE_PORTRAIT_TAIL_BYTES:
+            raise ValueError(f'dialogue portrait bank {bank_index} truncated')
+        out.extend(head)
+        out.extend(tail)
+    return bytes(out)
+
+
+def _dialogue_portrait_c(banks: bytes) -> str:
+    expected = DIALOGUE_PORTRAIT_BANK_COUNT * (DIALOGUE_PORTRAIT_HEAD_BYTES + DIALOGUE_PORTRAIT_TAIL_BYTES)
+    if len(banks) != expected:
+        raise ValueError(f'dialogue portrait payload has {len(banks)} bytes, expected {expected}')
+    return f"""#include <graveblood/assets.h>
+
+const u16 gb_dialogue_portrait_obj_banks[GB_DIALOGUE_PORTRAIT_BANK_COUNT * GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS] = {{
+{_c_values(_bytes_to_u16(banks), 12, 4)}
+}};
+"""
 
 
 def pack_social_selector_maps(rom: bytes) -> tuple[tuple[int, ...], ...]:
@@ -1618,6 +1657,10 @@ enum {{
     GB_LEAF_FRAME_HALFWORDS = 32,
     GB_DIALOGUE_SCRIPT_COUNT = 7,
     GB_DIALOGUE_RECORD_COUNT = 58,
+    GB_DIALOGUE_PORTRAIT_BANK_COUNT = 5,
+    GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS = 0x1200 / 2,
+    GB_DIALOGUE_PORTRAIT_TAIL_HALFWORDS = 0x0200 / 2,
+    GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS = GB_DIALOGUE_PORTRAIT_HEAD_HALFWORDS + GB_DIALOGUE_PORTRAIT_TAIL_HALFWORDS,
     GB_MESSAGE_RECORD_COUNT = 6,
     GB_SOCIAL_PROFILE_COUNT = 2,
     GB_SOCIAL_ACTION_COUNT = 20,
@@ -1685,6 +1728,7 @@ extern const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES
 extern const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS];
 extern const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS];
 extern const GbDialogueScript gb_dialogue_scripts[GB_DIALOGUE_SCRIPT_COUNT];
+extern const u16 gb_dialogue_portrait_obj_banks[GB_DIALOGUE_PORTRAIT_BANK_COUNT * GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS];
 extern const GbMessageRecord gb_message_records[GB_MESSAGE_RECORD_COUNT];
 extern const GbSocialProfileData gb_social_profiles[GB_SOCIAL_PROFILE_COUNT];
 extern const GbSocialActionData gb_social_actions[GB_SOCIAL_ACTION_COUNT];
@@ -1847,6 +1891,7 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     story_data = build_story_runtime_data(root)
     social_action_icons = pack_social_action_icons(rom, root)
     social_reaction_faces = pack_social_reaction_faces(rom)
+    dialogue_portrait_banks = pack_dialogue_portrait_banks(rom)
     social_selector_maps = pack_social_selector_maps(rom)
     social_selector_tiles = {entry & 0x03FF for state in social_selector_maps for entry in state}
     font = extract_canonical_font(rom)
@@ -1881,6 +1926,9 @@ def generate_all(root: Path, out: Path, rom_path: Path | None = None) -> None:
     (out / 'data' / 'story_data.c').write_text(_story_data_c(story_data), encoding='utf-8')
     (out / 'data' / 'social_selector_assets.c').write_text(
         _social_selector_c(social_action_icons, social_reaction_faces, social_selector_maps), encoding='utf-8'
+    )
+    (out / 'data' / 'dialogue_portrait_assets.c').write_text(
+        _dialogue_portrait_c(dialogue_portrait_banks), encoding='utf-8'
     )
     (out / 'data' / 'font_data.c').write_text(_font_data_c(font), encoding='utf-8')
     (out / 'data' / 'monster_sprite.c').write_text(_monster_sprite_c(monster, level_static), encoding='utf-8')

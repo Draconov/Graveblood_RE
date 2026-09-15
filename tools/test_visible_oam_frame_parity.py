@@ -82,8 +82,10 @@ const GbActorVisualSpec gb_actor_visuals[GB_ACTOR_VISUAL_COUNT] = {{0,0}};
 const u16 gb_actor_obj_frames[GB_ACTOR_VISUAL_COUNT * GB_ACTOR_MAX_FRAMES * GB_ACTOR_FRAME_HALFWORDS] = {0};
 const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
 const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
+const u16 gb_dialogue_portrait_obj_banks[GB_DIALOGUE_PORTRAIT_BANK_COUNT * GB_DIALOGUE_PORTRAIT_BANK_HALFWORDS] = {0};
 static const u16 pal[256] = {0};
 
+const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story) { (void)story; return 0; }
 u8 gb_player_frame_index(const GbPlayer* player) { (void)player; return 0; }
 
 int main(void)

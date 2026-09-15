@@ -142,6 +142,8 @@ const u16 gb_player_bicycle_obj_frames[GB_PLAYER_BICYCLE_FRAME_COUNT * GB_PLAYER
 const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALFWORDS] = {0};
 const u16 gb_level_static_obj_tiles[GB_LEVEL_STATIC_SPRITE_COUNT * GB_LEVEL_STATIC_SPRITE_HALFWORDS] = {0};
 u8 gb_player_frame_index(const GbPlayer* p) { (void)p; return 0; }
+const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story)
+{ (void)story; return 0; }
 
 static int find_reaction(int x, int y, int attr2)
 {
@@ -209,6 +211,7 @@ int main(void)
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
                 str(ROOT / 'reconstruction/data/social_selector_assets.c'),
+                str(ROOT / 'reconstruction/data/dialogue_portrait_assets.c'),
                 str(td / 'reaction.c'), '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(0, proc.returncode, proc.stderr)

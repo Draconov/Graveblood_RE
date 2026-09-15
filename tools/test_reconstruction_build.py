@@ -711,6 +711,8 @@ const u16 gb_monster_obj_frames[GB_MONSTER_SPRITE_COUNT * GB_MONSTER_SPRITE_HALF
 const u16 gb_level_static_obj_tiles[4 * 128] = {0};
 
 u8 gb_player_frame_index(const GbPlayer* player) { (void)player; return 0; }
+const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story)
+{ (void)story; return 0; }
 
 static const u16 palette[256] = {0};
 static const u16 tile = 0;
@@ -861,6 +863,7 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
                 str(ROOT / 'reconstruction/data/social_selector_assets.c'),
+                str(ROOT / 'reconstruction/data/dialogue_portrait_assets.c'),
                 str(td / 'level_static_oam_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
@@ -1089,6 +1092,8 @@ const u16 gb_grass_obj_tiles[GB_GRASS_OBJ_HALFWORDS] = {0};
 const u16 gb_leaf_obj_frames[GB_LEAF_FRAME_COUNT * GB_LEAF_FRAME_HALFWORDS] = {0};
 
 u8 gb_player_frame_index(const GbPlayer* player) { (void)player; return 0; }
+const GbDialogueRecord* gb_story_dialogue_record(const GbStoryRuntime* story)
+{ (void)story; return 0; }
 
 int main(void)
 {
@@ -1153,6 +1158,7 @@ extern volatile u16 gb_test_bg_colors[256], gb_test_obj_colors[256], gb_test_oam
                 '-I', str(td), '-I', str(ROOT / 'reconstruction/include'),
                 str(ROOT / 'reconstruction/source/engine/video.c'),
                 str(ROOT / 'reconstruction/data/social_selector_assets.c'),
+                str(ROOT / 'reconstruction/data/dialogue_portrait_assets.c'),
                 str(td / 'monster_oam_test.c'),
                 '-Wl,--gc-sections', '-o', str(exe),
             ], cwd=ROOT, capture_output=True, text=True)
